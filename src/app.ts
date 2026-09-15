@@ -7,6 +7,7 @@ import { usersRouter } from "./modules/users/users.routes";
 import { clientsRouter } from "./modules/clients/clients.routes";
 import { documentsRouter } from "./modules/documents/documents.routes";
 import { alertsRouter } from "./modules/alerts/alerts.routes";
+import { aiRouter } from "./modules/ai/ai.routes";
 import { errorMiddleware, notFoundMiddleware } from "./middlewares/error.middleware";
 
 export function createApp() {
@@ -24,6 +25,7 @@ export function createApp() {
   app.use("/api/clients", clientsRouter);
   app.use("/api/documents", documentsRouter);
   app.use("/api/alerts", alertsRouter);
+  app.use("/api/ai", aiRouter);
 
   app.use(notFoundMiddleware);
   app.use(errorMiddleware);

@@ -97,10 +97,12 @@ Debe devolver `{"status":"ok"}`.
 | GET | `/api/clients/:id` | Detalle de un cliente | Sí |
 | PATCH | `/api/clients/:id` | Actualiza un cliente | Sí |
 | DELETE | `/api/clients/:id` | Elimina un cliente | Sí |
-| POST | `/api/documents` | Registra metadatos de un documento subido | Sí |
+| POST | `/api/documents` | Registra metadatos de un documento (sin IA) | Sí |
+| POST | `/api/documents/upload` | Sube el archivo real y dispara el pipeline de IA | Sí |
 | GET | `/api/documents/client/:clientId` | Lista documentos de un cliente | Sí |
 | GET | `/api/documents/:id` | Detalle de un documento (con sus conceptos tributarios) | Sí |
 | GET | `/api/alerts/client/:clientId` | Lista alertas de un cliente | Sí |
+| POST | `/api/ai/chat` | Pregunta en lenguaje natural sobre un cliente (RAG) | Sí |
 
 Para las rutas que requieren token, envía el header:
 
@@ -133,7 +135,87 @@ Este backend **no crea ni modifica tablas** (no usa `prisma migrate`). El dueño
 3. Aquí, en el backend, se corre `npx prisma db pull` para refrescar `prisma/schema.prisma` con la nueva estructura.
 4. Se ajusta el código de los servicios/controladores si el cambio lo requiere.
 
+## Fase 3 — Puesta en marcha del pipeline de IA (Windows · cmd.exe)
+
+Requisitos adicionales a los de la Fase 2:
+
+- Contenedor de Redis corriendo (para la cola de tareas)
+- API key de Anthropic (`console.anthropic.com` → API Keys)
+- API key de Voyage AI (`console.voyageai.com` → usada para generar embeddings)
+
+```bat
+:: 1. Instalar las nuevas dependencias (bullmq, tesseract.js, pdf-parse, etc.)
+npm install
+
+:: 2. Levantar Redis
+docker compose up -d
+
+:: 3. Editar tu .env y pegar tus API keys
+notepad .env
+```
+
+En el `.env`, completa:
+```
+ANTHROPIC_API_KEY=sk-ant-...
+VOYAGE_API_KEY=pa-...
+```
+
+**Este proyecto ahora corre en DOS procesos separados**, cada uno en su propia ventana de cmd:
+
+```bat
+:: Ventana 1 — la API (igual que antes)
+npm run dev
+
+:: Ventana 2 — el worker que procesa documentos con IA
+npm run worker
+```
+
+Si el worker arrancó bien, verás:
+```
+Worker de procesamiento de documentos escuchando la cola 'document-processing'...
+```
+
+### Probar el pipeline completo
+
+Con ambos procesos corriendo, y con un token de un contador ya logueado (ver sección de autenticación arriba) y un `clientId` ya creado:
+
+```bat
+curl -X POST http://localhost:4000/api/documents/upload ^
+  -H "Authorization: Bearer PEGA_AQUI_EL_TOKEN" ^
+  -F "file=@C:\ruta\a\tu\certificado.pdf" ^
+  -F "clientId=PEGA_AQUI_EL_CLIENT_ID" ^
+  -F "docType=income_certificate"
+```
+
+En la ventana del **worker** deberías ver los logs del procesamiento en tiempo real (extracción de texto, conceptos encontrados, embeddings generados). Cuando termine, consulta:
+
+```bat
+curl http://localhost:4000/api/documents/DOCUMENT_ID ^
+  -H "Authorization: Bearer PEGA_AQUI_EL_TOKEN"
+```
+
+El campo `status` debe pasar de `uploaded` → `processing` → `processed` (o `error`, con `errorMessage` explicando qué pasó).
+
+### Probar el chat con IA (RAG)
+
+```bat
+curl -X POST http://localhost:4000/api/ai/chat ^
+  -H "Authorization: Bearer PEGA_AQUI_EL_TOKEN" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"clientId\":\"PEGA_AQUI_EL_CLIENT_ID\",\"question\":\"Cuanto fue el ingreso bruto reportado?\"}"
+```
+
+### Limitación conocida de esta fase
+
+El OCR (`text-extraction.service.ts`) solo soporta:
+- PDFs con **texto real embebido** (no escaneados) — la mayoría de certificados generados digitalmente
+- Imágenes JPG/PNG (con OCR real vía Tesseract.js)
+
+**PDFs escaneados** (una foto/imagen metida dentro de un PDF, sin texto) no están soportados todavía — el sistema devuelve un error claro pidiendo subir el documento como imagen. En producción esto se resolvería agregando AWS Textract (ya contemplado en la arquitectura), que si sabe leer PDFs escaneados directamente.
+
+
+
 ## Qué falta (próximas fases)
 
-- **Fase 3:** cola de tareas (BullMQ + Redis), OCR, extracción de conceptos tributarios con LLM, generación de embeddings (pgvector) y motor de reglas/alertas automáticas.
-- **Fase 6:** Dockerfile de producción y despliegue en AWS (ECS/Fargate).
+- **Fase 4:** frontend (SPA) que consuma esta API.
+- **Fase 6:** Dockerfile de producción, `s3-storage.service.ts` (implementando la misma interfaz que el storage local) y despliegue en AWS (ECS/Fargate).

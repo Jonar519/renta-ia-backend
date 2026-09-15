@@ -1,6 +1,8 @@
 import { DocumentType } from "@prisma/client";
 import { prisma } from "../../config/prisma";
 import { ApiError } from "../../utils/apiError";
+import { storageService } from "../../services/storage";
+import { documentQueue } from "../../queues/documentQueue";
 
 interface CreateDocumentInput {
   clientId: string;
@@ -10,12 +12,44 @@ interface CreateDocumentInput {
   storageKey: string;
 }
 
+interface UploadDocumentInput {
+  clientId: string;
+  uploadedBy: string;
+  docType: DocumentType;
+  originalName: string;
+  buffer: Buffer;
+}
+
 export const documentsService = {
-  // Nota: en esta fase solo registramos los metadatos del documento.
-  // La subida real a S3 y el encolado hacia el pipeline de IA se agregan
-  // en la Fase 3 (integración de inteligencia artificial).
+  // Registro manual de metadatos (Fase 2, se mantiene por si el archivo ya
+  // se subió por otro medio y solo se quiere registrar su referencia).
   async create(input: CreateDocumentInput) {
     return prisma.document.create({ data: input });
+  },
+
+  // Fase 3: sube el archivo real, crea el documento y encola su
+  // procesamiento por IA (OCR/lectura, extracción, embeddings, reglas).
+  async uploadAndEnqueue(input: UploadDocumentInput) {
+    const storageKey = await storageService.save({
+      buffer: input.buffer,
+      clientId: input.clientId,
+      fileName: input.originalName,
+    });
+
+    const document = await prisma.document.create({
+      data: {
+        clientId: input.clientId,
+        uploadedBy: input.uploadedBy,
+        docType: input.docType,
+        originalName: input.originalName,
+        storageKey,
+        status: "uploaded",
+      },
+    });
+
+    await documentQueue.add("process-document", { documentId: document.id });
+
+    return document;
   },
 
   async listByClient(clientId: string) {
