@@ -15,10 +15,8 @@ export const documentsController = {
     if (!req.file) {
       throw new ApiError(400, "No se envió ningún archivo (campo 'file')");
     }
+    // clientId y docType ya vienen validados por uploadDocumentSchema.
     const { clientId, docType } = req.body;
-    if (!clientId || !docType) {
-      throw new ApiError(400, "clientId y docType son requeridos");
-    }
 
     const document = await documentsService.uploadAndEnqueue({
       clientId,
