@@ -86,7 +86,9 @@ export async function processDocument(job: Job<DocumentProcessingJob>) {
       },
     });
 
-    console.log(`[worker] documento ${documentId} procesado${warnings.length > 0 ? " (con advertencias)" : " correctamente"}`);
+    console.log(
+      `[worker] documento ${documentId} procesado${warnings.length > 0 ? " (con advertencias)" : " correctamente"}`
+    );
   } catch (err) {
     // Solo llega aquí si falló la extracción de texto (etapa 1), que es
     // la única que de verdad impide seguir procesando el documento.

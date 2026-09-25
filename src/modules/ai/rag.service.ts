@@ -22,9 +22,7 @@ export const ragService = {
     }
     const relevantChunks = await searchSimilarChunks(clientId, queryEmbedding, 5);
 
-    const context = relevantChunks
-      .map((c, i) => `[Fragmento ${i + 1}]\n${c.chunkText}`)
-      .join("\n\n");
+    const context = relevantChunks.map((c, i) => `[Fragmento ${i + 1}]\n${c.chunkText}`).join("\n\n");
 
     const client = getAnthropicClient("usar el chat");
     const message = await client.messages.create({

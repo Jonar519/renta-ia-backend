@@ -16,7 +16,9 @@ export default async function setup() {
     throw new Error(`Por seguridad, la base de pruebas debe terminar en "_test" (recibido: "${dbName}")`);
   }
 
-  const migrationsDir = path.resolve(process.env.MIGRATIONS_DIR ?? path.join(process.cwd(), "../renta-ia-database/migrations"));
+  const migrationsDir = path.resolve(
+    process.env.MIGRATIONS_DIR ?? path.join(process.cwd(), "../renta-ia-database/migrations")
+  );
   if (!fs.existsSync(migrationsDir)) {
     throw new Error(`No se encontraron las migraciones en ${migrationsDir}. Define MIGRATIONS_DIR.`);
   }

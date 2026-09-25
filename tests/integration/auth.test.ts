@@ -29,7 +29,11 @@ describe("auth.service", () => {
   });
 
   it("la respuesta del registro no expone el hash", async () => {
-    const result = await authService.register({ name: "Sin hash", email: `nohash-${unique()}@test.local`, password: TEST_PASSWORD });
+    const result = await authService.register({
+      name: "Sin hash",
+      email: `nohash-${unique()}@test.local`,
+      password: TEST_PASSWORD,
+    });
     expect(result.user).not.toHaveProperty("passwordHash");
     expect(result.token).toEqual(expect.any(String));
   });
@@ -44,7 +48,9 @@ describe("auth.service", () => {
   });
 
   it("login con un correo inexistente da 401 (mismo mensaje, no revela si existe)", async () => {
-    const res = await request(app).post("/api/auth/login").send({ email: `nadie-${unique()}@test.local`, password: "x" });
+    const res = await request(app)
+      .post("/api/auth/login")
+      .send({ email: `nadie-${unique()}@test.local`, password: "x" });
     expect(res.status).toBe(401);
     expect(res.body.error).toBe("Credenciales inválidas");
   });

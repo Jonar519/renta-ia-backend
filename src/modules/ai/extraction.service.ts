@@ -3,12 +3,7 @@ import { logger } from "../../config/logger";
 import { CLAUDE_MODEL, firstTextBlock, getAnthropicClient } from "../../services/llm/anthropic.client";
 
 export type TaxConceptType =
-  | "gross_income"
-  | "withholding"
-  | "deduction"
-  | "pension_contribution"
-  | "health_contribution"
-  | "other";
+  "gross_income" | "withholding" | "deduction" | "pension_contribution" | "health_contribution" | "other";
 
 export interface ExtractedConcept {
   conceptType: TaxConceptType;
@@ -37,7 +32,14 @@ Cada elemento del arreglo debe tener EXACTAMENTE esta forma:
  * haga fallar el INSERT.
  */
 const extractedConceptSchema = z.object({
-  conceptType: z.enum(["gross_income", "withholding", "deduction", "pension_contribution", "health_contribution", "other"]),
+  conceptType: z.enum([
+    "gross_income",
+    "withholding",
+    "deduction",
+    "pension_contribution",
+    "health_contribution",
+    "other",
+  ]),
   description: z
     .string()
     .nullish()

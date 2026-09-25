@@ -35,9 +35,7 @@ export const rulesService = {
 };
 
 function sumByType(concepts: { conceptType: string; amount: unknown }[], type: string): number {
-  return concepts
-    .filter((c) => c.conceptType === type)
-    .reduce((sum, c) => sum + Number(c.amount), 0);
+  return concepts.filter((c) => c.conceptType === type).reduce((sum, c) => sum + Number(c.amount), 0);
 }
 
 function formatCOP(value: number): string {

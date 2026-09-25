@@ -12,7 +12,9 @@ const nodeEnv = process.env.NODE_ENV ?? "development";
 
 // Orígenes permitidos por CORS, separados por coma. En producción es
 // obligatorio definirlo; en desarrollo se usa el puerto por defecto de Vite.
-const corsOrigins = (process.env.CORS_ORIGIN ?? (nodeEnv === "production" ? required("CORS_ORIGIN") : "http://localhost:5173"))
+const corsOrigins = (
+  process.env.CORS_ORIGIN ?? (nodeEnv === "production" ? required("CORS_ORIGIN") : "http://localhost:5173")
+)
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);

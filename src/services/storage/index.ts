@@ -11,9 +11,7 @@ function resolveStorageService(): StorageService {
   if (env.storageDriver === "local") {
     return localStorageService;
   }
-  throw new Error(
-    `STORAGE_DRIVER="${env.storageDriver}" todavía no está implementado. Usa "local" por ahora.`
-  );
+  throw new Error(`STORAGE_DRIVER="${env.storageDriver}" todavía no está implementado. Usa "local" por ahora.`);
 }
 
 export const storageService: StorageService = resolveStorageService();

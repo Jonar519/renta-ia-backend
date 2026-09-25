@@ -78,38 +78,38 @@ Debe devolver `{"status":"ok"}`.
 
 ## Variables de entorno (`.env`)
 
-| Variable | Descripción |
-|---|---|
-| `DATABASE_URL` | Cadena de conexión a Postgres. Igual a la que usaste en `renta-ia-database` |
-| `JWT_SECRET` | Clave secreta para firmar los tokens. Cámbiala por un valor largo y aleatorio |
-| `JWT_EXPIRES_IN` | Duración del token (ej. `1d`, `12h`) |
-| `PORT` | Puerto donde corre el servidor (por defecto 4000) |
-| `NODE_ENV` | `development`, `production` o `test` (cambia el formato de logs y de morgan) |
-| `LOG_LEVEL` | Nivel de logs (pino). Por defecto `info` |
-| `CORS_ORIGIN` | Orígenes permitidos por CORS, separados por coma. En desarrollo, por defecto `http://localhost:5173`; **obligatorio en producción** |
-| `TRUST_PROXY` | Proxies delante de la API (0 en local, 1 detrás de un balanceador) |
-| `REDIS_URL` | Redis para la cola de documentos y los contadores de rate limiting |
-| `ANTHROPIC_API_KEY` / `VOYAGE_API_KEY` | Claves de IA (solo necesarias para procesar documentos y usar el chat) |
+| Variable                               | Descripción                                                                                                                         |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                         | Cadena de conexión a Postgres. Igual a la que usaste en `renta-ia-database`                                                         |
+| `JWT_SECRET`                           | Clave secreta para firmar los tokens. Cámbiala por un valor largo y aleatorio                                                       |
+| `JWT_EXPIRES_IN`                       | Duración del token (ej. `1d`, `12h`)                                                                                                |
+| `PORT`                                 | Puerto donde corre el servidor (por defecto 4000)                                                                                   |
+| `NODE_ENV`                             | `development`, `production` o `test` (cambia el formato de logs y de morgan)                                                        |
+| `LOG_LEVEL`                            | Nivel de logs (pino). Por defecto `info`                                                                                            |
+| `CORS_ORIGIN`                          | Orígenes permitidos por CORS, separados por coma. En desarrollo, por defecto `http://localhost:5173`; **obligatorio en producción** |
+| `TRUST_PROXY`                          | Proxies delante de la API (0 en local, 1 detrás de un balanceador)                                                                  |
+| `REDIS_URL`                            | Redis para la cola de documentos y los contadores de rate limiting                                                                  |
+| `ANTHROPIC_API_KEY` / `VOYAGE_API_KEY` | Claves de IA (solo necesarias para procesar documentos y usar el chat)                                                              |
 
 ## Endpoints disponibles (Fase 2)
 
-| Método | Ruta | Descripción | Requiere token |
-|---|---|---|---|
-| POST | `/api/auth/register` | Crea un usuario con rol **contador** (el campo `role` se ignora; admin/asistente solo se asignan en la base de datos) | No |
-| POST | `/api/auth/login` | Inicia sesión y devuelve un JWT | No |
-| GET | `/api/users/me` | Perfil del usuario autenticado | Sí |
-| POST | `/api/clients` | Crea un cliente contribuyente | Sí |
-| GET | `/api/clients` | Lista los clientes del contador autenticado | Sí |
-| GET | `/api/clients/:id` | Detalle de un cliente | Sí |
-| GET | `/api/clients/:id/tax-concepts` | Todos los conceptos tributarios del cliente (una sola consulta) | Sí |
-| PATCH | `/api/clients/:id` | Actualiza un cliente | Sí |
-| DELETE | `/api/clients/:id` | Elimina un cliente | Sí |
-| POST | `/api/documents` | Registra metadatos de un documento (sin IA) | Sí |
-| POST | `/api/documents/upload` | Sube el archivo real y dispara el pipeline de IA | Sí |
-| GET | `/api/documents/client/:clientId` | Lista documentos de un cliente | Sí |
-| GET | `/api/documents/:id` | Detalle de un documento (con sus conceptos tributarios) | Sí |
-| GET | `/api/alerts/client/:clientId` | Lista alertas de un cliente | Sí |
-| POST | `/api/ai/chat` | Pregunta en lenguaje natural sobre un cliente (RAG) | Sí |
+| Método | Ruta                              | Descripción                                                                                                           | Requiere token |
+| ------ | --------------------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------- |
+| POST   | `/api/auth/register`              | Crea un usuario con rol **contador** (el campo `role` se ignora; admin/asistente solo se asignan en la base de datos) | No             |
+| POST   | `/api/auth/login`                 | Inicia sesión y devuelve un JWT                                                                                       | No             |
+| GET    | `/api/users/me`                   | Perfil del usuario autenticado                                                                                        | Sí             |
+| POST   | `/api/clients`                    | Crea un cliente contribuyente                                                                                         | Sí             |
+| GET    | `/api/clients`                    | Lista los clientes del contador autenticado                                                                           | Sí             |
+| GET    | `/api/clients/:id`                | Detalle de un cliente                                                                                                 | Sí             |
+| GET    | `/api/clients/:id/tax-concepts`   | Todos los conceptos tributarios del cliente (una sola consulta)                                                       | Sí             |
+| PATCH  | `/api/clients/:id`                | Actualiza un cliente                                                                                                  | Sí             |
+| DELETE | `/api/clients/:id`                | Elimina un cliente                                                                                                    | Sí             |
+| POST   | `/api/documents`                  | Registra metadatos de un documento (sin IA)                                                                           | Sí             |
+| POST   | `/api/documents/upload`           | Sube el archivo real y dispara el pipeline de IA                                                                      | Sí             |
+| GET    | `/api/documents/client/:clientId` | Lista documentos de un cliente                                                                                        | Sí             |
+| GET    | `/api/documents/:id`              | Detalle de un documento (con sus conceptos tributarios)                                                               | Sí             |
+| GET    | `/api/alerts/client/:clientId`    | Lista alertas de un cliente                                                                                           | Sí             |
+| POST   | `/api/ai/chat`                    | Pregunta en lenguaje natural sobre un cliente (RAG)                                                                   | Sí             |
 
 Todas las rutas que reciben un cliente (`:id`, `:clientId` o `clientId` en el body) verifican que pertenezca al usuario autenticado (o que sea admin). Si no, responden **404** (no 403) para no revelar que el recurso existe.
 
@@ -173,6 +173,7 @@ notepad .env
 ```
 
 En el `.env`, completa:
+
 ```
 ANTHROPIC_API_KEY=sk-ant-...
 VOYAGE_API_KEY=pa-...
@@ -189,6 +190,7 @@ npm run worker
 ```
 
 Si el worker arrancó bien, verás:
+
 ```
 Worker de procesamiento de documentos escuchando la cola 'document-processing'...
 ```
@@ -226,12 +228,11 @@ curl -X POST http://localhost:4000/api/ai/chat ^
 ### Limitación conocida de esta fase
 
 El OCR (`text-extraction.service.ts`) solo soporta:
+
 - PDFs con **texto real embebido** (no escaneados) — la mayoría de certificados generados digitalmente
 - Imágenes JPG/PNG (con OCR real vía Tesseract.js)
 
 **PDFs escaneados** (una foto/imagen metida dentro de un PDF, sin texto) no están soportados todavía — el sistema devuelve un error claro pidiendo subir el documento como imagen. En producción esto se resolvería agregando AWS Textract (ya contemplado en la arquitectura), que si sabe leer PDFs escaneados directamente.
-
-
 
 ## Qué falta (próximas fases)
 

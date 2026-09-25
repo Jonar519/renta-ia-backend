@@ -1,12 +1,7 @@
 import { NextFunction, Request, Response, Router } from "express";
 import multer from "multer";
 import { documentsController } from "./documents.controller";
-import {
-  createDocumentSchema,
-  documentClientParams,
-  documentIdParams,
-  uploadDocumentSchema,
-} from "./documents.schema";
+import { createDocumentSchema, documentClientParams, documentIdParams, uploadDocumentSchema } from "./documents.schema";
 import { authMiddleware } from "../../middlewares/auth.middleware";
 import { requireClientAccess } from "../../middlewares/ownership.middleware";
 import { validate } from "../../middlewares/validate.middleware";

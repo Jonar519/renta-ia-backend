@@ -26,7 +26,10 @@ export const createClientSchema = z.object({
 
 // En la actualización, enviar "" o null en email/phone los borra.
 const clearable = <T extends z.ZodTypeAny>(schema: T) =>
-  z.preprocess((value) => (typeof value === "string" && value.trim() === "" ? null : value), schema.nullable().optional());
+  z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? null : value),
+    schema.nullable().optional()
+  );
 
 export const updateClientSchema = z
   .object({

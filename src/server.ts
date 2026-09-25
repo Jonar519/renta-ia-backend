@@ -15,6 +15,9 @@ async function main() {
 }
 
 main().catch((err) => {
-  logger.fatal({ err: err instanceof Error ? { name: err.name, message: err.message } : String(err) }, "Error al iniciar el servidor");
+  logger.fatal(
+    { err: err instanceof Error ? { name: err.name, message: err.message } : String(err) },
+    "Error al iniciar el servidor"
+  );
   process.exit(1);
 });

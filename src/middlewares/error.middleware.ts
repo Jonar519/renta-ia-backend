@@ -36,7 +36,8 @@ function toApiError(err: unknown): ApiError | null {
   }
 
   if (err instanceof MulterError) {
-    if (err.code === "LIMIT_FILE_SIZE") return new ApiError(413, "El archivo supera el tamaño máximo permitido (15 MB)");
+    if (err.code === "LIMIT_FILE_SIZE")
+      return new ApiError(413, "El archivo supera el tamaño máximo permitido (15 MB)");
     return new ApiError(400, `Error en la subida del archivo (${err.code})`);
   }
 

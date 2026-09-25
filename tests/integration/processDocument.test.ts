@@ -68,7 +68,9 @@ describe("Worker processDocument", () => {
 
     const updated = await prisma.document.findUniqueOrThrow({ where: { id: doc.id } });
     expect(updated.status).toBe("processed");
-    expect(updated.errorMessage).toMatch(/^Procesado con advertencias: Extracción de conceptos tributarios falló: Sin crédito/);
+    expect(updated.errorMessage).toMatch(
+      /^Procesado con advertencias: Extracción de conceptos tributarios falló: Sin crédito/
+    );
     expect(await prisma.documentEmbedding.count({ where: { documentId: doc.id } })).toBe(2);
   });
 

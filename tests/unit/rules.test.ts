@@ -10,7 +10,13 @@ async function clientWith(grossIncome: number, deductions: number) {
   const document = await createDocument(client.id, user.user.id);
   await prisma.taxConcept.createMany({
     data: [
-      { documentId: document.id, clientId: client.id, conceptType: "gross_income", amount: grossIncome, periodYear: 2025 },
+      {
+        documentId: document.id,
+        clientId: client.id,
+        conceptType: "gross_income",
+        amount: grossIncome,
+        periodYear: 2025,
+      },
       { documentId: document.id, clientId: client.id, conceptType: "deduction", amount: deductions, periodYear: 2025 },
     ],
   });
