@@ -1,5 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { z } from "zod";
 import { env } from "../../config/env";
+import { logger } from "../../config/logger";
 
 function getClient(): Anthropic {
   if (!env.anthropicApiKey) {
@@ -39,6 +41,68 @@ Cada elemento del arreglo debe tener EXACTAMENTE esta forma:
   "periodYear": number (año fiscal, ej. 2025)
 }`;
 
+/**
+ * Schema de UN concepto devuelto por el LLM. Los límites coinciden con las
+ * columnas/CHECKs de tax_concepts, para que un concepto que pase aquí nunca
+ * haga fallar el INSERT.
+ */
+const extractedConceptSchema = z.object({
+  conceptType: z.enum(["gross_income", "withholding", "deduction", "pension_contribution", "health_contribution", "other"]),
+  description: z
+    .string()
+    .nullish()
+    .transform((value) => (value ?? "").slice(0, 255)),
+  // Se acepta "1500000" además de 1500000, pero no "abc" ni negativos.
+  amount: z.preprocess(
+    (value) => (typeof value === "string" && value.trim() !== "" ? Number(value) : value),
+    z.number().finite().nonnegative()
+  ),
+  periodYear: z.preprocess(
+    (value) => (typeof value === "string" && value.trim() !== "" ? Number(value) : value),
+    z.number().int().min(2000).max(2100)
+  ),
+});
+
+/** Quita un bloque ```json ... ``` si el modelo lo agregó pese a la instrucción. */
+function stripMarkdownFences(text: string): string {
+  const match = text.trim().match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return match ? match[1]! : text.trim();
+}
+
+/**
+ * Convierte la respuesta de texto del LLM en conceptos válidos. Un concepto
+ * inválido se descarta individualmente (con warning) en vez de invalidar
+ * toda la respuesta.
+ */
+export function parseExtractedConcepts(rawText: string): ExtractedConcept[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stripMarkdownFences(rawText));
+  } catch {
+    logger.warn({ preview: rawText.slice(0, 200) }, "No se pudo interpretar la respuesta del LLM como JSON");
+    return [];
+  }
+
+  if (!Array.isArray(parsed)) {
+    logger.warn("La respuesta del LLM no es un arreglo JSON; se ignora");
+    return [];
+  }
+
+  const concepts: ExtractedConcept[] = [];
+  parsed.forEach((item, index) => {
+    const result = extractedConceptSchema.safeParse(item);
+    if (result.success) {
+      concepts.push(result.data);
+    } else {
+      logger.warn(
+        { index, issues: result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`) },
+        "Concepto tributario inválido descartado"
+      );
+    }
+  });
+  return concepts;
+}
+
 export const extractionService = {
   async extractTaxConcepts(documentText: string): Promise<ExtractedConcept[]> {
     const client = getClient();
@@ -60,12 +124,6 @@ export const extractionService = {
       return [];
     }
 
-    try {
-      const parsed = JSON.parse(textBlock.text);
-      return Array.isArray(parsed) ? (parsed as ExtractedConcept[]) : [];
-    } catch (err) {
-      console.error("No se pudo interpretar la respuesta del LLM como JSON:", textBlock.text);
-      return [];
-    }
+    return parseExtractedConcepts(textBlock.text);
   },
 };
