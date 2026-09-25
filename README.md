@@ -111,7 +111,7 @@ Debe devolver `{"status":"ok"}`.
 | Método | Ruta                              | Descripción                                                                                                           | Requiere token |
 | ------ | --------------------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------- |
 | POST   | `/api/auth/register`              | Crea un usuario con rol **contador** (el campo `role` se ignora; admin/asistente solo se asignan en la base de datos) | No             |
-| POST   | `/api/auth/login`                 | Inicia sesión y devuelve un JWT                                                                                       | No             |
+| POST   | `/api/auth/login`                 | Inicia sesión y devuelve un JWT (el correo no distingue mayúsculas)                                                   | No             |
 | GET    | `/api/users/me`                   | Perfil del usuario autenticado                                                                                        | Sí             |
 | POST   | `/api/clients`                    | Crea un cliente contribuyente                                                                                         | Sí             |
 | GET    | `/api/clients`                    | Lista los clientes del contador autenticado                                                                           | Sí             |

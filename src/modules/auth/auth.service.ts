@@ -27,9 +27,19 @@ function buildAuthResponse(user: Pick<User, "id" | "name" | "email" | "role">) {
   };
 }
 
+/**
+ * Los emails se guardan y se buscan siempre en minúsculas (y sin espacios):
+ * "Ana@Example.com" y "ana@example.com" son la misma cuenta. La base de
+ * datos lo refuerza con un índice único sobre lower(email).
+ */
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
 export const authService = {
   async register(input: RegisterInput) {
-    const existing = await prisma.user.findUnique({ where: { email: input.email } });
+    const email = normalizeEmail(input.email);
+    const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
       throw new ApiError(409, "Ya existe un usuario con ese correo");
     }
@@ -39,7 +49,7 @@ export const authService = {
     const user = await prisma.user.create({
       data: {
         name: input.name,
-        email: input.email,
+        email,
         passwordHash,
         // El registro público SIEMPRE crea contadores. Otros roles (admin,
         // assistant) solo pueden asignarse directamente en la base de datos.
@@ -51,7 +61,7 @@ export const authService = {
   },
 
   async login(input: LoginInput) {
-    const user = await prisma.user.findUnique({ where: { email: input.email } });
+    const user = await prisma.user.findUnique({ where: { email: normalizeEmail(input.email) } });
     if (!user) {
       throw new ApiError(401, "Credenciales inválidas");
     }
