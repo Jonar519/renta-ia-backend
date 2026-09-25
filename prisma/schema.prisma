@@ -9,6 +9,7 @@ datasource db {
   extensions = [pgcrypto, vector]
 }
 
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model User {
   id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name            String           @db.VarChar(150)
@@ -16,7 +17,7 @@ model User {
   passwordHash    String           @map("password_hash") @db.VarChar(255)
   role            UserRole         @default(accountant)
   createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime         @default(now()) @map("updated_at") @db.Timestamptz(6)
+  updatedAt       DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   aiConversations AiConversation[]
   clients         Client[]
   uploadedDocs    Document[]       @relation("UploadedBy")
@@ -33,7 +34,7 @@ model Client {
   email            String?          @db.VarChar(150)
   phone            String?          @db.VarChar(30)
   createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime         @default(now()) @map("updated_at") @db.Timestamptz(6)
+  updatedAt        DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   conversations    AiConversation[]
   alerts           Alert[]
   accountant       User             @relation(fields: [accountantUserId], references: [id], onUpdate: NoAction)
@@ -43,6 +44,7 @@ model Client {
   @@unique([accountantUserId, documentNumber])
   @@index([accountantUserId], map: "idx_clients_accountant")
   @@index([documentNumber], map: "idx_clients_document_number")
+  @@index([accountantUserId, createdAt(sort: Desc)], map: "idx_clients_accountant_created")
   @@map("clients")
 }
 
@@ -66,6 +68,8 @@ model Document {
   @@index([clientId], map: "idx_documents_client")
   @@index([status], map: "idx_documents_status")
   @@index([docType], map: "idx_documents_type")
+  @@index([clientId, uploadedAt(sort: Desc)], map: "idx_documents_client_uploaded")
+  @@index([uploadedBy], map: "idx_documents_uploaded_by")
   @@map("documents")
 }
 
@@ -97,6 +101,7 @@ model DocumentEmbedding {
   createdAt  DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
   document   Document              @relation(fields: [documentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  @@unique([documentId, chunkIndex], map: "uq_document_embeddings_document_chunk")
   @@index([documentId], map: "idx_document_embeddings_document")
   @@index([embedding], map: "idx_document_embeddings_vector")
   @@map("document_embeddings")
@@ -119,6 +124,8 @@ model Alert {
   @@index([clientId], map: "idx_alerts_client")
   @@index([dueDate], map: "idx_alerts_due_date")
   @@index([status], map: "idx_alerts_status")
+  @@index([clientId, createdAt(sort: Desc)], map: "idx_alerts_client_created")
+  @@index([documentId], map: "idx_alerts_document")
   @@map("alerts")
 }
 
@@ -132,6 +139,7 @@ model AiConversation {
   messages  AiMessage[]
 
   @@index([clientId], map: "idx_ai_conversations_client")
+  @@index([userId], map: "idx_ai_conversations_user")
   @@map("ai_conversations")
 }
 
@@ -145,6 +153,15 @@ model AiMessage {
 
   @@index([conversationId], map: "idx_ai_messages_conversation")
   @@map("ai_messages")
+}
+
+/// Historial de migraciones SQL. Lo gestionan los scripts de renta-ia-database
+/// (migrate.sh / migrate.bat); la aplicación nunca escribe en esta tabla.
+model SchemaMigration {
+  filename  String   @id @db.VarChar(255)
+  appliedAt DateTime @default(now()) @map("applied_at") @db.Timestamptz(6)
+
+  @@map("schema_migrations")
 }
 
 enum UserRole {
