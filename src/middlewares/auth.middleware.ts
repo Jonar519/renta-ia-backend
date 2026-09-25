@@ -10,12 +10,10 @@ export interface AuthPayload {
   role: AppRole;
 }
 
-declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
-  namespace Express {
-    interface Request {
-      user?: AuthPayload;
-    }
+// Agrega req.user al tipo Request de Express (module augmentation).
+declare module "express-serve-static-core" {
+  interface Request {
+    user?: AuthPayload;
   }
 }
 

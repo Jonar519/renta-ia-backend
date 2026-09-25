@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { clientsService } from "./clients.service";
+import { routeParam } from "../../utils/params";
 
 export const clientsController = {
   async create(req: Request, res: Response) {
@@ -16,22 +17,22 @@ export const clientsController = {
   },
 
   async getById(req: Request, res: Response) {
-    const client = await clientsService.getById(req.params.id, req.user!);
+    const client = await clientsService.getById(routeParam(req, "id"), req.user!);
     res.json(client);
   },
 
   async update(req: Request, res: Response) {
-    const client = await clientsService.update(req.params.id, req.body ?? {}, req.user!);
+    const client = await clientsService.update(routeParam(req, "id"), req.body ?? {}, req.user!);
     res.json(client);
   },
 
   async remove(req: Request, res: Response) {
-    await clientsService.remove(req.params.id, req.user!);
+    await clientsService.remove(routeParam(req, "id"), req.user!);
     res.status(204).send();
   },
 
   async listTaxConcepts(req: Request, res: Response) {
-    const concepts = await clientsService.listTaxConcepts(req.params.id, req.user!);
+    const concepts = await clientsService.listTaxConcepts(routeParam(req, "id"), req.user!);
     res.json(concepts);
   },
 };

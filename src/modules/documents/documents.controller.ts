@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { documentsService } from "./documents.service";
 import { ApiError } from "../../utils/apiError";
+import { routeParam } from "../../utils/params";
 
 export const documentsController = {
   async create(req: Request, res: Response) {
@@ -30,12 +31,12 @@ export const documentsController = {
   },
 
   async listByClient(req: Request, res: Response) {
-    const documents = await documentsService.listByClient(req.params.clientId);
+    const documents = await documentsService.listByClient(routeParam(req, "clientId"));
     res.json(documents);
   },
 
   async getById(req: Request, res: Response) {
-    const document = await documentsService.getById(req.params.id, req.user!);
+    const document = await documentsService.getById(routeParam(req, "id"), req.user!);
     res.json(document);
   },
 };

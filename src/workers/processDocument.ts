@@ -62,8 +62,12 @@ export async function processDocument(job: Job<DocumentProcessingJob>) {
       const chunks = embeddingsService.chunkText(text);
       if (chunks.length > 0) {
         const vectors = await embeddingsService.embed(chunks);
-        for (let i = 0; i < chunks.length; i++) {
-          await saveEmbedding(document.id, i, chunks[i], vectors[i]);
+        for (const [i, chunk] of chunks.entries()) {
+          const vector = vectors[i];
+          if (!vector) {
+            throw new Error(`Se recibieron ${vectors.length} vectores para ${chunks.length} fragmentos`);
+          }
+          await saveEmbedding(document.id, i, chunk, vector);
         }
         console.log(`[worker] ${chunks.length} fragmento(s) vectorizado(s)`);
       }
