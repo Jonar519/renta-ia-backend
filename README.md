@@ -7,36 +7,51 @@ API REST del **Sistema de Gestión Documental Contable con IA**. Se conecta a la
 ```
 renta-ia-backend/
 ├── prisma/
-│   └── schema.prisma       # Refleja el esquema del repo renta-ia-database
+│   └── schema.prisma            # Refleja el esquema del repo renta-ia-database
 ├── src/
 │   ├── config/
-│   │   ├── env.ts           # Carga y valida variables de entorno
-│   │   └── prisma.ts        # Cliente de Prisma (singleton)
+│   │   ├── env.ts               # Carga y valida variables de entorno
+│   │   ├── logger.ts            # Logger estructurado (pino) con redacción de secretos
+│   │   ├── prisma.ts            # Cliente de Prisma (singleton)
+│   │   └── redis.ts             # Conexión a Redis (cola + rate limiting)
 │   ├── middlewares/
-│   │   ├── auth.middleware.ts    # Verifica el JWT
-│   │   ├── role.middleware.ts    # Autorización por rol
-│   │   └── error.middleware.ts   # Manejo centralizado de errores
-│   ├── modules/
-│   │   ├── auth/         # Registro / login
-│   │   ├── users/        # Perfil del usuario autenticado
-│   │   ├── clients/      # CRUD de clientes contribuyentes
-│   │   ├── documents/    # Metadatos de documentos (IA se integra en Fase 3)
-│   │   └── alerts/       # Consulta de alertas
-│   ├── utils/
-│   │   ├── apiError.ts
-│   │   └── asyncHandler.ts
-│   ├── app.ts             # Ensambla la app de Express
-│   └── server.ts          # Punto de entrada
+│   │   ├── auth.middleware.ts       # Verifica el JWT
+│   │   ├── ownership.middleware.ts  # ÚNICO lugar que decide si un usuario accede a un cliente
+│   │   ├── validate.middleware.ts   # Validación genérica con zod (body/params/query)
+│   │   ├── rateLimit.middleware.ts  # Límites global, auth, chat y upload (Redis)
+│   │   ├── role.middleware.ts       # Autorización por rol
+│   │   └── error.middleware.ts      # Manejo centralizado de errores (Prisma/multer → 4xx)
+│   ├── modules/                 # Cada módulo: routes → (schema) → controller → service
+│   │   ├── auth/                # Registro / login
+│   │   ├── users/               # Perfil del usuario autenticado
+│   │   ├── clients/             # CRUD de clientes + conceptos tributarios del cliente
+│   │   ├── documents/           # Subida de documentos y consulta
+│   │   ├── alerts/              # Consulta de alertas
+│   │   └── ai/                  # Chat RAG, extracción con LLM, embeddings, motor de reglas
+│   ├── services/
+│   │   ├── llm/anthropic.client.ts  # Cliente de Anthropic compartido
+│   │   └── storage/             # Interfaz de almacenamiento (hoy disco local; S3 en Fase 6)
+│   ├── queues/documentQueue.ts  # Cola BullMQ de procesamiento de documentos
+│   ├── workers/
+│   │   ├── processDocument.ts           # Pipeline de IA de un documento
+│   │   └── documentProcessing.worker.ts # Arranque del worker (npm run worker)
+│   ├── utils/                   # ApiError, asyncHandler, schemas comunes, uuid, tipos de archivo
+│   ├── app.ts                   # Ensambla la app de Express
+│   └── server.ts                # Punto de entrada de la API
+├── tests/                       # Vitest: integration/ y unit/
 ├── .env.example
+├── eslint.config.js · .prettierrc
+├── vitest.config.ts
 ├── package.json
-└── tsconfig.json
+└── tsconfig.json · tsconfig.test.json
 ```
 
-Cada módulo sigue el mismo patrón: **routes → controller → service → Prisma**. El controller nunca habla directo con Prisma; siempre pasa por el service, que es donde vive la lógica de negocio.
+Cada módulo sigue el mismo patrón: **routes → controller → service → Prisma**. El controller nunca habla directo con Prisma; siempre pasa por el service, que es donde vive la lógica de negocio. La validación de entrada (zod) y la verificación de dueño del cliente ocurren en la ruta, antes del controller.
 
 ## Requisitos
 
-- Node.js 18 o superior
+- Node.js 20 o superior
+- Docker (Postgres + pgvector del repo `renta-ia-database`, y Redis de este repo)
 - El repositorio `renta-ia-database` ya migrado y corriendo (ver su propio README)
 
 ## Puesta en marcha (Windows · cmd.exe)
@@ -91,7 +106,7 @@ Debe devolver `{"status":"ok"}`.
 | `REDIS_URL`                            | Redis para la cola de documentos y los contadores de rate limiting                                                                  |
 | `ANTHROPIC_API_KEY` / `VOYAGE_API_KEY` | Claves de IA (solo necesarias para procesar documentos y usar el chat)                                                              |
 
-## Endpoints disponibles (Fase 2)
+## Endpoints
 
 | Método | Ruta                              | Descripción                                                                                                           | Requiere token |
 | ------ | --------------------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------- |
@@ -144,6 +159,26 @@ curl http://localhost:4000/api/clients ^
   -H "Authorization: Bearer PEGA_AQUI_EL_TOKEN"
 ```
 
+## Tests y calidad de código
+
+```bat
+:: Tests (Vitest + Supertest). Necesitan el Postgres de renta-ia-database corriendo:
+:: crean desde cero una base aparte "renta_ia_test" (nunca tocan renta_ia) y le
+:: aplican las migraciones de ..
+enta-ia-databasemigrations.
+npm test
+
+:: Lint (ESLint + Prettier), typecheck y build
+npm run lint
+npm run typecheck
+npm run build
+
+:: Formatear el código
+npm run format
+```
+
+Variables opcionales para los tests: `TEST_DATABASE_URL` (por defecto `postgresql://postgres:postgres@localhost:5433/renta_ia_test`; su nombre **debe** terminar en `_test`) y `MIGRATIONS_DIR` (ruta a las migraciones SQL). Anthropic, Voyage y Redis están mockeados: los tests no consumen crédito ni necesitan Redis.
+
 ## Relación con el repositorio de base de datos
 
 Este backend **no crea ni modifica tablas** (no usa `prisma migrate`). El dueño del esquema es `renta-ia-database`. El flujo correcto ante un cambio de esquema es:
@@ -153,7 +188,7 @@ Este backend **no crea ni modifica tablas** (no usa `prisma migrate`). El dueño
 3. Aquí, en el backend, se corre `npx prisma db pull` para refrescar `prisma/schema.prisma` con la nueva estructura.
 4. Se ajusta el código de los servicios/controladores si el cambio lo requiere.
 
-## Fase 3 — Puesta en marcha del pipeline de IA (Windows · cmd.exe)
+## Pipeline de IA: puesta en marcha (Windows · cmd.exe)
 
 Requisitos adicionales a los de la Fase 2:
 
@@ -225,7 +260,7 @@ curl -X POST http://localhost:4000/api/ai/chat ^
   -d "{\"clientId\":\"PEGA_AQUI_EL_CLIENT_ID\",\"question\":\"Cuanto fue el ingreso bruto reportado?\"}"
 ```
 
-### Limitación conocida de esta fase
+### Limitación conocida
 
 El OCR (`text-extraction.service.ts`) solo soporta:
 
@@ -234,7 +269,13 @@ El OCR (`text-extraction.service.ts`) solo soporta:
 
 **PDFs escaneados** (una foto/imagen metida dentro de un PDF, sin texto) no están soportados todavía — el sistema devuelve un error claro pidiendo subir el documento como imagen. En producción esto se resolvería agregando AWS Textract (ya contemplado en la arquitectura), que si sabe leer PDFs escaneados directamente.
 
-## Qué falta (próximas fases)
+## Estado del proyecto
 
-- **Fase 4:** frontend (SPA) que consuma esta API.
-- **Fase 6:** Dockerfile de producción, `s3-storage.service.ts` (implementando la misma interfaz que el storage local) y despliegue en AWS (ECS/Fargate).
+| Fase                                                                                                                                         | Estado    |
+| -------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| 1. Base de datos (repo `renta-ia-database`)                                                                                                  | ✅        |
+| 2. API REST (auth, clientes, documentos, alertas)                                                                                            | ✅        |
+| 3. Pipeline de IA (OCR, extracción con LLM, embeddings, reglas, chat RAG)                                                                    | ✅        |
+| 4. Frontend SPA (repo `renta-ia-frontend`)                                                                                                   | ✅        |
+| 5. Endurecimiento: autorización por dueño, validación zod, rate limiting, tests, lint, CI                                                    | ✅        |
+| 6. Despliegue en AWS: Dockerfile de producción, `s3-storage.service.ts` (misma interfaz que el storage local), ECS/Fargate, RDS, ElastiCache | Pendiente |
