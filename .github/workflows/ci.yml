@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # Postgres + pgvector para los tests de integración. Redis, Anthropic y
+    # Voyage están mockeados en los tests: no se necesitan aquí.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # globalSetup crea esta base desde cero y le aplica las migraciones.
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/renta_ia_test
+      MIGRATIONS_DIR: ${{ github.workspace }}/renta-ia-database/migrations
+      # prisma generate lee el schema, que referencia env("DATABASE_URL").
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/renta_ia_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # El esquema vive en el repo renta-ia-database (dueño de las migraciones).
+      # - Si ese repo es privado, crea el secret DATABASE_REPO_TOKEN (un
+      #   fine-grained PAT con permiso de lectura sobre él).
+      # - Rama: variable de repositorio DATABASE_REPO_REF (por defecto main).
+      - name: Checkout de las migraciones (renta-ia-database)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/renta-ia-database
+          ref: ${{ vars.DATABASE_REPO_REF || 'main' }}
+          token: ${{ secrets.DATABASE_REPO_TOKEN || github.token }}
+          path: renta-ia-database
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
