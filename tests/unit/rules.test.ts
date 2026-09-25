@@ -49,3 +49,33 @@ describe("rulesService: deducciones > 40% del ingreso bruto", () => {
     expect(await inconsistencyAlerts(clientId)).toHaveLength(0);
   });
 });
+
+describe("rulesService: sin alertas duplicadas", () => {
+  it("evaluar de nuevo deja una sola alerta abierta, con las cifras actualizadas", async () => {
+    const { clientId, documentId } = await clientWith(1_000_000, 500_000);
+    await rulesService.evaluateClientConcepts(clientId, documentId);
+
+    // Un segundo documento suma 100.000 más en deducciones.
+    const client = await prisma.client.findUniqueOrThrow({ where: { id: clientId } });
+    const secondDoc = await createDocument(clientId, client.accountantUserId);
+    await prisma.taxConcept.create({
+      data: { documentId: secondDoc.id, clientId, conceptType: "deduction", amount: 100_000, periodYear: 2025 },
+    });
+    await rulesService.evaluateClientConcepts(clientId, secondDoc.id);
+
+    const alerts = await inconsistencyAlerts(clientId);
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]!.documentId).toBe(secondDoc.id);
+    expect(alerts[0]!.message).toContain("600.000");
+  });
+
+  it("si la alerta anterior ya se resolvió, se crea una nueva", async () => {
+    const { clientId, documentId } = await clientWith(1_000_000, 500_000);
+    await rulesService.evaluateClientConcepts(clientId, documentId);
+    await prisma.alert.updateMany({ where: { clientId }, data: { status: "resolved" } });
+
+    await rulesService.evaluateClientConcepts(clientId, documentId);
+    const alerts = await inconsistencyAlerts(clientId);
+    expect(alerts.map((a) => a.status).sort()).toEqual(["open", "resolved"]);
+  });
+});

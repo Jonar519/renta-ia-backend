@@ -108,3 +108,64 @@ describe("Worker processDocument", () => {
     expect(await prisma.documentEmbedding.count({ where: { documentId: doc.id } })).toBe(2);
   });
 });
+
+describe("Worker processDocument: reprocesamiento", () => {
+  let clientId: string;
+  let userId: string;
+
+  beforeAll(async () => {
+    const user = await registerUser();
+    userId = user.user.id;
+    clientId = (await createClient(user.token)).id;
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    extractText.mockResolvedValue("texto");
+    chunkText.mockReturnValue(["fragmento 1", "fragmento 2"]);
+    embed.mockResolvedValue([new Array(1024).fill(0.1), new Array(1024).fill(0.2)]);
+  });
+
+  it("procesar dos veces el mismo documento no duplica conceptos ni embeddings", async () => {
+    const doc = await createDocument(clientId, userId);
+    extractTaxConcepts.mockResolvedValue([
+      { conceptType: "gross_income", description: "Salario", amount: 1000, periodYear: 2025 },
+      { conceptType: "withholding", description: "Retención", amount: 100, periodYear: 2025 },
+    ]);
+
+    await processDocument(jobFor(doc.id));
+    await processDocument(jobFor(doc.id));
+
+    expect(await prisma.taxConcept.count({ where: { documentId: doc.id } })).toBe(2);
+    expect(await prisma.documentEmbedding.count({ where: { documentId: doc.id } })).toBe(2);
+  });
+
+  it("al reprocesar, los conceptos nuevos reemplazan a los anteriores", async () => {
+    const doc = await createDocument(clientId, userId);
+    extractTaxConcepts.mockResolvedValueOnce([
+      { conceptType: "gross_income", description: "Primera lectura", amount: 1000, periodYear: 2025 },
+    ]);
+    await processDocument(jobFor(doc.id));
+    extractTaxConcepts.mockResolvedValueOnce([
+      { conceptType: "gross_income", description: "Segunda lectura", amount: 2000, periodYear: 2025 },
+    ]);
+    await processDocument(jobFor(doc.id));
+
+    const concepts = await prisma.taxConcept.findMany({ where: { documentId: doc.id } });
+    expect(concepts.map((c) => c.description)).toEqual(["Segunda lectura"]);
+  });
+
+  it("si al reprocesar el LLM no devuelve conceptos, se conservan los anteriores", async () => {
+    const doc = await createDocument(clientId, userId);
+    extractTaxConcepts.mockResolvedValueOnce([
+      { conceptType: "gross_income", description: "Buena", amount: 1000, periodYear: 2025 },
+    ]);
+    await processDocument(jobFor(doc.id));
+    extractTaxConcepts.mockResolvedValueOnce([]);
+    await processDocument(jobFor(doc.id));
+
+    expect(await prisma.taxConcept.count({ where: { documentId: doc.id } })).toBe(1);
+  });
+});

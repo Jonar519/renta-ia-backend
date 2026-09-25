@@ -4,7 +4,7 @@ import { storageService } from "../services/storage";
 import { textExtractionService } from "../modules/ai/text-extraction.service";
 import { extractionService } from "../modules/ai/extraction.service";
 import { embeddingsService } from "../modules/ai/embeddings.service";
-import { saveEmbedding } from "../modules/ai/embeddings.repository";
+import { replaceEmbeddings } from "../modules/ai/embeddings.repository";
 import { rulesService } from "../modules/ai/rules.service";
 import type { DocumentProcessingJob } from "../queues/documentQueue";
 
@@ -35,16 +35,23 @@ export async function processDocument(job: Job<DocumentProcessingJob>) {
       console.log(`[worker] ${concepts.length} concepto(s) tributario(s) extraído(s)`);
 
       if (concepts.length > 0) {
-        await prisma.taxConcept.createMany({
-          data: concepts.map((c) => ({
-            documentId: document.id,
-            clientId: document.clientId,
-            conceptType: c.conceptType,
-            description: c.description,
-            amount: c.amount,
-            periodYear: c.periodYear,
-          })),
-        });
+        // Si el documento se reprocesa (reintento de BullMQ o re-subida), los
+        // conceptos nuevos REEMPLAZAN a los anteriores de ese documento, en una
+        // transacción. Si la extracción no devolvió nada, se conservan los que
+        // había (una respuesta vacía o inválida del LLM no borra datos buenos).
+        await prisma.$transaction([
+          prisma.taxConcept.deleteMany({ where: { documentId: document.id } }),
+          prisma.taxConcept.createMany({
+            data: concepts.map((c) => ({
+              documentId: document.id,
+              clientId: document.clientId,
+              conceptType: c.conceptType,
+              description: c.description,
+              amount: c.amount,
+              periodYear: c.periodYear,
+            })),
+          }),
+        ]);
 
         // 4. Motor de reglas: solo tiene sentido si hubo conceptos extraídos.
         await rulesService.evaluateClientConcepts(document.clientId, document.id);
@@ -62,13 +69,14 @@ export async function processDocument(job: Job<DocumentProcessingJob>) {
       const chunks = embeddingsService.chunkText(text);
       if (chunks.length > 0) {
         const vectors = await embeddingsService.embed(chunks);
-        for (const [i, chunk] of chunks.entries()) {
-          const vector = vectors[i];
-          if (!vector) {
-            throw new Error(`Se recibieron ${vectors.length} vectores para ${chunks.length} fragmentos`);
-          }
-          await saveEmbedding(document.id, i, chunk, vector);
+        if (vectors.length !== chunks.length) {
+          throw new Error(`Se recibieron ${vectors.length} vectores para ${chunks.length} fragmentos`);
         }
+        // Reemplaza los embeddings anteriores del documento (reprocesamiento).
+        await replaceEmbeddings(
+          document.id,
+          chunks.map((chunkText, i) => ({ chunkText, embedding: vectors[i]! }))
+        );
         console.log(`[worker] ${chunks.length} fragmento(s) vectorizado(s)`);
       }
     } catch (err) {

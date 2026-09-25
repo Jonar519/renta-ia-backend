@@ -17,19 +17,26 @@ export const rulesService = {
     const deductions = sumByType(concepts, "deduction");
 
     if (grossIncome > 0 && deductions / grossIncome > DEDUCTION_LIMIT_RATIO) {
-      await prisma.alert.create({
-        data: {
-          clientId,
-          documentId,
-          alertType: "inconsistency",
-          severity: "high",
-          status: "open",
-          message:
-            `Las deducciones reportadas ($${formatCOP(deductions)}) superan el ` +
-            `${Math.round(DEDUCTION_LIMIT_RATIO * 100)}% del ingreso bruto acumulado ` +
-            `($${formatCOP(grossIncome)}). Revisar manualmente antes de declarar.`,
-        },
+      const message =
+        `Las deducciones reportadas ($${formatCOP(deductions)}) superan el ` +
+        `${Math.round(DEDUCTION_LIMIT_RATIO * 100)}% del ingreso bruto acumulado ` +
+        `($${formatCOP(grossIncome)}). Revisar manualmente antes de declarar.`;
+
+      // Una sola alerta de inconsistencia abierta por cliente: si ya existe,
+      // se actualiza con las cifras actuales en vez de crear otra igual con
+      // cada documento nuevo.
+      const existing = await prisma.alert.findFirst({
+        where: { clientId, alertType: "inconsistency", status: "open" },
+        orderBy: { createdAt: "desc" },
       });
+
+      if (existing) {
+        await prisma.alert.update({ where: { id: existing.id }, data: { documentId, severity: "high", message } });
+      } else {
+        await prisma.alert.create({
+          data: { clientId, documentId, alertType: "inconsistency", severity: "high", status: "open", message },
+        });
+      }
     }
   },
 };

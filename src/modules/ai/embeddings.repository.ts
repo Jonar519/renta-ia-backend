@@ -8,18 +8,26 @@ import { prisma } from "../../config/prisma";
  * (previene inyección SQL), solo que nosotros escribimos el SQL a mano.
  */
 
-export async function saveEmbedding(
+/**
+ * Reemplaza TODOS los embeddings de un documento por los nuevos, en una
+ * transacción: si el documento se reprocesa no quedan fragmentos duplicados
+ * (además la base lo impide con UNIQUE (document_id, chunk_index)), y si
+ * algo falla a mitad se conservan los anteriores.
+ */
+export async function replaceEmbeddings(
   documentId: string,
-  chunkIndex: number,
-  chunkText: string,
-  embedding: number[]
+  chunks: { chunkText: string; embedding: number[] }[]
 ): Promise<void> {
-  const vectorLiteral = `[${embedding.join(",")}]`;
-
-  await prisma.$executeRaw`
-    INSERT INTO document_embeddings (document_id, chunk_index, chunk_text, embedding)
-    VALUES (${documentId}::uuid, ${chunkIndex}, ${chunkText}, ${vectorLiteral}::vector)
-  `;
+  await prisma.$transaction(async (tx) => {
+    await tx.documentEmbedding.deleteMany({ where: { documentId } });
+    for (const [chunkIndex, { chunkText, embedding }] of chunks.entries()) {
+      const vectorLiteral = `[${embedding.join(",")}]`;
+      await tx.$executeRaw`
+        INSERT INTO document_embeddings (document_id, chunk_index, chunk_text, embedding)
+        VALUES (${documentId}::uuid, ${chunkIndex}, ${chunkText}, ${vectorLiteral}::vector)
+      `;
+    }
+  });
 }
 
 export interface SimilarChunk {
