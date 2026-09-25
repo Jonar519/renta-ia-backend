@@ -84,6 +84,12 @@ Debe devolver `{"status":"ok"}`.
 | `JWT_SECRET` | Clave secreta para firmar los tokens. Cámbiala por un valor largo y aleatorio |
 | `JWT_EXPIRES_IN` | Duración del token (ej. `1d`, `12h`) |
 | `PORT` | Puerto donde corre el servidor (por defecto 4000) |
+| `NODE_ENV` | `development`, `production` o `test` (cambia el formato de logs y de morgan) |
+| `LOG_LEVEL` | Nivel de logs (pino). Por defecto `info` |
+| `CORS_ORIGIN` | Orígenes permitidos por CORS, separados por coma. En desarrollo, por defecto `http://localhost:5173`; **obligatorio en producción** |
+| `TRUST_PROXY` | Proxies delante de la API (0 en local, 1 detrás de un balanceador) |
+| `REDIS_URL` | Redis para la cola de documentos y los contadores de rate limiting |
+| `ANTHROPIC_API_KEY` / `VOYAGE_API_KEY` | Claves de IA (solo necesarias para procesar documentos y usar el chat) |
 
 ## Endpoints disponibles (Fase 2)
 
@@ -106,6 +112,15 @@ Debe devolver `{"status":"ok"}`.
 | POST | `/api/ai/chat` | Pregunta en lenguaje natural sobre un cliente (RAG) | Sí |
 
 Todas las rutas que reciben un cliente (`:id`, `:clientId` o `clientId` en el body) verifican que pertenezca al usuario autenticado (o que sea admin). Si no, responden **404** (no 403) para no revelar que el recurso existe.
+
+### Validación, errores y límites
+
+- Todos los bodies y parámetros se validan con **zod** (`src/modules/*/*.schema.ts`). Los campos no declarados se descartan.
+- Formato de error: `{ "error": "mensaje", "details": [{ "field": "body.question", "message": "..." }] }` (`details` solo en errores de validación).
+- Códigos: `400` datos inválidos · `401` sin token/token inválido · `404` no existe o no es tuyo · `409` duplicado (ej. misma cédula para el mismo contador) · `413` archivo o body demasiado grande · `415` tipo de archivo no permitido · `429` límite de solicitudes.
+- `POST /api/ai/chat`: `question` entre 3 y 1000 caracteres.
+- `POST /api/documents/upload`: solo PDF, PNG o JPG (se valida MIME, extensión y contenido real), máx. 15 MB.
+- Rate limiting (contadores en Redis): 300 req/15 min por IP en toda la API · 10 intentos **fallidos** /15 min en `/api/auth/*` · 30 preguntas/hora por usuario en el chat · 30 subidas/hora por usuario.
 
 Para las rutas que requieren token, envía el header:
 
