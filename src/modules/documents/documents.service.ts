@@ -1,8 +1,14 @@
 import { DocumentType } from "@prisma/client";
 import { prisma } from "../../config/prisma";
 import { ApiError } from "../../utils/apiError";
+import { isUuid } from "../../utils/uuid";
 import { storageService } from "../../services/storage";
 import { documentQueue } from "../../queues/documentQueue";
+import { AuthPayload } from "../../middlewares/auth.middleware";
+import { clientScope } from "../../middlewares/ownership.middleware";
+
+// El acceso al cliente (clientId) de create/upload/listByClient se verifica
+// en la ruta con requireClientAccess, antes de llegar aquí.
 
 interface CreateDocumentInput {
   clientId: string;
@@ -24,7 +30,15 @@ export const documentsService = {
   // Registro manual de metadatos (Fase 2, se mantiene por si el archivo ya
   // se subió por otro medio y solo se quiere registrar su referencia).
   async create(input: CreateDocumentInput) {
-    return prisma.document.create({ data: input });
+    return prisma.document.create({
+      data: {
+        clientId: input.clientId,
+        uploadedBy: input.uploadedBy,
+        docType: input.docType,
+        originalName: input.originalName,
+        storageKey: input.storageKey,
+      },
+    });
   },
 
   // Fase 3: sube el archivo real, crea el documento y encola su
@@ -59,11 +73,13 @@ export const documentsService = {
     });
   },
 
-  async getById(id: string) {
-    const document = await prisma.document.findUnique({
-      where: { id },
-      include: { taxConcepts: true },
-    });
+  async getById(id: string, user: AuthPayload) {
+    const document = isUuid(id)
+      ? await prisma.document.findFirst({
+          where: { id, client: clientScope(user) },
+          include: { taxConcepts: true },
+        })
+      : null;
     if (!document) {
       throw new ApiError(404, "Documento no encontrado");
     }

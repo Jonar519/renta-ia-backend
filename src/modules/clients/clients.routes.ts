@@ -10,5 +10,6 @@ clientsRouter.use(authMiddleware);
 clientsRouter.post("/", asyncHandler(clientsController.create));
 clientsRouter.get("/", asyncHandler(clientsController.list));
 clientsRouter.get("/:id", asyncHandler(clientsController.getById));
+clientsRouter.get("/:id/tax-concepts", asyncHandler(clientsController.listTaxConcepts));
 clientsRouter.patch("/:id", asyncHandler(clientsController.update));
 clientsRouter.delete("/:id", asyncHandler(clientsController.remove));

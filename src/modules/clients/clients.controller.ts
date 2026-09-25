@@ -16,17 +16,22 @@ export const clientsController = {
   },
 
   async getById(req: Request, res: Response) {
-    const client = await clientsService.getById(req.params.id);
+    const client = await clientsService.getById(req.params.id, req.user!);
     res.json(client);
   },
 
   async update(req: Request, res: Response) {
-    const client = await clientsService.update(req.params.id, req.body);
+    const client = await clientsService.update(req.params.id, req.body ?? {}, req.user!);
     res.json(client);
   },
 
   async remove(req: Request, res: Response) {
-    await clientsService.remove(req.params.id);
+    await clientsService.remove(req.params.id, req.user!);
     res.status(204).send();
+  },
+
+  async listTaxConcepts(req: Request, res: Response) {
+    const concepts = await clientsService.listTaxConcepts(req.params.id, req.user!);
+    res.json(concepts);
   },
 };

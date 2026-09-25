@@ -2,6 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import { documentsController } from "./documents.controller";
 import { authMiddleware } from "../../middlewares/auth.middleware";
+import { requireClientAccess } from "../../middlewares/ownership.middleware";
 import { asyncHandler } from "../../utils/asyncHandler";
 
 const upload = multer({
@@ -13,7 +14,17 @@ export const documentsRouter = Router();
 
 documentsRouter.use(authMiddleware);
 
-documentsRouter.post("/", asyncHandler(documentsController.create));
-documentsRouter.post("/upload", upload.single("file"), asyncHandler(documentsController.upload));
-documentsRouter.get("/client/:clientId", asyncHandler(documentsController.listByClient));
+documentsRouter.post("/", requireClientAccess("body", "clientId"), asyncHandler(documentsController.create));
+// multer va primero: es quien llena req.body en peticiones multipart.
+documentsRouter.post(
+  "/upload",
+  upload.single("file"),
+  requireClientAccess("body", "clientId"),
+  asyncHandler(documentsController.upload)
+);
+documentsRouter.get(
+  "/client/:clientId",
+  requireClientAccess("params", "clientId"),
+  asyncHandler(documentsController.listByClient)
+);
 documentsRouter.get("/:id", asyncHandler(documentsController.getById));

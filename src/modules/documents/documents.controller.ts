@@ -37,7 +37,7 @@ export const documentsController = {
   },
 
   async getById(req: Request, res: Response) {
-    const document = await documentsService.getById(req.params.id);
+    const document = await documentsService.getById(req.params.id, req.user!);
     res.json(document);
   },
 };
