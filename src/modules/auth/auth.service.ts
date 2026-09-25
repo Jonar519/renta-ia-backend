@@ -1,16 +1,14 @@
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
+import jwt, { SignOptions } from "jsonwebtoken";
 import { User } from "@prisma/client";
 import { prisma } from "../../config/prisma";
 import { env } from "../../config/env";
 import { ApiError } from "../../utils/apiError";
-import { AppRole } from "../../middlewares/auth.middleware";
 
 interface RegisterInput {
   name: string;
   email: string;
   password: string;
-  role?: AppRole;
 }
 
 interface LoginInput {
@@ -20,7 +18,7 @@ interface LoginInput {
 
 function buildAuthResponse(user: Pick<User, "id" | "name" | "email" | "role">) {
   const token = jwt.sign({ userId: user.id, role: user.role }, env.jwtSecret, {
-    expiresIn: env.jwtExpiresIn,
+    expiresIn: env.jwtExpiresIn as SignOptions["expiresIn"],
   });
 
   return {
@@ -43,7 +41,9 @@ export const authService = {
         name: input.name,
         email: input.email,
         passwordHash,
-        role: input.role ?? "accountant",
+        // El registro público SIEMPRE crea contadores. Otros roles (admin,
+        // assistant) solo pueden asignarse directamente en la base de datos.
+        role: "accountant",
       },
     });
 
