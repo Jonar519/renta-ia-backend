@@ -89,12 +89,13 @@ Debe devolver `{"status":"ok"}`.
 
 | Método | Ruta | Descripción | Requiere token |
 |---|---|---|---|
-| POST | `/api/auth/register` | Crea un usuario (contador, asistente, admin) | No |
+| POST | `/api/auth/register` | Crea un usuario con rol **contador** (el campo `role` se ignora; admin/asistente solo se asignan en la base de datos) | No |
 | POST | `/api/auth/login` | Inicia sesión y devuelve un JWT | No |
 | GET | `/api/users/me` | Perfil del usuario autenticado | Sí |
 | POST | `/api/clients` | Crea un cliente contribuyente | Sí |
 | GET | `/api/clients` | Lista los clientes del contador autenticado | Sí |
 | GET | `/api/clients/:id` | Detalle de un cliente | Sí |
+| GET | `/api/clients/:id/tax-concepts` | Todos los conceptos tributarios del cliente (una sola consulta) | Sí |
 | PATCH | `/api/clients/:id` | Actualiza un cliente | Sí |
 | DELETE | `/api/clients/:id` | Elimina un cliente | Sí |
 | POST | `/api/documents` | Registra metadatos de un documento (sin IA) | Sí |
@@ -103,6 +104,8 @@ Debe devolver `{"status":"ok"}`.
 | GET | `/api/documents/:id` | Detalle de un documento (con sus conceptos tributarios) | Sí |
 | GET | `/api/alerts/client/:clientId` | Lista alertas de un cliente | Sí |
 | POST | `/api/ai/chat` | Pregunta en lenguaje natural sobre un cliente (RAG) | Sí |
+
+Todas las rutas que reciben un cliente (`:id`, `:clientId` o `clientId` en el body) verifican que pertenezca al usuario autenticado (o que sea admin). Si no, responden **404** (no 403) para no revelar que el recurso existe.
 
 Para las rutas que requieren token, envía el header:
 
