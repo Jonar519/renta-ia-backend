@@ -1,15 +1,7 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { env } from "../../config/env";
 import { prisma } from "../../config/prisma";
 import { embeddingsService } from "./embeddings.service";
 import { searchSimilarChunks } from "./embeddings.repository";
-
-function getClient(): Anthropic {
-  if (!env.anthropicApiKey) {
-    throw new Error("Falta configurar ANTHROPIC_API_KEY en el archivo .env para usar el chat.");
-  }
-  return new Anthropic({ apiKey: env.anthropicApiKey });
-}
+import { CLAUDE_MODEL, firstTextBlock, getAnthropicClient } from "../../services/llm/anthropic.client";
 
 const SYSTEM_PROMPT = `Eres un asistente contable que responde preguntas sobre la situación
 tributaria de un cliente, basándote ÚNICAMENTE en los fragmentos de documentos que se te
@@ -25,15 +17,18 @@ interface AskQuestionInput {
 export const ragService = {
   async askQuestion({ clientId, userId, question }: AskQuestionInput) {
     const [queryEmbedding] = await embeddingsService.embed([question]);
+    if (!queryEmbedding) {
+      throw new Error("No se pudo generar el embedding de la pregunta.");
+    }
     const relevantChunks = await searchSimilarChunks(clientId, queryEmbedding, 5);
 
     const context = relevantChunks
       .map((c, i) => `[Fragmento ${i + 1}]\n${c.chunkText}`)
       .join("\n\n");
 
-    const client = getClient();
+    const client = getAnthropicClient("usar el chat");
     const message = await client.messages.create({
-      model: "claude-sonnet-5",
+      model: CLAUDE_MODEL,
       max_tokens: 1000,
       system: SYSTEM_PROMPT,
       messages: [
@@ -44,8 +39,7 @@ export const ragService = {
       ],
     });
 
-    const textBlock = message.content.find((block) => block.type === "text");
-    const answer = textBlock && textBlock.type === "text" ? textBlock.text : "No se pudo generar una respuesta.";
+    const answer = firstTextBlock(message) ?? "No se pudo generar una respuesta.";
 
     const conversation = await prisma.aiConversation.create({ data: { clientId, userId } });
 

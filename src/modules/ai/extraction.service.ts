@@ -1,16 +1,6 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
-import { env } from "../../config/env";
 import { logger } from "../../config/logger";
-
-function getClient(): Anthropic {
-  if (!env.anthropicApiKey) {
-    throw new Error(
-      "Falta configurar ANTHROPIC_API_KEY en el archivo .env para poder usar la extracción con IA."
-    );
-  }
-  return new Anthropic({ apiKey: env.anthropicApiKey });
-}
+import { CLAUDE_MODEL, firstTextBlock, getAnthropicClient } from "../../services/llm/anthropic.client";
 
 export type TaxConceptType =
   | "gross_income"
@@ -105,10 +95,10 @@ export function parseExtractedConcepts(rawText: string): ExtractedConcept[] {
 
 export const extractionService = {
   async extractTaxConcepts(documentText: string): Promise<ExtractedConcept[]> {
-    const client = getClient();
+    const client = getAnthropicClient("poder usar la extracción con IA");
 
     const message = await client.messages.create({
-      model: "claude-sonnet-5",
+      model: CLAUDE_MODEL,
       max_tokens: 2000,
       system: SYSTEM_PROMPT,
       messages: [
@@ -119,11 +109,7 @@ export const extractionService = {
       ],
     });
 
-    const textBlock = message.content.find((block) => block.type === "text");
-    if (!textBlock || textBlock.type !== "text") {
-      return [];
-    }
-
-    return parseExtractedConcepts(textBlock.text);
+    const text = firstTextBlock(message);
+    return text === null ? [] : parseExtractedConcepts(text);
   },
 };
