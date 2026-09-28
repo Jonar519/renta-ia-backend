@@ -4,3 +4,8 @@ fc46d0c1b2b3e1f1d4bf203fe9dfca0cf9e4f65d:README.md:curl-auth-header:183
 fc46d0c1b2b3e1f1d4bf203fe9dfca0cf9e4f65d:README.md:curl-auth-header:193
 fc46d0c1b2b3e1f1d4bf203fe9dfca0cf9e4f65d:README.md:curl-auth-header:202
 2cadf02cff9161ba25366a11f0b230b69f1e455b:README.md:curl-auth-header:123
+# Contraseñas SINTÉTICAS de tests y pruebas de carga (TEST_PASSWORD y la contraseña
+# incorrecta a propósito de los escenarios de fuerza bruta), revisadas: no son secretos.
+db49bea2c17652d1039af48ebf8dffaa22f1ba88:loadtests/ratelimit.mjs:generic-api-key:31
+8fe96739adf85d89e51095fbcef11d7d1dac5824:tests/helpers.ts:generic-api-key:8
+8fe96739adf85d89e51095fbcef11d7d1dac5824:tests/integration/session.test.ts:generic-api-key:151
