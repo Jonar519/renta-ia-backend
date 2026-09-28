@@ -4,3 +4,5 @@ coverage/
 uploads/
 package-lock.json
 renta-ia-database
+# Generado por "npm run openapi" (un test verifica que esté al día)
+docs/openapi.json

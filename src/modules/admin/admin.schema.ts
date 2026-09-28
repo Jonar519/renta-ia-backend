@@ -13,7 +13,10 @@ export const createUserSchema = z
   .object({
     name: z.string().trim().min(2).max(150),
     email: z.string().trim().email().max(150),
-    password: z.string().max(PASSWORD_MAX_LENGTH),
+    password: z
+      .string()
+      .max(PASSWORD_MAX_LENGTH)
+      .describe("10 a 72 caracteres; no puede ser una contraseña común ni contener el correo o el nombre"),
     role: z.enum(["assistant", "client"]),
     accountantUserId: uuidSchema.optional(),
     clientId: uuidSchema.optional(),

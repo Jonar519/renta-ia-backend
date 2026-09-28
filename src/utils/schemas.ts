@@ -1,7 +1,11 @@
 import { z } from "zod";
+import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { isUuid } from "./uuid";
 
 // Piezas de validación compartidas por los *.schema.ts de cada módulo.
+
+// Habilita .openapi() (metadatos para docs/openapi.json, ver src/docs/openapi.ts).
+extendZodWithOpenApi(z);
 
 // Mensajes de error de zod en español (los usuarios de la API los ven en
 // `details`). Los mensajes personalizados de cada schema tienen prioridad.
@@ -32,7 +36,10 @@ z.setErrorMap((issue, ctx) => {
   }
 });
 
-export const uuidSchema = z.string().refine(isUuid, { message: "Debe ser un UUID válido" });
+export const uuidSchema = z
+  .string()
+  .refine(isUuid, { message: "Debe ser un UUID válido" })
+  .openapi({ type: "string", format: "uuid" });
 
 export function uuidParams<K extends string>(key: K) {
   return z.object({ [key]: uuidSchema } as Record<K, typeof uuidSchema>);

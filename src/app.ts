@@ -17,6 +17,8 @@ import { globalLimiter } from "./middlewares/rateLimit.middleware";
 import { healthHandler, readyHandler } from "./observability/health";
 import { httpMetricsMiddleware, metricsHandler, onScrape, queueJobs } from "./observability/metrics";
 import { documentQueue } from "./queues/documentQueue";
+import swaggerUi from "swagger-ui-express";
+import { buildOpenApiDocument } from "./docs/openapi";
 
 // Estado de la cola en cada scrape de /metrics (esperando, activos, fallidos…).
 onScrape(async () => {
@@ -71,6 +73,14 @@ export function createApp() {
   app.get("/health", healthHandler);
   app.get("/ready", readyHandler);
   app.get("/metrics", metricsHandler);
+
+  // Documentación interactiva de la API (OpenAPI 3 generado desde los
+  // schemas zod). Fuera de producción: no se publica el mapa de la API.
+  if (env.nodeEnv !== "production") {
+    const openApiDocument = buildOpenApiDocument();
+    app.get("/docs/openapi.json", (_req, res) => res.json(openApiDocument));
+    app.use("/docs", swaggerUi.serve, swaggerUi.setup(openApiDocument));
+  }
 
   app.use("/api", globalLimiter);
   app.use("/api/auth", authRouter);
