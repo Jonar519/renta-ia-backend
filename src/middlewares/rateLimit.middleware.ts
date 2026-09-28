@@ -72,3 +72,12 @@ export const uploadLimiter = limiter(
     keyGenerator: byUser,
   }
 );
+
+/** Resumen ejecutivo: cada uno es una llamada al LLM. */
+export const summaryLimiter = limiter(
+  "ai-summary",
+  60 * MINUTE,
+  20,
+  "Alcanzaste el límite de resúmenes ejecutivos por hora.",
+  { keyGenerator: byUser }
+);

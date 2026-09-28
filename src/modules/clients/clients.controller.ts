@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { clientsService } from "./clients.service";
+import { summaryService } from "./summary.service";
 import { routeParam } from "../../utils/params";
 
 export const clientsController = {
@@ -12,8 +13,14 @@ export const clientsController = {
   },
 
   async list(req: Request, res: Response) {
-    const clients = await clientsService.listByAccountant(req.user!.userId);
+    const clients = await clientsService.list(req.user!);
     res.json(clients);
+  },
+
+  // periodYear (opcional) ya viene validado por summarySchema.
+  async summary(req: Request, res: Response) {
+    const summary = await summaryService.generate(routeParam(req, "id"), req.user!, req.body?.periodYear);
+    res.json(summary);
   },
 
   async getById(req: Request, res: Response) {

@@ -1,6 +1,6 @@
 import { prisma } from "../../config/prisma";
 import { AuthPayload } from "../../middlewares/auth.middleware";
-import { assertClientAccess } from "../../middlewares/ownership.middleware";
+import { assertClientAccess, clientScope } from "../../middlewares/ownership.middleware";
 
 interface CreateClientInput {
   accountantUserId: string;
@@ -42,10 +42,16 @@ export const clientsService = {
     });
   },
 
-  async listByAccountant(accountantUserId: string) {
+  /**
+   * Clientes visibles para el usuario (mismo criterio que clientScope): el
+   * contador ve los suyos; el admin ve todos, con el nombre del contador
+   * responsable para poder distinguirlos.
+   */
+  async list(user: AuthPayload) {
     return prisma.client.findMany({
-      where: { accountantUserId },
+      where: clientScope(user),
       orderBy: { createdAt: "desc" },
+      include: user.role === "admin" ? { accountant: { select: { id: true, name: true } } } : undefined,
     });
   },
 

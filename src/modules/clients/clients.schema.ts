@@ -41,3 +41,8 @@ export const updateClientSchema = z
   .refine((data) => Object.values(data).some((value) => value !== undefined), {
     message: "Envía al menos un campo para actualizar",
   });
+
+// Año gravable a resumir; si se omite, el más reciente con conceptos.
+export const summarySchema = z.object({
+  periodYear: z.number().int().min(2000).max(2100).optional(),
+});
