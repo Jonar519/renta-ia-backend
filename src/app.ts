@@ -35,6 +35,15 @@ export function createApp() {
     app.use(morgan("combined"));
   }
 
+  // Política de caché (docs/cache-policy.md del frontend): NINGUNA respuesta
+  // de la API se guarda en cachés del navegador, proxies ni CDN. Todo lo que
+  // devuelve la API es dato tributario/personal o estado que cambia (y
+  // además depende del usuario autenticado).
+  app.use((_req, res, next) => {
+    res.set("Cache-Control", "no-store");
+    next();
+  });
+
   app.get("/health", (_req, res) => res.json({ status: "ok" }));
 
   app.use("/api", globalLimiter);
