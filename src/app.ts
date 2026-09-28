@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
+import compression from "compression";
 import morgan from "morgan";
 import { env } from "./config/env";
 import { authRouter } from "./modules/auth/auth.routes";
@@ -19,6 +20,10 @@ export function createApp() {
   app.set("trust proxy", env.trustProxy);
 
   app.use(helmet());
+  // gzip/brotli de las respuestas (> 1 KB). Medido: el detalle de un cliente
+  // con 4.000 conceptos transfería 824 KB de JSON sin comprimir
+  // (docs/performance-report.md del frontend).
+  app.use(compression({ threshold: 1024 }));
   app.use(cors({ origin: env.corsOrigins }));
   app.use(express.json({ limit: "100kb" }));
 

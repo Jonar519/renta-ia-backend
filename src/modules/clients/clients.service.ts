@@ -79,7 +79,7 @@ export const clientsService = {
     return prisma.taxConcept.findMany({
       where: { clientId: id },
       orderBy: [{ periodYear: "desc" }, { createdAt: "desc" }],
-      select: { id: true, documentId: true, conceptType: true, description: true, amount: true, periodYear: true },
+      select: { conceptType: true, description: true, amount: true, periodYear: true },
     });
   },
 };
