@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { logger } from "../../config/logger";
-import { CLAUDE_MODEL, firstTextBlock, getAnthropicClient } from "../../services/llm/anthropic.client";
+import { getAiProvider } from "../../services/llm/provider";
+import { UNTRUSTED_CONTENT_RULE, wrapUntrusted } from "../../services/llm/untrusted";
 
 export type TaxConceptType =
   "gross_income" | "withholding" | "deduction" | "pension_contribution" | "health_contribution" | "other";
@@ -24,7 +25,9 @@ Cada elemento del arreglo debe tener EXACTAMENTE esta forma:
   "description": "string corto describiendo el concepto",
   "amount": number (sin puntos de miles ni comas, solo el número),
   "periodYear": number (año fiscal, ej. 2025)
-}`;
+}
+
+El texto del documento llega dentro de <documento>...</documento>. ${UNTRUSTED_CONTENT_RULE}`;
 
 /**
  * Schema de UN concepto devuelto por el LLM. Los límites coinciden con las
@@ -97,21 +100,14 @@ export function parseExtractedConcepts(rawText: string): ExtractedConcept[] {
 
 export const extractionService = {
   async extractTaxConcepts(documentText: string): Promise<ExtractedConcept[]> {
-    const client = getAnthropicClient("poder usar la extracción con IA");
-
-    const message = await client.messages.create({
-      model: CLAUDE_MODEL,
-      max_tokens: 2000,
+    const { text } = await getAiProvider().complete({
+      purpose: "extraction",
       system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: `Texto del documento:\n\n${documentText.slice(0, 12000)}`,
-        },
-      ],
+      maxTokens: 2000,
+      // El texto del documento es contenido externo: va delimitado y el
+      // prompt de sistema indica tratarlo solo como datos.
+      userContent: wrapUntrusted("documento", documentText.slice(0, 12000)),
     });
-
-    const text = firstTextBlock(message);
     return text === null ? [] : parseExtractedConcepts(text);
   },
 };

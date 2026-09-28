@@ -10,6 +10,17 @@ function required(name: string): string {
 
 const nodeEnv = process.env.NODE_ENV ?? "development";
 
+function aiProvider(): "anthropic" | "mock" {
+  const value = process.env.AI_PROVIDER ?? "anthropic";
+  if (value !== "anthropic" && value !== "mock") {
+    throw new Error(`AI_PROVIDER="${value}" no es válido. Usa "anthropic" o "mock".`);
+  }
+  if (value === "mock" && nodeEnv === "production") {
+    throw new Error("AI_PROVIDER=mock es solo para pruebas y no puede usarse con NODE_ENV=production.");
+  }
+  return value;
+}
+
 // Orígenes permitidos por CORS, separados por coma. En producción es
 // obligatorio definirlo; en desarrollo se usa el puerto por defecto de Vite.
 const corsOrigins = (
@@ -40,6 +51,9 @@ export const env = {
   // Solo se exigen en el momento de procesar un documento o usar el chat.
   anthropicApiKey: process.env.ANTHROPIC_API_KEY,
   voyageApiKey: process.env.VOYAGE_API_KEY,
+  // "anthropic" (real, por defecto) o "mock" (SOLO pruebas; prohibido en producción).
+  aiProvider: aiProvider(),
+  aiMockLatencyMs: Number(process.env.AI_MOCK_LATENCY_MS ?? 0),
 
   // Almacenamiento de documentos (Fase 3: disco local · Fase 6: S3)
   storageDriver: process.env.STORAGE_DRIVER ?? "local",
