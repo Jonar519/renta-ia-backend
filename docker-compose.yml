@@ -3,6 +3,12 @@ services:
     image: redis:7-alpine
     container_name: renta_ia_redis
     restart: unless-stopped
+    # BullMQ exige que Redis NUNCA descarte claves por falta de memoria: con
+    # una política de expulsión (allkeys-lru, etc.) se perderían trabajos de
+    # la cola en silencio. Con noeviction, si se llena, Redis rechaza la
+    # escritura con un error visible. Es el valor por defecto de la imagen,
+    # pero se deja explícito para que nadie lo cambie sin querer.
+    command: ["redis-server", "--maxmemory-policy", "noeviction"]
     ports:
       - "6379:6379"
     healthcheck:
