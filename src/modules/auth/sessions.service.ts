@@ -7,7 +7,7 @@ import { env } from "../../config/env";
 import { ApiError } from "../../utils/apiError";
 
 /**
- * Sesión: access token corto + refresh token rotativo (docs/adr del frontend).
+ * Sesión: access token corto + refresh token rotativo (docs/adr/0007-esquema-de-sesion.md).
  *
  *  - Access token: JWT de 15 min en el header Authorization. El navegador lo
  *    guarda SOLO en memoria (un XSS no lo encuentra en localStorage y dura poco).
