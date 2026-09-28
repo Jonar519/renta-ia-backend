@@ -1,304 +1,229 @@
 # renta-ia-backend
 
-API REST del **Sistema de Gestión Documental Contable con IA**. Se conecta a la base de datos definida en el repositorio [`renta-ia-database`](../renta-ia-database) mediante Prisma.
+API REST + worker de IA del **Sistema de Gestión Documental Contable con IA**.
+Se conecta a la base de datos del repositorio [`renta-ia-database`](../renta-ia-database)
+mediante Prisma (solo como cliente: el esquema lo gestiona ese repo).
 
-## Estructura del proyecto
+- Decisiones de arquitectura: [`docs/adr/`](docs/adr/README.md)
+- Modelo de amenazas (STRIDE): [`docs/threat-model.md`](docs/threat-model.md)
+- Pruebas de carga con mediciones reales: [`docs/load-test-report.md`](docs/load-test-report.md)
+- API (OpenAPI 3): [`docs/openapi.json`](docs/openapi.json) y, fuera de producción, **http://localhost:4000/docs**
+
+## Estructura
 
 ```
 renta-ia-backend/
-├── prisma/
-│   └── schema.prisma            # Refleja el esquema del repo renta-ia-database
+├── prisma/schema.prisma          # Generado con `npx prisma db pull` (no se edita a mano salvo nombres de relaciones)
 ├── src/
-│   ├── config/
-│   │   ├── env.ts               # Carga y valida variables de entorno
-│   │   ├── logger.ts            # Logger estructurado (pino) con redacción de secretos
-│   │   ├── prisma.ts            # Cliente de Prisma (singleton)
-│   │   └── redis.ts             # Conexión a Redis (cola + rate limiting)
-│   ├── middlewares/
-│   │   ├── auth.middleware.ts       # Verifica el JWT
-│   │   ├── ownership.middleware.ts  # ÚNICO lugar que decide si un usuario accede a un cliente
-│   │   ├── validate.middleware.ts   # Validación genérica con zod (body/params/query)
-│   │   ├── rateLimit.middleware.ts  # Límites global, auth, chat y upload (Redis)
-│   │   ├── role.middleware.ts       # Autorización por rol
-│   │   └── error.middleware.ts      # Manejo centralizado de errores (Prisma/multer → 4xx)
-│   ├── modules/                 # Cada módulo: routes → (schema) → controller → service
-│   │   ├── auth/                # Registro / login
-│   │   ├── users/               # Perfil del usuario autenticado
-│   │   ├── clients/             # CRUD de clientes + conceptos tributarios del cliente
-│   │   ├── documents/           # Subida de documentos y consulta
-│   │   ├── alerts/              # Consulta de alertas
-│   │   └── ai/                  # Chat RAG, extracción con LLM, embeddings, motor de reglas
+│   ├── config/                   # env (validación), logger (pino), prisma, redis, calendario y reglas tributarias
+│   ├── middlewares/              # auth (JWT), ownership (clientScope por rol), role, csrf, validate (zod), rateLimit, error
+│   ├── modules/                  # routes → (schema zod) → controller → service → Prisma
+│   │   ├── auth/                 # registro, login, refresh, logout, bloqueo progresivo, política de contraseñas
+│   │   ├── admin/                # alta de usuarios assistant/client, consulta de auditoría
+│   │   ├── users/ clients/ documents/ alerts/ ai/ metrics/
 │   ├── services/
-│   │   ├── llm/anthropic.client.ts  # Cliente de Anthropic compartido
-│   │   └── storage/             # Interfaz de almacenamiento (hoy disco local; S3 en Fase 6)
-│   ├── queues/documentQueue.ts  # Cola BullMQ de procesamiento de documentos
-│   ├── workers/
-│   │   ├── processDocument.ts           # Pipeline de IA de un documento
-│   │   └── documentProcessing.worker.ts # Arranque del worker (npm run worker)
-│   ├── utils/                   # ApiError, asyncHandler, schemas comunes, uuid, tipos de archivo
-│   ├── app.ts                   # Ensambla la app de Express
-│   └── server.ts                # Punto de entrada de la API
-├── tests/                       # Vitest: integration/ y unit/
-├── .env.example
-├── eslint.config.js · .prettierrc
-├── vitest.config.ts
-├── package.json
-└── tsconfig.json · tsconfig.test.json
+│   │   ├── llm/                  # proveedor de IA (anthropic | mock), delimitadores anti prompt-injection
+│   │   ├── storage/              # interfaz de almacenamiento (hoy disco local)
+│   │   ├── audit/                # registro de auditoría (audit_log)
+│   │   ├── access/               # audiencia de un cliente (para el tiempo real)
+│   │   └── events/               # eventos worker → API (Redis pub/sub)
+│   ├── observability/            # /health, /ready y métricas Prometheus
+│   ├── lifecycle/                # apagado ordenado (SIGTERM/SIGINT)
+│   ├── realtime/                 # WebSocket /ws
+│   ├── queues/ workers/          # BullMQ: cola de documentos y tareas programadas
+│   ├── docs/                     # generador de OpenAPI desde los schemas zod
+│   ├── app.ts · server.ts
+├── tests/                        # Vitest + Supertest (integration/ y unit/)
+├── loadtests/                    # autocannon (ver loadtests/README.md)
+└── docs/                         # ADR, threat model, informe de carga, openapi.json
 ```
-
-Cada módulo sigue el mismo patrón: **routes → controller → service → Prisma**. El controller nunca habla directo con Prisma; siempre pasa por el service, que es donde vive la lógica de negocio. La validación de entrada (zod) y la verificación de dueño del cliente ocurren en la ruta, antes del controller.
-
-## Requisitos
-
-- Node.js 20 o superior
-- Docker (Postgres + pgvector del repo `renta-ia-database`, y Redis de este repo)
-- El repositorio `renta-ia-database` ya migrado y corriendo (ver su propio README)
 
 ## Puesta en marcha (Windows · cmd.exe)
 
-Parado dentro de la carpeta `renta-ia-backend`:
+Requisitos: Node.js 20+, Docker Desktop, y `renta-ia-database` levantado y migrado.
 
 ```bat
-:: 1. Instalar dependencias
-npm install
-
-:: 2. Crear el archivo de variables de entorno
-copy .env.example .env
-
-:: 3. Generar el cliente de Prisma a partir del schema
-npx prisma generate
-
-:: 4. Confirmar que el schema coincide con la base de datos real
-::    (opcional pero recomendado la primera vez)
-npx prisma db pull
-
-:: 5. Levantar el servidor en modo desarrollo
-npm run dev
-```
-
-Si todo va bien, verás:
-
-```
-Conectado a la base de datos.
-Servidor escuchando en http://localhost:4000
-```
-
-Prueba que responde:
-
-```bat
-curl http://localhost:4000/health
-```
-
-Debe devolver `{"status":"ok"}`.
-
-## Variables de entorno (`.env`)
-
-| Variable                               | Descripción                                                                                                                                                                  |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                         | Cadena de conexión a Postgres. Igual a la que usaste en `renta-ia-database`                                                                                                  |
-| `JWT_SECRET`                           | Clave secreta para firmar los tokens. Cámbiala por un valor largo y aleatorio                                                                                                |
-| `JWT_EXPIRES_IN`                       | Duración del token (ej. `1d`, `12h`)                                                                                                                                         |
-| `PORT`                                 | Puerto donde corre el servidor (por defecto 4000)                                                                                                                            |
-| `NODE_ENV`                             | `development`, `production` o `test` (cambia el formato de logs y de morgan)                                                                                                 |
-| `LOG_LEVEL`                            | Nivel de logs (pino). Por defecto `info`                                                                                                                                     |
-| `CORS_ORIGIN`                          | Orígenes permitidos por CORS, separados por coma. En desarrollo, por defecto `http://localhost:5173`; **obligatorio en producción**                                          |
-| `TRUST_PROXY`                          | Proxies delante de la API (0 en local, 1 detrás de un balanceador)                                                                                                           |
-| `REDIS_URL`                            | Redis para la cola de documentos y los contadores de rate limiting                                                                                                           |
-| `AI_PROVIDER`                          | `anthropic` (por defecto) o `mock`. **`mock` es solo para E2E y pruebas de carga**: no llama a ninguna API y el servidor se niega a arrancar con él si `NODE_ENV=production` |
-| `AI_MOCK_LATENCY_MS`                   | Solo con `AI_PROVIDER=mock`: latencia artificial por llamada (ms)                                                                                                            |
-| `TAX_CALENDAR_PATH` / `TAX_RULES_PATH` | Opcionales: rutas a otros JSON de calendario tributario / parámetros (por defecto `src/config/tax-calendar.json` y `tax-rules.json`)                                         |
-| `EXOGENOUS_TOLERANCE_RATIO`            | Opcional: tolerancia de la regla exógena vs. certificado (por defecto 0.05 = 5%)                                                                                             |
-| `ANTHROPIC_API_KEY` / `VOYAGE_API_KEY` | Claves de IA (solo necesarias para procesar documentos y usar el chat)                                                                                                       |
-
-## Endpoints
-
-| Método | Ruta                              | Descripción                                                                                                           | Requiere token                    |
-| ------ | --------------------------------- | --------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| POST   | `/api/auth/register`              | Crea un usuario con rol **contador** (el campo `role` se ignora; admin/asistente solo se asignan en la base de datos) | No                                |
-| POST   | `/api/auth/login`                 | Inicia sesión y devuelve un JWT (el correo no distingue mayúsculas)                                                   | No                                |
-| GET    | `/api/users/me`                   | Perfil del usuario autenticado                                                                                        | Sí                                |
-| POST   | `/api/clients`                    | Crea un cliente contribuyente                                                                                         | Sí                                |
-| GET    | `/api/clients`                    | Lista los clientes del contador autenticado                                                                           | Sí                                |
-| GET    | `/api/clients/:id`                | Detalle de un cliente                                                                                                 | Sí                                |
-| POST   | `/api/clients/:id/summary`        | Resumen ejecutivo: totales y saldo estimado calculados en código + texto redactado por IA (20/h por usuario)          | Sí                                |
-| GET    | `/api/clients/:id/tax-concepts`   | Todos los conceptos tributarios del cliente (una sola consulta)                                                       | Sí                                |
-| PATCH  | `/api/clients/:id`                | Actualiza un cliente                                                                                                  | Sí                                |
-| DELETE | `/api/clients/:id`                | Elimina un cliente                                                                                                    | Sí                                |
-| POST   | `/api/documents`                  | Registra metadatos de un documento (sin IA)                                                                           | Sí                                |
-| POST   | `/api/documents/upload`           | Sube el archivo real y dispara el pipeline de IA                                                                      | Sí                                |
-| GET    | `/api/documents/client/:clientId` | Lista documentos de un cliente                                                                                        | Sí                                |
-| POST   | `/api/documents/:id/reprocess`    | Reintentar el análisis con IA (solo si terminó con error o advertencias; 409 si está en cola)                         | Sí                                |
-| GET    | `/api/documents/:id`              | Detalle de un documento (con sus conceptos tributarios)                                                               | Sí                                |
-| GET    | `/api/alerts/client/:clientId`    | Lista alertas de un cliente                                                                                           | Sí                                |
-| PATCH  | `/api/alerts/:id`                 | Cambiar estado: `{ "status": "acknowledged"                                                                           | "resolved" }` (resuelta es final) | Sí  |
-| POST   | `/api/alerts/deadlines/run`       | Ejecutar ya la revisión de vencimientos (el job corre a diario a las 06:00)                                           | Sí (admin)                        |
-| WS     | `/ws`                             | Notificaciones en tiempo real del estado de los documentos (ver abajo)                                                | Sí (primer mensaje)               |
-| POST   | `/api/ai/chat`                    | Pregunta en lenguaje natural sobre un cliente (RAG)                                                                   | Sí                                |
-
-Todas las rutas que reciben un cliente (`:id`, `:clientId` o `clientId` en el body) verifican que pertenezca al usuario autenticado (o que sea admin). Si no, responden **404** (no 403) para no revelar que el recurso existe.
-
-### Validación, errores y límites
-
-- Todos los bodies y parámetros se validan con **zod** (`src/modules/*/*.schema.ts`). Los campos no declarados se descartan.
-- Formato de error: `{ "error": "mensaje", "details": [{ "field": "body.question", "message": "..." }] }` (`details` solo en errores de validación).
-- Códigos: `400` datos inválidos · `401` sin token/token inválido · `404` no existe o no es tuyo · `409` duplicado (ej. misma cédula para el mismo contador) · `413` archivo o body demasiado grande · `415` tipo de archivo no permitido · `429` límite de solicitudes.
-- `POST /api/ai/chat`: `question` entre 3 y 1000 caracteres.
-- `POST /api/documents/upload`: solo PDF, PNG o JPG (se valida MIME, extensión y contenido real), máx. 15 MB.
-- Rate limiting (contadores en Redis): 300 req/15 min por IP en toda la API · 10 intentos **fallidos** /15 min en `/api/auth/*` · 30 preguntas/hora por usuario en el chat · 30 subidas/hora por usuario.
-
-Para las rutas que requieren token, envía el header:
-
-```
-Authorization: Bearer <token que devolvió /api/auth/login>
-```
-
-## Prueba rápida de extremo a extremo (cmd.exe)
-
-```bat
-:: Registrar un contador
-curl -X POST http://localhost:4000/api/auth/register ^
-  -H "Content-Type: application/json" ^
-  -d "{\"name\":\"Ana Contadora\",\"email\":\"ana2@example.com\",\"password\":\"claveSegura123\"}"
-```
-
-Copia el `token` de la respuesta y úsalo así:
-
-```bat
-curl http://localhost:4000/api/clients ^
-  -H "Authorization: Bearer PEGA_AQUI_EL_TOKEN"
-```
-
-## Tiempo real (WebSocket `/ws`)
-
-El worker publica cada cambio de estado de un documento en Redis (pub/sub); la API lo reenvía por WebSocket **solo** al contador dueño del cliente (y a los admin).
-
-- Conexión: `ws://localhost:4000/ws`, con un `Origin` permitido por `CORS_ORIGIN`.
-- Primer mensaje (antes de 5 s): `{ "type": "auth", "token": "<token>" }` → responde `{ "type": "ready" }`.
-- Eventos: `{ "type": "document.updated", "documentId", "clientId", "status", "errorMessage", "at" }`.
-- Cierres: `4401` token inválido, `4408` no se autenticó a tiempo, `4409` token expirado.
-- Si el socket no está disponible, el frontend hace polling con backoff mientras haya documentos pendientes.
-
-## Alertas de vencimiento y calendario tributario
-
-`src/config/tax-calendar.json` define, por año gravable, la fecha límite de la declaración según los dos últimos dígitos del NIT/cédula. **Las fechas incluidas son de EJEMPLO** (`"esEjemplo": true`) y cada alerta lo advierte: reemplázalas con el calendario oficial de la DIAN. El worker (`npm run worker`) programa un job diario (06:00, America/Bogota) que crea o escala las alertas sin duplicarlas y sin recrear las resueltas.
-
-## Tests y calidad de código
-
-```bat
-:: Tests (Vitest + Supertest). Necesitan el Postgres de renta-ia-database corriendo:
-:: crean desde cero una base aparte "renta_ia_test" (nunca tocan renta_ia) y le
-:: aplican las migraciones de ..
-enta-ia-databasemigrations.
-npm test
-
-:: Lint (ESLint + Prettier), typecheck y build
-npm run lint
-npm run typecheck
-npm run build
-
-:: Formatear el código
-npm run format
-```
-
-Variables opcionales para los tests: `TEST_DATABASE_URL` (por defecto `postgresql://postgres:postgres@localhost:5433/renta_ia_test`; su nombre **debe** terminar en `_test`) y `MIGRATIONS_DIR` (ruta a las migraciones SQL). Anthropic, Voyage y Redis están mockeados: los tests no consumen crédito ni necesitan Redis.
-
-## Relación con el repositorio de base de datos
-
-Este backend **no crea ni modifica tablas** (no usa `prisma migrate`). El dueño del esquema es `renta-ia-database`. El flujo correcto ante un cambio de esquema es:
-
-1. Se agrega una nueva migración SQL en `renta-ia-database`.
-2. Se aplica esa migración (`scripts\migrate.bat`).
-3. Aquí, en el backend, se corre `npx prisma db pull` para refrescar `prisma/schema.prisma` con la nueva estructura.
-4. Se ajusta el código de los servicios/controladores si el cambio lo requiere.
-
-## Pipeline de IA: puesta en marcha (Windows · cmd.exe)
-
-Requisitos adicionales a los de la Fase 2:
-
-- Contenedor de Redis corriendo (para la cola de tareas)
-- API key de Anthropic (`console.anthropic.com` → API Keys)
-- API key de Voyage AI (`console.voyageai.com` → usada para generar embeddings)
-
-```bat
-:: 1. Instalar las nuevas dependencias (bullmq, tesseract.js, pdf-parse, etc.)
-npm install
-
-:: 2. Levantar Redis
+:: Redis (cola, rate limiting, eventos en tiempo real)
 docker compose up -d
 
-:: 3. Editar tu .env y pegar tus API keys
-notepad .env
-```
+npm install
+copy .env.example .env
+npx prisma generate
 
-En el `.env`, completa:
-
-```
-ANTHROPIC_API_KEY=sk-ant-...
-VOYAGE_API_KEY=pa-...
-```
-
-**Este proyecto ahora corre en DOS procesos separados**, cada uno en su propia ventana de cmd:
-
-```bat
-:: Ventana 1 — la API (igual que antes)
+:: Ventana 1: la API
 npm run dev
 
-:: Ventana 2 — el worker que procesa documentos con IA
+:: Ventana 2: el worker de IA
 npm run worker
 ```
 
-Si el worker arrancó bien, verás:
+Edita `.env`: `JWT_SECRET` largo y aleatorio, y `ANTHROPIC_API_KEY` / `VOYAGE_API_KEY`
+si las tienes (sin ellas todo funciona salvo el análisis con IA y el chat).
 
-```
-Worker de procesamiento de documentos escuchando la cola 'document-processing'...
-```
+> **Si ya tenías un `.env` de antes:** cambia `JWT_EXPIRES_IN=1d` por
+> `JWT_EXPIRES_IN=15m`. Con el esquema de sesión nuevo el access token es corto
+> y se renueva solo con la cookie de refresh.
 
-### Probar el pipeline completo
-
-Con ambos procesos corriendo, y con un token de un contador ya logueado (ver sección de autenticación arriba) y un `clientId` ya creado:
-
-```bat
-curl -X POST http://localhost:4000/api/documents/upload ^
-  -H "Authorization: Bearer PEGA_AQUI_EL_TOKEN" ^
-  -F "file=@C:\ruta\a\tu\certificado.pdf" ^
-  -F "clientId=PEGA_AQUI_EL_CLIENT_ID" ^
-  -F "docType=income_certificate"
-```
-
-En la ventana del **worker** deberías ver los logs del procesamiento en tiempo real (extracción de texto, conceptos encontrados, embeddings generados). Cuando termine, consulta:
+Comprobación:
 
 ```bat
-curl http://localhost:4000/api/documents/DOCUMENT_ID ^
-  -H "Authorization: Bearer PEGA_AQUI_EL_TOKEN"
+curl http://localhost:4000/health
+curl http://localhost:4000/ready
 ```
 
-El campo `status` debe pasar de `uploaded` → `processing` → `processed` (o `error`, con `errorMessage` explicando qué pasó).
+`/health` → `{"status":"ok",...}`; `/ready` → `{"status":"ready","checks":{"database":"ok","redis":"ok"}}`.
 
-### Probar el chat con IA (RAG)
+## Variables de entorno
+
+| Variable                                | Por defecto              | Descripción                                                                                                         |
+| --------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                          | — (obligatoria)          | PostgreSQL de `renta-ia-database` (puerto **5433** en local)                                                        |
+| `JWT_SECRET`                            | — (obligatoria)          | Clave para firmar los access tokens (HS256)                                                                         |
+| `JWT_EXPIRES_IN`                        | `15m`                    | Vida del access token (el navegador lo guarda solo en memoria)                                                      |
+| `REFRESH_TOKEN_TTL_DAYS`                | `7`                      | Vida del refresh token (cookie httpOnly rotativa)                                                                   |
+| `COOKIE_SECURE`                         | `true` en producción     | Cookie `Secure` (solo HTTPS)                                                                                        |
+| `PORT`                                  | `4000`                   | Puerto de la API y del WebSocket                                                                                    |
+| `NODE_ENV`                              | `development`            | `production` activa `Secure`, exige `CORS_ORIGIN`, oculta `/docs` y prohíbe `AI_PROVIDER=mock` y `RATE_LIMIT_SCALE` |
+| `LOG_LEVEL`                             | `info`                   | Nivel de pino                                                                                                       |
+| `CORS_ORIGIN`                           | `http://localhost:5173`  | Orígenes permitidos (coma). **Obligatorio en producción**                                                           |
+| `TRUST_PROXY`                           | `0`                      | Proxies delante de la API (1 detrás de un balanceador)                                                              |
+| `REDIS_URL`                             | `redis://localhost:6379` | Cola, rate limiting y eventos                                                                                       |
+| `WORKER_CONCURRENCY`                    | `2`                      | Documentos en paralelo por worker (ver informe de carga)                                                            |
+| `METRICS_TOKEN`                         | vacío                    | Token para `GET /metrics` (API) y `:WORKER_METRICS_PORT/metrics` (worker). Vacío = 404                              |
+| `WORKER_METRICS_PORT`                   | `9464`                   | Puerto de métricas del worker                                                                                       |
+| `SHUTDOWN_TIMEOUT_MS`                   | `10000`                  | Tiempo máximo del apagado ordenado                                                                                  |
+| `SHUTDOWN_DRAIN_DELAY_MS`               | `0`                      | Espera entre `/ready = 503` y cerrar el servidor (en producción ≥ intervalo del health check)                       |
+| `AI_PROVIDER`                           | `anthropic`              | `mock` **solo para E2E y pruebas de carga** (rechazado con `NODE_ENV=production`)                                   |
+| `AI_MOCK_LATENCY_MS`                    | `0`                      | Latencia simulada por llamada con `AI_PROVIDER=mock`                                                                |
+| `RATE_LIMIT_SCALE`                      | `1`                      | **Solo pruebas de carga**: multiplica todos los límites (rechazado en producción)                                   |
+| `ANTHROPIC_API_KEY` / `VOYAGE_API_KEY`  | vacías                   | Claves de IA                                                                                                        |
+| `STORAGE_DRIVER` / `STORAGE_LOCAL_PATH` | `local` / `./uploads`    | Almacenamiento de archivos                                                                                          |
+| `TAX_CALENDAR_PATH` / `TAX_RULES_PATH`  | JSON en `src/config/`    | Calendario (fechas **de ejemplo**) y parámetros tributarios                                                         |
+
+## Sesión y seguridad
+
+- `POST /api/auth/login` y `/register` devuelven `{ accessToken, user }` y dejan la
+  cookie `renta_ia_refresh` (httpOnly, `SameSite=Strict`, `Path=/api/auth`).
+- `POST /api/auth/refresh` rota la cookie y entrega un access token nuevo;
+  `POST /api/auth/logout` revoca la sesión. Ambos exigen `X-Requested-With: renta-ia`.
+- Bloqueo progresivo por cuenta tras 5 fallos (1, 2, 4… hasta 60 min) y 10 fallos / 15 min por IP.
+- Contraseñas: 10–72 caracteres, sin contraseñas comunes ni el correo o el nombre.
+- Roles: `admin`, `accountant`, `assistant` (clientes de su contador, sin crear ni
+  borrar) y `client` (solo lectura de su expediente). Se crean con `POST /api/admin/users`.
+- Auditoría en `audit_log` (sin datos sensibles), consultable en `GET /api/admin/audit`.
+- Detalles y riesgos residuales: [`docs/threat-model.md`](docs/threat-model.md) y [ADR 0007](docs/adr/0007-esquema-de-sesion.md).
+
+Probar con curl (cmd.exe), guardando la cookie en un archivo:
 
 ```bat
-curl -X POST http://localhost:4000/api/ai/chat ^
-  -H "Authorization: Bearer PEGA_AQUI_EL_TOKEN" ^
+curl -c cookies.txt -X POST http://localhost:4000/api/auth/login ^
   -H "Content-Type: application/json" ^
-  -d "{\"clientId\":\"PEGA_AQUI_EL_CLIENT_ID\",\"question\":\"Cuanto fue el ingreso bruto reportado?\"}"
+  -d "{\"email\":\"ana@example.com\",\"password\":\"Password123!\"}"
+
+:: Copia el accessToken de la respuesta:
+set TOKEN=pega-aqui-el-access-token
+curl http://localhost:4000/api/clients -H "Authorization: Bearer %TOKEN%"
+
+:: Renovar (usa y reemplaza la cookie)
+curl -b cookies.txt -c cookies.txt -X POST http://localhost:4000/api/auth/refresh -H "X-Requested-With: renta-ia"
 ```
 
-### Limitación conocida
+## Endpoints
 
-El OCR (`text-extraction.service.ts`) solo soporta:
+La referencia completa, generada desde los schemas zod, está en **`/docs`** (Swagger UI,
+fuera de producción) y en `docs/openapi.json` (`npm run openapi` la regenera; un
+test falla si quedó desactualizada).
 
-- PDFs con **texto real embebido** (no escaneados) — la mayoría de certificados generados digitalmente
-- Imágenes JPG/PNG (con OCR real vía Tesseract.js)
+| Grupo        | Rutas                                                                                                                                                                                         |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth         | `POST /api/auth/register` · `login` · `refresh` · `logout` · `GET /api/users/me`                                                                                                              |
+| Clientes     | `GET/POST /api/clients` · `GET/PATCH/DELETE /api/clients/:id` · `GET /api/clients/:id/tax-concepts` · `POST /api/clients/:id/summary`                                                         |
+| Documentos   | `POST /api/documents/upload` · `GET /api/documents/client/:clientId` · `GET /api/documents/client/:clientId/by-hash/:sha256` · `GET /api/documents/:id` · `POST /api/documents/:id/reprocess` |
+| Alertas      | `GET /api/alerts/client/:clientId` · `PATCH /api/alerts/:id` · `POST /api/alerts/deadlines/run` (admin)                                                                                       |
+| IA           | `POST /api/ai/chat`                                                                                                                                                                           |
+| Admin        | `POST /api/admin/users` · `GET /api/admin/audit`                                                                                                                                              |
+| Métricas web | `POST /api/metrics/web-vitals` · `GET /api/metrics/web-vitals/summary` (admin)                                                                                                                |
+| Operación    | `GET /health` · `GET /ready` · `GET /metrics` (token) · `GET /docs` (no producción)                                                                                                           |
+| Tiempo real  | `WS /ws` (token en el primer mensaje)                                                                                                                                                         |
 
-**PDFs escaneados** (una foto/imagen metida dentro de un PDF, sin texto) no están soportados todavía — el sistema devuelve un error claro pidiendo subir el documento como imagen. En producción esto se resolvería agregando AWS Textract (ya contemplado en la arquitectura), que si sabe leer PDFs escaneados directamente.
+Listados paginados por cursor: `?limit=50&cursor=...` → `{ items, nextCursor }`.
+Un recurso de otro cliente responde **404** (no 403) para no revelar que existe.
 
-## Estado del proyecto
+## Tiempo real (WebSocket `/ws`)
 
-| Fase                                                                                                                                         | Estado    |
-| -------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| 1. Base de datos (repo `renta-ia-database`)                                                                                                  | ✅        |
-| 2. API REST (auth, clientes, documentos, alertas)                                                                                            | ✅        |
-| 3. Pipeline de IA (OCR, extracción con LLM, embeddings, reglas, chat RAG)                                                                    | ✅        |
-| 4. Frontend SPA (repo `renta-ia-frontend`)                                                                                                   | ✅        |
-| 5. Endurecimiento: autorización por dueño, validación zod, rate limiting, tests, lint, CI                                                    | ✅        |
-| 6. Despliegue en AWS: Dockerfile de producción, `s3-storage.service.ts` (misma interfaz que el storage local), ECS/Fargate, RDS, ElastiCache | Pendiente |
+- `ws://localhost:4000/ws` con un `Origin` de `CORS_ORIGIN`.
+- Primer mensaje: `{ "type": "auth", "token": "<accessToken>" }` → `{ "type": "ready" }`.
+- Eventos `document.updated` a quienes pueden ver el cliente: contador, sus
+  asistentes, el usuario de portal del cliente y los admin.
+
+## Observabilidad y operación
+
+- `GET /health` (liveness, sin dependencias) y `GET /ready` (PostgreSQL + Redis; 503 durante el apagado).
+- Apagado ordenado con `SIGTERM` o **Ctrl+C** en cmd.exe (API y worker): deja de
+  recibir tráfico, termina lo que está en curso y cierra conexiones. El worker
+  espera a que terminen los documentos en proceso.
+- Métricas Prometheus con `METRICS_TOKEN`:
+
+```bat
+set METRICS_TOKEN=un-token-largo
+npm run dev
+curl http://localhost:4000/metrics -H "Authorization: Bearer %METRICS_TOKEN%"
+```
+
+Incluyen `renta_ia_http_request_duration_seconds`, `renta_ia_queue_jobs`,
+`renta_ia_pipeline_stage_duration_seconds`, `renta_ia_llm_request_duration_seconds`,
+`renta_ia_llm_tokens_total` y las métricas del proceso.
+
+## Tests, calidad y pruebas de carga
+
+```bat
+npm test
+npm run lint
+npm run typecheck
+npm run build
+npm run openapi
+```
+
+Los tests necesitan el PostgreSQL de `renta-ia-database`: crean desde cero la base
+`renta_ia_test` (nunca tocan `renta_ia`) con las migraciones de
+`..\renta-ia-database\migrations`. Redis, Anthropic y Voyage están simulados.
+
+Pruebas de carga: [`loadtests/README.md`](loadtests/README.md)
+(`npm run loadtest:setup`, `loadtest:login`, `loadtest:list`, `loadtest:mixed`,
+`loadtest:chat`, `loadtest:upload`, `loadtest:ratelimit`).
+
+CI (`.github/workflows/ci.yml`): lint, typecheck, tests, build; y un job
+`security` con `npm audit --omit=dev` y gitleaks.
+
+## Cambios de esquema
+
+Este repo **no crea ni modifica tablas**. Ante un cambio:
+
+1. Nueva migración en `renta-ia-database` (nunca se editan las existentes) y `scripts\migrate.bat`.
+2. Aquí: `npx prisma db pull` y ajustar el código.
+3. Merge: **primero** `renta-ia-database`, después este repo (su CI lee las migraciones de `main`).
+
+En Windows, si `prisma generate` falla con `EPERM` sobre `query_engine-windows.dll.node`,
+detén la API y el worker (tienen la DLL abierta) y vuelve a intentarlo.
+
+## Pipeline de IA
+
+Subida → cola (BullMQ) → worker: extracción de texto (PDF con texto o imagen con
+OCR) → conceptos tributarios con el LLM → embeddings (Voyage) → reglas → alertas.
+La extracción de conceptos y los embeddings **fallan por separado**: el documento
+queda `processed` con advertencias y se puede reprocesar. Un PDF escaneado (sin
+texto) termina en `error` con un mensaje que pide subirlo como imagen.
+
+El calendario tributario incluido (`src/config/tax-calendar.json`) tiene **fechas
+de ejemplo** (`"esEjemplo": true`) y cada alerta lo advierte: reemplázalo por el
+calendario oficial de la DIAN.
+
+## Estado
+
+| Tema                                                                       | Estado                           |
+| -------------------------------------------------------------------------- | -------------------------------- |
+| API, pipeline de IA, tiempo real, alertas, resumen                         | ✅                               |
+| Sesión con refresh rotativo, CSRF, bloqueo, roles, auditoría, threat model | ✅                               |
+| Health/ready, apagado ordenado, métricas, pruebas de carga                 | ✅                               |
+| OpenAPI, ADR                                                               | ✅                               |
+| Despliegue en AWS (Dockerfile de producción, S3, infraestructura)          | Pendiente (fuera del Proyecto 1) |
