@@ -7,6 +7,9 @@ import { embeddingsService } from "../modules/ai/embeddings.service";
 import { replaceEmbeddings } from "../modules/ai/embeddings.repository";
 import { rulesService } from "../modules/ai/rules.service";
 import type { DocumentProcessingJob } from "../queues/documentQueue";
+import { publishDocumentEvent } from "../services/events/documentEvents";
+import { clientAudience } from "../services/access/clientAudience";
+import { pipelineStageDuration, timeStage } from "../observability/metrics";
 
 /**
  * Pipeline de IA de un documento. Separado del arranque del Worker
@@ -15,9 +18,28 @@ import type { DocumentProcessingJob } from "../queues/documentQueue";
 export async function processDocument(job: Job<DocumentProcessingJob>) {
   const { documentId } = job.data;
   console.log(`[worker] procesando documento ${documentId} ...`);
+  // Tiempo en cola (desde que se encoló hasta que un worker lo tomó) y total.
+  if (job.timestamp) {
+    pipelineStageDuration.observe({ stage: "queue_wait", outcome: "ok" }, (Date.now() - job.timestamp) / 1000);
+  }
+  const endTotal = pipelineStageDuration.startTimer({ stage: "total" });
 
-  const document = await prisma.document.findUniqueOrThrow({ where: { id: documentId } });
+  const document = await prisma.document.findUniqueOrThrow({
+    where: { id: documentId },
+  });
+  const audienceUserIds = await clientAudience(document.clientId);
+  // Notificación en tiempo real al dueño del cliente (nunca interrumpe el pipeline).
+  const notify = (status: "processing" | "processed" | "error", errorMessage: string | null) =>
+    publishDocumentEvent({
+      documentId,
+      clientId: document.clientId,
+      audienceUserIds,
+      status,
+      errorMessage,
+    });
+
   await prisma.document.update({ where: { id: documentId }, data: { status: "processing" } });
+  await notify("processing", null);
 
   const warnings: string[] = [];
 
@@ -25,13 +47,13 @@ export async function processDocument(job: Job<DocumentProcessingJob>) {
     // 1. Extraer texto (PDF con texto embebido, o imagen vía OCR).
     // Si esto falla, no hay nada más que hacer con el documento: se detiene aquí.
     const buffer = await storageService.readAsBuffer(document.storageKey);
-    const text = await textExtractionService.extractText(buffer, document.originalName);
+    const text = await timeStage("text", () => textExtractionService.extractText(buffer, document.originalName));
 
     // 2. Extraer conceptos tributarios estructurados con el LLM.
     // Etapa independiente: si falla (ej. sin crédito en la API), se guarda
     // como advertencia y el pipeline continúa con las demás etapas.
     try {
-      const concepts = await extractionService.extractTaxConcepts(text);
+      const concepts = await timeStage("concepts", () => extractionService.extractTaxConcepts(text));
       console.log(`[worker] ${concepts.length} concepto(s) tributario(s) extraído(s)`);
 
       if (concepts.length > 0) {
@@ -68,7 +90,7 @@ export async function processDocument(job: Job<DocumentProcessingJob>) {
     try {
       const chunks = embeddingsService.chunkText(text);
       if (chunks.length > 0) {
-        const vectors = await embeddingsService.embed(chunks);
+        const vectors = await timeStage("embeddings", () => embeddingsService.embed(chunks));
         if (vectors.length !== chunks.length) {
           throw new Error(`Se recibieron ${vectors.length} vectores para ${chunks.length} fragmentos`);
         }
@@ -85,14 +107,13 @@ export async function processDocument(job: Job<DocumentProcessingJob>) {
       warnings.push(`Generación de embeddings falló: ${message}`);
     }
 
+    const finalMessage = warnings.length > 0 ? `Procesado con advertencias: ${warnings.join(" | ")}` : null;
     await prisma.document.update({
       where: { id: documentId },
-      data: {
-        status: "processed",
-        processedAt: new Date(),
-        errorMessage: warnings.length > 0 ? `Procesado con advertencias: ${warnings.join(" | ")}` : null,
-      },
+      data: { status: "processed", processedAt: new Date(), errorMessage: finalMessage },
     });
+    endTotal({ outcome: warnings.length > 0 ? "warnings" : "ok" });
+    await notify("processed", finalMessage);
 
     console.log(
       `[worker] documento ${documentId} procesado${warnings.length > 0 ? " (con advertencias)" : " correctamente"}`
@@ -110,6 +131,8 @@ export async function processDocument(job: Job<DocumentProcessingJob>) {
       where: { id: documentId },
       data: { status: "error", errorMessage: message },
     });
+    await notify("error", message);
+    endTotal({ outcome: "error" });
 
     throw err;
   }

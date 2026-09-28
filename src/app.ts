@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
+import compression from "compression";
 import morgan from "morgan";
 import { env } from "./config/env";
 import { authRouter } from "./modules/auth/auth.routes";
@@ -9,16 +10,46 @@ import { clientsRouter } from "./modules/clients/clients.routes";
 import { documentsRouter } from "./modules/documents/documents.routes";
 import { alertsRouter } from "./modules/alerts/alerts.routes";
 import { aiRouter } from "./modules/ai/ai.routes";
+import { metricsRouter } from "./modules/metrics/metrics.routes";
+import { adminRouter } from "./modules/admin/admin.routes";
 import { errorMiddleware, notFoundMiddleware } from "./middlewares/error.middleware";
 import { globalLimiter } from "./middlewares/rateLimit.middleware";
+import { healthHandler, readyHandler } from "./observability/health";
+import { httpMetricsMiddleware, metricsHandler, onScrape, queueJobs } from "./observability/metrics";
+import { documentQueue } from "./queues/documentQueue";
+import swaggerUi from "swagger-ui-express";
+import { buildOpenApiDocument } from "./docs/openapi";
+
+// Estado de la cola en cada scrape de /metrics (esperando, activos, fallidos…).
+onScrape(async () => {
+  const counts = await documentQueue.getJobCounts("waiting", "active", "delayed", "failed", "completed");
+  for (const [state, value] of Object.entries(counts)) {
+    queueJobs.set({ queue: "document-processing", state }, value);
+  }
+});
 
 export function createApp() {
   const app = express();
 
   app.set("trust proxy", env.trustProxy);
 
+  // helmet revisado (Fase 4, docs/threat-model.md): la API solo sirve JSON, así
+  // que los defaults son correctos: CSP "default-src 'self'" (no aplica a
+  // JSON, pero protege si un error devolviera HTML), X-Content-Type-Options
+  // nosniff, frame-ancestors 'none'/X-Frame-Options, Referrer-Policy
+  // no-referrer, HSTS (efectivo detrás de HTTPS) y Cross-Origin-Resource-Policy
+  // same-origin (no afecta a fetch con CORS; impide incrustar respuestas con
+  // <img>/<script> desde otros sitios). Se quita X-Powered-By.
+  // Primero: mide también las respuestas de helmet, CORS y los rate limiters.
+  app.use(httpMetricsMiddleware);
   app.use(helmet());
-  app.use(cors({ origin: env.corsOrigins }));
+  // gzip/brotli de las respuestas (> 1 KB). Medido: el detalle de un cliente
+  // con 4.000 conceptos transfería 824 KB de JSON sin comprimir
+  // (docs/performance-report.md del frontend).
+  app.use(compression({ threshold: 1024 }));
+  // credentials: true para que el navegador envíe la cookie de refresh a
+  // /api/auth (solo a los orígenes listados en CORS_ORIGIN).
+  app.use(cors({ origin: env.corsOrigins, credentials: true }));
   app.use(express.json({ limit: "100kb" }));
 
   // "dev" (colores, conciso) solo en desarrollo; "combined" (formato Apache
@@ -29,7 +60,27 @@ export function createApp() {
     app.use(morgan("combined"));
   }
 
-  app.get("/health", (_req, res) => res.json({ status: "ok" }));
+  // Política de caché (docs/cache-policy.md del frontend): NINGUNA respuesta
+  // de la API se guarda en cachés del navegador, proxies ni CDN. Todo lo que
+  // devuelve la API es dato tributario/personal o estado que cambia (y
+  // además depende del usuario autenticado).
+  app.use((_req, res, next) => {
+    res.set("Cache-Control", "no-store");
+    next();
+  });
+
+  // Sondas y métricas: fuera de /api (sin rate limit ni auth de usuario).
+  app.get("/health", healthHandler);
+  app.get("/ready", readyHandler);
+  app.get("/metrics", metricsHandler);
+
+  // Documentación interactiva de la API (OpenAPI 3 generado desde los
+  // schemas zod). Fuera de producción: no se publica el mapa de la API.
+  if (env.nodeEnv !== "production") {
+    const openApiDocument = buildOpenApiDocument();
+    app.get("/docs/openapi.json", (_req, res) => res.json(openApiDocument));
+    app.use("/docs", swaggerUi.serve, swaggerUi.setup(openApiDocument));
+  }
 
   app.use("/api", globalLimiter);
   app.use("/api/auth", authRouter);
@@ -38,6 +89,8 @@ export function createApp() {
   app.use("/api/documents", documentsRouter);
   app.use("/api/alerts", alertsRouter);
   app.use("/api/ai", aiRouter);
+  app.use("/api/metrics", metricsRouter);
+  app.use("/api/admin", adminRouter);
 
   app.use(notFoundMiddleware);
   app.use(errorMiddleware);

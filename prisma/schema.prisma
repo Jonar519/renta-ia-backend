@@ -9,18 +9,24 @@ datasource db {
   extensions = [pgcrypto, vector]
 }
 
-/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model User {
-  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name            String           @db.VarChar(150)
-  email           String           @unique @db.VarChar(150)
-  passwordHash    String           @map("password_hash") @db.VarChar(255)
-  role            UserRole         @default(accountant)
-  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  aiConversations AiConversation[]
-  clients         Client[]
-  uploadedDocs    Document[]       @relation("UploadedBy")
+  id                 String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name               String                @db.VarChar(150)
+  email              String                @unique @db.VarChar(150)
+  passwordHash       String                @map("password_hash") @db.VarChar(255)
+  role               UserRole              @default(accountant)
+  createdAt          DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime              @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  aiConversations    AiConversation[]
+  auditEntries       AuditLog[]
+  clients            Client[]
+  portalClients      Client[]              @relation("ClientPortalUser")
+  uploadedDocs       Document[]            @relation("UploadedBy")
+  refreshTokens      RefreshToken[]
+  /// Contadores a los que ayuda este usuario (si es assistant).
+  assistsAccountants AccountantAssistant[] @relation("AssistantUser")
+  /// Asistentes asignados a este usuario (si es accountant).
+  assistants         AccountantAssistant[] @relation("AccountantUser")
 
   @@index([role], map: "idx_users_role")
   @@map("users")
@@ -35,9 +41,11 @@ model Client {
   phone            String?          @db.VarChar(30)
   createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  portalUserId     String?          @map("portal_user_id") @db.Uuid
   conversations    AiConversation[]
   alerts           Alert[]
   accountant       User             @relation(fields: [accountantUserId], references: [id], onUpdate: NoAction)
+  portalUser       User?            @relation("ClientPortalUser", fields: [portalUserId], references: [id], onUpdate: NoAction)
   documents        Document[]
   taxConcepts      TaxConcept[]
 
@@ -59,6 +67,7 @@ model Document {
   errorMessage String?             @map("error_message")
   uploadedAt   DateTime            @default(now()) @map("uploaded_at") @db.Timestamptz(6)
   processedAt  DateTime?           @map("processed_at") @db.Timestamptz(6)
+  sha256       String?             @db.Char(64)
   alerts       Alert[]
   embeddings   DocumentEmbedding[]
   client       Client              @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -118,6 +127,7 @@ model Alert {
   dueDate    DateTime?     @map("due_date") @db.Date
   createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   resolvedAt DateTime?     @map("resolved_at") @db.Timestamptz(6)
+  dedupeKey  String?       @map("dedupe_key") @db.VarChar(100)
   client     Client        @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   document   Document?     @relation(fields: [documentId], references: [id], onUpdate: NoAction)
 
@@ -126,6 +136,7 @@ model Alert {
   @@index([status], map: "idx_alerts_status")
   @@index([clientId, createdAt(sort: Desc)], map: "idx_alerts_client_created")
   @@index([documentId], map: "idx_alerts_document")
+  @@index([clientId, dedupeKey], map: "idx_alerts_client_dedupe")
   @@map("alerts")
 }
 
@@ -162,6 +173,84 @@ model SchemaMigration {
   appliedAt DateTime @default(now()) @map("applied_at") @db.Timestamptz(6)
 
   @@map("schema_migrations")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model WebVital {
+  id             BigInt   @id @default(autoincrement())
+  metric         String   @db.VarChar(12)
+  value          Float
+  rating         String?  @db.VarChar(20)
+  route          String   @db.VarChar(100)
+  device         String   @db.VarChar(10)
+  navigationType String?  @map("navigation_type") @db.VarChar(20)
+  attribution    String?  @db.VarChar(200)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([createdAt], map: "idx_web_vitals_created")
+  @@index([metric, route, createdAt(sort: Desc)], map: "idx_web_vitals_metric_route_created")
+  @@map("web_vitals")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model AccountantAssistant {
+  assistantUserId  String   @map("assistant_user_id") @db.Uuid
+  accountantUserId String   @map("accountant_user_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  accountant       User     @relation("AccountantUser", fields: [accountantUserId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  assistant        User     @relation("AssistantUser", fields: [assistantUserId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([assistantUserId, accountantUserId])
+  @@index([accountantUserId], map: "idx_accountant_assistants_accountant")
+  @@map("accountant_assistants")
+}
+
+model AuditLog {
+  id        BigInt   @id @default(autoincrement())
+  userId    String?  @map("user_id") @db.Uuid
+  action    String   @db.VarChar(50)
+  entity    String?  @db.VarChar(30)
+  entityId  String?  @map("entity_id") @db.VarChar(64)
+  ip        String?  @db.VarChar(45)
+  userAgent String?  @map("user_agent") @db.VarChar(200)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  user      User?    @relation(fields: [userId], references: [id], onUpdate: NoAction)
+
+  @@index([createdAt(sort: Desc)], map: "idx_audit_log_created")
+  @@index([entity, entityId], map: "idx_audit_log_entity")
+  @@index([userId, createdAt(sort: Desc)], map: "idx_audit_log_user_created")
+  @@map("audit_log")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model LoginAttempt {
+  keyHash     String    @id @map("key_hash") @db.Char(64)
+  failures    Int       @default(0)
+  lockedUntil DateTime? @map("locked_until") @db.Timestamptz(6)
+  lastFailure DateTime  @default(now()) @map("last_failure") @db.Timestamptz(6)
+
+  @@map("login_attempts")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model RefreshToken {
+  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String         @map("user_id") @db.Uuid
+  familyId     String         @map("family_id") @db.Uuid
+  tokenHash    String         @unique @map("token_hash") @db.Char(64)
+  expiresAt    DateTime       @map("expires_at") @db.Timestamptz(6)
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  revokedAt    DateTime?      @map("revoked_at") @db.Timestamptz(6)
+  revokeReason String?        @map("revoke_reason") @db.VarChar(30)
+  replacedById String?        @map("replaced_by") @db.Uuid
+  replacedBy   RefreshToken?  @relation("RefreshTokenRotation", fields: [replacedById], references: [id], onUpdate: NoAction)
+  replaces     RefreshToken[] @relation("RefreshTokenRotation")
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([expiresAt], map: "idx_refresh_tokens_expires")
+  @@index([familyId], map: "idx_refresh_tokens_family")
+  @@index([userId], map: "idx_refresh_tokens_user")
+  @@map("refresh_tokens")
 }
 
 enum UserRole {

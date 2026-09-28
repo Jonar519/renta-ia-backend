@@ -1,0 +1,54 @@
+{
+  "measuredAt": "2026-09-28T17:00:53.567Z",
+  "api": "http://localhost:4300",
+  "machine": {
+    "cpu": "AMD Ryzen 9 7900 12-Core Processor",
+    "logicalCpus": 24,
+    "ramGb": 31.1,
+    "os": "Windows_NT 10.0.26200",
+    "node": "v24.13.1"
+  },
+  "scenario": "upload-burst",
+  "uploads": 200,
+  "uploadConnections": 10,
+  "workerConcurrency": "16",
+  "aiMockLatencyMsPerCall": "300",
+  "result": {
+    "uploadLatencyMs": {
+      "p50": 116.9,
+      "p95": 141.6,
+      "p99": 329.8,
+      "max": 330.3
+    },
+    "statusCodes": {
+      "201": 200
+    },
+    "errorRate": 0,
+    "allEnqueuedAfterMs": 2513,
+    "maxWaitingObserved": 136,
+    "queueDrainedAfterMs": 9385,
+    "documentsPerSecond": 21.31,
+    "workerStagesAvgMs": {
+      "queue_wait:ok": {
+        "count": 200,
+        "avgMs": 2889.6
+      },
+      "text:ok": {
+        "count": 200,
+        "avgMs": 1.2
+      },
+      "concepts:ok": {
+        "count": 200,
+        "avgMs": 303.2
+      },
+      "embeddings:ok": {
+        "count": 200,
+        "avgMs": 304.1
+      },
+      "total:ok": {
+        "count": 200,
+        "avgMs": 696.7
+      }
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "_ADVERTENCIA": "LAS FECHAS DE ESTE ARCHIVO SON VALORES DE EJEMPLO, NO EL CALENDARIO OFICIAL. Antes de usar el sistema con clientes reales, reemplázalas con el calendario tributario publicado por la DIAN (decreto de plazos) para cada año gravable y cambia 'esEjemplo' a false. Mientras 'esEjemplo' sea true, cada alerta de vencimiento lo indica en su mensaje.",
+  "esEjemplo": true,
+  "zonaHoraria": "America/Bogota",
+  "diasDeAnticipacion": 60,
+  "umbralesSeveridad": {
+    "_descripcion": "Días restantes hasta el vencimiento: <= critical → crítica, <= high → alta, <= medium → media, resto → baja.",
+    "critical": 7,
+    "high": 15,
+    "medium": 30
+  },
+  "declaracionRentaPersonasNaturales": {
+    "_descripcion": "Clave: año gravable. Cada rango agrupa los dos últimos dígitos del NIT/cédula (sin dígito de verificación). Los rangos deben cubrir 00 a 99 sin solaparse.",
+    "2025": [
+      { "desde": "01", "hasta": "20", "vence": "2026-08-12" },
+      { "desde": "21", "hasta": "40", "vence": "2026-08-26" },
+      { "desde": "41", "hasta": "60", "vence": "2026-09-09" },
+      { "desde": "61", "hasta": "80", "vence": "2026-09-23" },
+      { "desde": "81", "hasta": "99", "vence": "2026-10-07" },
+      { "desde": "00", "hasta": "00", "vence": "2026-10-07" }
+    ],
+    "2026": [
+      { "desde": "01", "hasta": "20", "vence": "2027-08-11" },
+      { "desde": "21", "hasta": "40", "vence": "2027-08-25" },
+      { "desde": "41", "hasta": "60", "vence": "2027-09-08" },
+      { "desde": "61", "hasta": "80", "vence": "2027-09-22" },
+      { "desde": "81", "hasta": "99", "vence": "2027-10-06" },
+      { "desde": "00", "hasta": "00", "vence": "2027-10-06" }
+    ]
+  }
+}

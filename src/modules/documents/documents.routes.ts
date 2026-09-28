@@ -1,12 +1,20 @@
 import { NextFunction, Request, Response, Router } from "express";
 import multer from "multer";
 import { documentsController } from "./documents.controller";
-import { createDocumentSchema, documentClientParams, documentIdParams, uploadDocumentSchema } from "./documents.schema";
+import {
+  byHashParams,
+  createDocumentSchema,
+  documentClientParams,
+  documentIdParams,
+  uploadDocumentSchema,
+} from "./documents.schema";
 import { authMiddleware } from "../../middlewares/auth.middleware";
 import { requireClientAccess } from "../../middlewares/ownership.middleware";
+import { forbidRoles } from "../../middlewares/role.middleware";
 import { validate } from "../../middlewares/validate.middleware";
 import { uploadLimiter } from "../../middlewares/rateLimit.middleware";
 import { asyncHandler } from "../../utils/asyncHandler";
+import { paginationQuerySchema } from "../../utils/pagination";
 import { ApiError } from "../../utils/apiError";
 import { MAX_UPLOAD_BYTES, hasValidSignature, isAllowedMimeAndExtension } from "../../utils/fileType";
 
@@ -34,8 +42,12 @@ export const documentsRouter = Router();
 
 documentsRouter.use(authMiddleware);
 
+// El rol "client" (portal del contribuyente) es de solo lectura.
+const readOnlyClient = forbidRoles("client");
+
 documentsRouter.post(
   "/",
+  readOnlyClient,
   validate({ body: createDocumentSchema }),
   requireClientAccess("body", "clientId"),
   asyncHandler(documentsController.create)
@@ -44,6 +56,7 @@ documentsRouter.post(
 // firma del archivo → validación de campos → verificación de dueño.
 documentsRouter.post(
   "/upload",
+  readOnlyClient,
   uploadLimiter,
   upload.single("file"),
   checkFileSignature,
@@ -53,8 +66,24 @@ documentsRouter.post(
 );
 documentsRouter.get(
   "/client/:clientId",
-  validate({ params: documentClientParams }),
+  validate({ params: documentClientParams, query: paginationQuerySchema }),
   requireClientAccess("params", "clientId"),
   asyncHandler(documentsController.listByClient)
 );
+// Consulta previa a la subida: el navegador calcula el SHA-256 en un Web
+// Worker y pregunta si ya existe, sin transferir el archivo.
+documentsRouter.get(
+  "/client/:clientId/by-hash/:sha256",
+  validate({ params: byHashParams }),
+  requireClientAccess("params", "clientId"),
+  asyncHandler(documentsController.findByHash)
+);
 documentsRouter.get("/:id", validate({ params: documentIdParams }), asyncHandler(documentsController.getById));
+// Reintentar el análisis con IA. Cuesta lo mismo que una subida: mismo límite.
+documentsRouter.post(
+  "/:id/reprocess",
+  readOnlyClient,
+  uploadLimiter,
+  validate({ params: documentIdParams }),
+  asyncHandler(documentsController.reprocess)
+);

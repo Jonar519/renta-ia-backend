@@ -19,7 +19,8 @@ function store(prefix: string): Options["store"] | undefined {
 function limiter(prefix: string, windowMs: number, limit: number, message: string, extra: Partial<Options> = {}) {
   return rateLimit({
     windowMs,
-    limit,
+    // RATE_LIMIT_SCALE (solo pruebas de carga; 1 en producción, ver env.ts).
+    limit: limit * env.rateLimitScale,
     standardHeaders: "draft-7",
     legacyHeaders: false,
     store: store(prefix),
@@ -72,3 +73,15 @@ export const uploadLimiter = limiter(
     keyGenerator: byUser,
   }
 );
+
+/** Resumen ejecutivo: cada uno es una llamada al LLM. */
+export const summaryLimiter = limiter(
+  "ai-summary",
+  60 * MINUTE,
+  20,
+  "Alcanzaste el límite de resúmenes ejecutivos por hora.",
+  { keyGenerator: byUser }
+);
+
+/** Beacons de Web Vitals (anónimos): por IP, holgado para una sesión normal. */
+export const metricsLimiter = limiter("web-vitals", MINUTE, 60, "Demasiadas métricas enviadas.");

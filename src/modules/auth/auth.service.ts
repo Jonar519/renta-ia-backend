@@ -1,9 +1,8 @@
-import bcrypt from "bcryptjs";
-import jwt, { SignOptions } from "jsonwebtoken";
-import { User } from "@prisma/client";
+import bcrypt from "bcrypt";
 import { prisma } from "../../config/prisma";
-import { env } from "../../config/env";
 import { ApiError } from "../../utils/apiError";
+import { lockoutService } from "./lockout.service";
+import { sessionsService } from "./sessions.service";
 
 interface RegisterInput {
   name: string;
@@ -16,24 +15,29 @@ interface LoginInput {
   password: string;
 }
 
-function buildAuthResponse(user: Pick<User, "id" | "name" | "email" | "role">) {
-  const token = jwt.sign({ userId: user.id, role: user.role }, env.jwtSecret, {
-    expiresIn: env.jwtExpiresIn as SignOptions["expiresIn"],
-  });
+// Mismo mensaje para "no existe" y "contraseña incorrecta": no se revela
+// qué correos tienen cuenta.
+const INVALID_CREDENTIALS = "Credenciales inválidas";
 
-  return {
-    token,
-    user: { id: user.id, name: user.name, email: user.email, role: user.role },
-  };
-}
+// Hash de una contraseña aleatoria: cuando el correo no existe se compara
+// igual contra este hash, para que la respuesta tarde lo mismo que con un
+// correo real (si no, el tiempo de respuesta revelaría qué cuentas existen).
+const DUMMY_HASH = bcrypt.hashSync(`dummy-${Math.random()}`, 10);
 
 /**
  * Los emails se guardan y se buscan siempre en minúsculas (y sin espacios):
  * "Ana@Example.com" y "ana@example.com" son la misma cuenta. La base de
  * datos lo refuerza con un índice único sobre lower(email).
  */
-function normalizeEmail(email: string): string {
+export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
+}
+
+export class AccountLockedError extends ApiError {
+  constructor(remainingMs: number) {
+    const minutes = Math.max(1, Math.ceil(remainingMs / 60_000));
+    super(429, `Demasiados intentos fallidos. Intenta de nuevo en ${minutes} minuto${minutes === 1 ? "" : "s"}.`);
+  }
 }
 
 export const authService = {
@@ -52,25 +56,28 @@ export const authService = {
         email,
         passwordHash,
         // El registro público SIEMPRE crea contadores. Otros roles (admin,
-        // assistant) solo pueden asignarse directamente en la base de datos.
+        // assistant, client) los crea un admin (POST /api/admin/users).
         role: "accountant",
       },
     });
 
-    return buildAuthResponse(user);
+    return sessionsService.start(user);
   },
 
   async login(input: LoginInput) {
-    const user = await prisma.user.findUnique({ where: { email: normalizeEmail(input.email) } });
-    if (!user) {
-      throw new ApiError(401, "Credenciales inválidas");
+    const email = normalizeEmail(input.email);
+
+    const remaining = await lockoutService.remainingLockMs(email);
+    if (remaining > 0) throw new AccountLockedError(remaining);
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    const valid = await bcrypt.compare(input.password, user?.passwordHash ?? DUMMY_HASH);
+    if (!user || !valid) {
+      await lockoutService.registerFailure(email);
+      throw new ApiError(401, INVALID_CREDENTIALS);
     }
 
-    const valid = await bcrypt.compare(input.password, user.passwordHash);
-    if (!valid) {
-      throw new ApiError(401, "Credenciales inválidas");
-    }
-
-    return buildAuthResponse(user);
+    await lockoutService.registerSuccess(email);
+    return sessionsService.start(user);
   },
 };

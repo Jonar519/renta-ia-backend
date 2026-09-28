@@ -1,7 +1,9 @@
 import { Request, Response } from "express";
 import { documentsService } from "./documents.service";
 import { ApiError } from "../../utils/apiError";
+import { audit } from "../../services/audit/audit.service";
 import { routeParam } from "../../utils/params";
+import type { PageParams } from "../../utils/pagination";
 
 export const documentsController = {
   async create(req: Request, res: Response) {
@@ -9,6 +11,7 @@ export const documentsController = {
       ...req.body,
       uploadedBy: req.user!.userId,
     });
+    audit(req, { action: "document.upload", entity: "document", entityId: document.id });
     res.status(201).json(document);
   },
 
@@ -17,7 +20,7 @@ export const documentsController = {
       throw new ApiError(400, "No se envió ningún archivo (campo 'file')");
     }
     // clientId y docType ya vienen validados por uploadDocumentSchema.
-    const { clientId, docType } = req.body;
+    const { clientId, docType, sha256 } = req.body;
 
     const document = await documentsService.uploadAndEnqueue({
       clientId,
@@ -25,18 +28,35 @@ export const documentsController = {
       uploadedBy: req.user!.userId,
       originalName: req.file.originalname,
       buffer: req.file.buffer,
+      clientSha256: sha256,
     });
+    audit(req, { action: "document.upload", entity: "document", entityId: document.id });
 
     res.status(201).json(document);
   },
 
   async listByClient(req: Request, res: Response) {
-    const documents = await documentsService.listByClient(routeParam(req, "clientId"));
+    const documents = await documentsService.listByClient(
+      routeParam(req, "clientId"),
+      req.query as unknown as PageParams
+    );
+    audit(req, { action: "document.list", entity: "client", entityId: routeParam(req, "clientId") });
     res.json(documents);
+  },
+
+  async findByHash(req: Request, res: Response) {
+    res.json(await documentsService.findByHash(routeParam(req, "clientId"), routeParam(req, "sha256")));
   },
 
   async getById(req: Request, res: Response) {
     const document = await documentsService.getById(routeParam(req, "id"), req.user!);
+    audit(req, { action: "document.view", entity: "document", entityId: document.id });
     res.json(document);
+  },
+
+  async reprocess(req: Request, res: Response) {
+    const document = await documentsService.reprocess(routeParam(req, "id"), req.user!);
+    audit(req, { action: "document.reprocess", entity: "document", entityId: document.id });
+    res.status(202).json(document);
   },
 };

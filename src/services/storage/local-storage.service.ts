@@ -39,4 +39,8 @@ export const localStorageService: StorageService = {
   async readAsBuffer(storageKey: string) {
     return fs.readFileSync(resolveInsideBase(storageKey));
   },
+
+  async delete(storageKey: string) {
+    fs.rmSync(resolveInsideBase(storageKey), { force: true });
+  },
 };

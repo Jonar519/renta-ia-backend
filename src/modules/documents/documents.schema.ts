@@ -17,7 +17,16 @@ export const createDocumentSchema = z.object({
 });
 
 // Campos de texto que acompañan al archivo en el multipart de /upload.
+const sha256 = z
+  .string()
+  .regex(/^[0-9a-f]{64}$/, { message: "Debe ser un SHA-256 en hexadecimal (64 caracteres en minúscula)" });
+
 export const uploadDocumentSchema = z.object({
   clientId: uuidSchema,
   docType,
+  // Huella calculada por el navegador (Web Worker). Opcional: si viene, se
+  // compara con la que calcula el backend para detectar un archivo alterado.
+  sha256: sha256.optional(),
 });
+
+export const byHashParams = z.object({ clientId: uuidSchema, sha256 });

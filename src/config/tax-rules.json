@@ -1,0 +1,24 @@
+{
+  "_ADVERTENCIA": "Parámetros tributarios usados por el motor de reglas y el resumen ejecutivo. Los valores de UVT y la tabla del art. 241 E.T. deben VERIFICARSE contra la normativa vigente de cada año antes de usar el sistema con clientes reales; el cálculo del saldo es simplificado y orientativo.",
+  "limiteDeduccionesSobreIngresoBruto": 0.4,
+  "toleranciaExogenaVsCertificado": 0.05,
+  "rentaPersonasNaturales": {
+    "verificado": false,
+    "_simplificacion": "Base = ingresos brutos − aportes obligatorios a pensión y salud − deducciones (con el tope del 40% y 1.340 UVT). NO incluye rentas exentas (p. ej. 25% laboral), dividendos, ganancias ocasionales, anticipos, descuentos tributarios ni otras cédulas.",
+    "topeDeduccionesUvt": 1340,
+    "topeDeduccionesPorcentaje": 0.4,
+    "uvtPorAnioGravable": {
+      "2024": 47065,
+      "2025": 49799
+    },
+    "tablaArt241": [
+      { "desdeUvt": 0, "hastaUvt": 1090, "tarifa": 0, "baseUvt": 0 },
+      { "desdeUvt": 1090, "hastaUvt": 1700, "tarifa": 0.19, "baseUvt": 0 },
+      { "desdeUvt": 1700, "hastaUvt": 4100, "tarifa": 0.28, "baseUvt": 116 },
+      { "desdeUvt": 4100, "hastaUvt": 8670, "tarifa": 0.33, "baseUvt": 788 },
+      { "desdeUvt": 8670, "hastaUvt": 18970, "tarifa": 0.35, "baseUvt": 2296 },
+      { "desdeUvt": 18970, "hastaUvt": 31000, "tarifa": 0.37, "baseUvt": 5901 },
+      { "desdeUvt": 31000, "hastaUvt": null, "tarifa": 0.39, "baseUvt": 10352 }
+    ]
+  }
+}

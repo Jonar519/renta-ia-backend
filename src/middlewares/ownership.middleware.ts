@@ -7,14 +7,31 @@ import { AuthPayload } from "./auth.middleware";
 
 /**
  * Único lugar donde se decide si un usuario puede acceder a un cliente:
- * el admin ve todo; cualquier otro rol solo ve los clientes de los que es
- * contador responsable (clients.accountant_user_id).
+ *  - admin: todos.
+ *  - accountant: los clientes de los que es contador responsable
+ *    (clients.accountant_user_id).
+ *  - assistant: los clientes de los contadores a los que está asignado
+ *    (tabla accountant_assistants).
+ *  - client: solo su propio expediente (clients.portal_user_id).
+ * Lo que cada rol puede MODIFICAR se decide en las rutas (role.middleware).
  *
  * Si no tiene acceso se responde 404 (no 403) para no revelar que el
  * recurso existe.
  */
 export function clientScope(user: AuthPayload): Prisma.ClientWhereInput {
-  return user.role === "admin" ? {} : { accountantUserId: user.userId };
+  switch (user.role) {
+    case "admin":
+      return {};
+    case "accountant":
+      return { accountantUserId: user.userId };
+    case "assistant":
+      return { accountant: { assistants: { some: { assistantUserId: user.userId } } } };
+    case "client":
+      return { portalUserId: user.userId };
+    default:
+      // Rol desconocido: no ve nada (defensa en profundidad).
+      return { id: { in: [] } };
+  }
 }
 
 export async function assertClientAccess(clientId: string, user: AuthPayload) {
