@@ -14,6 +14,17 @@ import { metricsRouter } from "./modules/metrics/metrics.routes";
 import { adminRouter } from "./modules/admin/admin.routes";
 import { errorMiddleware, notFoundMiddleware } from "./middlewares/error.middleware";
 import { globalLimiter } from "./middlewares/rateLimit.middleware";
+import { healthHandler, readyHandler } from "./observability/health";
+import { httpMetricsMiddleware, metricsHandler, onScrape, queueJobs } from "./observability/metrics";
+import { documentQueue } from "./queues/documentQueue";
+
+// Estado de la cola en cada scrape de /metrics (esperando, activos, fallidos…).
+onScrape(async () => {
+  const counts = await documentQueue.getJobCounts("waiting", "active", "delayed", "failed", "completed");
+  for (const [state, value] of Object.entries(counts)) {
+    queueJobs.set({ queue: "document-processing", state }, value);
+  }
+});
 
 export function createApp() {
   const app = express();
@@ -27,6 +38,8 @@ export function createApp() {
   // no-referrer, HSTS (efectivo detrás de HTTPS) y Cross-Origin-Resource-Policy
   // same-origin (no afecta a fetch con CORS; impide incrustar respuestas con
   // <img>/<script> desde otros sitios). Se quita X-Powered-By.
+  // Primero: mide también las respuestas de helmet, CORS y los rate limiters.
+  app.use(httpMetricsMiddleware);
   app.use(helmet());
   // gzip/brotli de las respuestas (> 1 KB). Medido: el detalle de un cliente
   // con 4.000 conceptos transfería 824 KB de JSON sin comprimir
@@ -54,7 +67,10 @@ export function createApp() {
     next();
   });
 
-  app.get("/health", (_req, res) => res.json({ status: "ok" }));
+  // Sondas y métricas: fuera de /api (sin rate limit ni auth de usuario).
+  app.get("/health", healthHandler);
+  app.get("/ready", readyHandler);
+  app.get("/metrics", metricsHandler);
 
   app.use("/api", globalLimiter);
   app.use("/api/auth", authRouter);

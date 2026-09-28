@@ -19,7 +19,8 @@ function store(prefix: string): Options["store"] | undefined {
 function limiter(prefix: string, windowMs: number, limit: number, message: string, extra: Partial<Options> = {}) {
   return rateLimit({
     windowMs,
-    limit,
+    // RATE_LIMIT_SCALE (solo pruebas de carga; 1 en producción, ver env.ts).
+    limit: limit * env.rateLimitScale,
     standardHeaders: "draft-7",
     legacyHeaders: false,
     store: store(prefix),

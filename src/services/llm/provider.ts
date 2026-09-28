@@ -1,6 +1,7 @@
 import { env } from "../../config/env";
 import { anthropicProvider } from "./anthropic.provider";
 import { createMockProvider } from "./mock.provider";
+import { llmRequestDuration, llmTokens } from "../../observability/metrics";
 
 /** Para qué se usa una llamada al modelo (etiqueta de métricas y logs). */
 export type AiPurpose = "extraction" | "chat" | "summary";
@@ -31,9 +32,44 @@ export interface AiProvider {
   embed(texts: string[]): Promise<number[][]>;
 }
 
+/** Envuelve un proveedor para medir latencia y tokens (renta_ia_llm_*). */
+export function instrumentProvider(inner: AiProvider): AiProvider {
+  return {
+    name: inner.name,
+    async complete(request) {
+      const end = llmRequestDuration.startTimer({
+        provider: inner.name,
+        operation: "complete",
+        purpose: request.purpose,
+      });
+      try {
+        const result = await inner.complete(request);
+        end({ outcome: "ok" });
+        llmTokens.inc({ provider: inner.name, purpose: request.purpose, direction: "input" }, result.inputTokens);
+        llmTokens.inc({ provider: inner.name, purpose: request.purpose, direction: "output" }, result.outputTokens);
+        return result;
+      } catch (err) {
+        end({ outcome: "error" });
+        throw err;
+      }
+    },
+    async embed(texts) {
+      const end = llmRequestDuration.startTimer({ provider: inner.name, operation: "embed", purpose: "embeddings" });
+      try {
+        const vectors = await inner.embed(texts);
+        end({ outcome: "ok" });
+        return vectors;
+      } catch (err) {
+        end({ outcome: "error" });
+        throw err;
+      }
+    },
+  };
+}
+
 let provider: AiProvider | null = null;
 
 export function getAiProvider(): AiProvider {
-  provider ??= env.aiProvider === "mock" ? createMockProvider() : anthropicProvider;
+  provider ??= instrumentProvider(env.aiProvider === "mock" ? createMockProvider() : anthropicProvider);
   return provider;
 }

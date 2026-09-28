@@ -21,6 +21,29 @@ function aiProvider(): "anthropic" | "mock" {
   return value;
 }
 
+/**
+ * Multiplicador de TODOS los límites de rate limiting. Existe solo para las
+ * pruebas de carga (loadtests/): con el valor por defecto (1) un solo equipo
+ * choca contra el límite global de 300 solicitudes / 15 min en segundos.
+ * Igual que AI_PROVIDER=mock, se rechaza cualquier valor distinto de 1 en producción.
+ */
+function rateLimitScale(): number {
+  const value = Number(process.env.RATE_LIMIT_SCALE ?? 1);
+  if (!Number.isFinite(value) || value < 1) {
+    throw new Error(`RATE_LIMIT_SCALE="${process.env.RATE_LIMIT_SCALE}" no es válido (número >= 1).`);
+  }
+  if (value !== 1 && nodeEnv === "production") {
+    throw new Error("RATE_LIMIT_SCALE es solo para pruebas de carga y no puede usarse con NODE_ENV=production.");
+  }
+  return value;
+}
+
+function positiveInt(name: string, fallback: number): number {
+  const value = Number(process.env[name] ?? fallback);
+  if (!Number.isInteger(value) || value < 1) throw new Error(`${name} debe ser un entero positivo.`);
+  return value;
+}
+
 // Orígenes permitidos por CORS, separados por coma. En producción es
 // obligatorio definirlo; en desarrollo se usa el puerto por defecto de Vite.
 const corsOrigins = (
@@ -48,6 +71,17 @@ export const env = {
   // Número de proxies delante de la app (ej. 1 detrás de un ALB). Necesario
   // para que el rate limiting vea la IP real del cliente y no la del proxy.
   trustProxy: Number(process.env.TRUST_PROXY ?? 0),
+  rateLimitScale: rateLimitScale(),
+
+  // Observabilidad: GET /metrics (Prometheus) solo con "Authorization: Bearer
+  // <METRICS_TOKEN>". Sin token configurado, /metrics responde 404.
+  metricsToken: process.env.METRICS_TOKEN || undefined,
+  // El worker expone sus propias métricas en este puerto (mismo token).
+  workerMetricsPort: positiveInt("WORKER_METRICS_PORT", 9464),
+  // Documentos que el worker procesa en paralelo.
+  workerConcurrency: positiveInt("WORKER_CONCURRENCY", 2),
+  // Tiempo máximo del apagado ordenado (SIGTERM/SIGINT) antes de forzar la salida.
+  shutdownTimeoutMs: positiveInt("SHUTDOWN_TIMEOUT_MS", 10_000),
 
   // Cola de tareas
   redisUrl: process.env.REDIS_URL ?? "redis://localhost:6379",
