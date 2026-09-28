@@ -4,7 +4,7 @@ import { alertClientParams, alertIdParams, updateAlertStatusSchema } from "./ale
 import { authMiddleware } from "../../middlewares/auth.middleware";
 import { requireClientAccess } from "../../middlewares/ownership.middleware";
 import { validate } from "../../middlewares/validate.middleware";
-import { requireRole } from "../../middlewares/role.middleware";
+import { forbidRoles, requireRole } from "../../middlewares/role.middleware";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { paginationQuerySchema } from "../../utils/pagination";
 import { runDeadlineCheck } from "./deadlines.service";
@@ -31,6 +31,7 @@ alertsRouter.post(
 // La verificación de dueño está en alertsService.updateStatus (vía el cliente de la alerta).
 alertsRouter.patch(
   "/:id",
+  forbidRoles("client"),
   validate({ params: alertIdParams, body: updateAlertStatusSchema }),
   asyncHandler(alertsController.updateStatus)
 );

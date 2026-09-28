@@ -19,8 +19,12 @@ export interface DocumentEvent {
   type: "document.updated";
   documentId: string;
   clientId: string;
-  /** Contador dueño del cliente: la API solo reenvía el evento a él (y a los admin). */
-  accountantUserId: string;
+  /**
+   * Usuarios con acceso al cliente (contador, asistentes y usuario del
+   * portal; ver services/access/clientAudience.ts). La API solo reenvía el
+   * evento a ellos y a los admin; este campo no llega al navegador.
+   */
+  audienceUserIds: string[];
   status: "uploaded" | "processing" | "processed" | "error";
   errorMessage: string | null;
   at: string;

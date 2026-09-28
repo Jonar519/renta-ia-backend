@@ -118,13 +118,14 @@ export async function attachRealtime(
   heartbeat.unref();
 
   const unsubscribe = await documentEventBus.subscribe((event: DocumentEvent) => {
-    // accountantUserId es para enrutar; no se reenvía al navegador.
-    const { accountantUserId, ...publicEvent } = event;
+    // audienceUserIds es para enrutar; no se reenvía al navegador.
+    const { audienceUserIds, ...publicEvent } = event;
+    const audience = new Set(audienceUserIds);
     const data = JSON.stringify(publicEvent);
     for (const [ws, state] of states) {
       const user = state.user;
       if (!user || ws.readyState !== WebSocket.OPEN) continue;
-      if (user.role === "admin" || user.userId === accountantUserId) ws.send(data);
+      if (user.role === "admin" || audience.has(user.userId)) ws.send(data);
     }
   });
 

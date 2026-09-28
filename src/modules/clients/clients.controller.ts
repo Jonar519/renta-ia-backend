@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { clientsService } from "./clients.service";
 import { summaryService } from "./summary.service";
+import { audit } from "../../services/audit/audit.service";
 import { routeParam } from "../../utils/params";
 import type { PageParams } from "../../utils/pagination";
 
@@ -10,6 +11,7 @@ export const clientsController = {
       ...req.body,
       accountantUserId: req.user!.userId,
     });
+    audit(req, { action: "client.create", entity: "client", entityId: client.id });
     res.status(201).json(client);
   },
 
@@ -21,21 +23,25 @@ export const clientsController = {
   // periodYear (opcional) ya viene validado por summarySchema.
   async summary(req: Request, res: Response) {
     const summary = await summaryService.generate(routeParam(req, "id"), req.user!, req.body?.periodYear);
+    audit(req, { action: "ai.summary", entity: "client", entityId: routeParam(req, "id") });
     res.json(summary);
   },
 
   async getById(req: Request, res: Response) {
     const client = await clientsService.getById(routeParam(req, "id"), req.user!);
+    audit(req, { action: "client.view", entity: "client", entityId: client.id });
     res.json(client);
   },
 
   async update(req: Request, res: Response) {
     const client = await clientsService.update(routeParam(req, "id"), req.body ?? {}, req.user!);
+    audit(req, { action: "client.update", entity: "client", entityId: client.id });
     res.json(client);
   },
 
   async remove(req: Request, res: Response) {
     await clientsService.remove(routeParam(req, "id"), req.user!);
+    audit(req, { action: "client.delete", entity: "client", entityId: routeParam(req, "id") });
     res.status(204).send();
   },
 

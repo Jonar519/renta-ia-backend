@@ -6,6 +6,7 @@ import { isUuid } from "../../utils/uuid";
 import { storageService } from "../../services/storage";
 import { documentQueue } from "../../queues/documentQueue";
 import { publishDocumentEvent } from "../../services/events/documentEvents";
+import { clientAudience } from "../../services/access/clientAudience";
 import { AuthPayload } from "../../middlewares/auth.middleware";
 import { clientScope } from "../../middlewares/ownership.middleware";
 import { afterCursor, PageParams, toPage } from "../../utils/pagination";
@@ -159,7 +160,6 @@ export const documentsService = {
     const document = isUuid(id)
       ? await prisma.document.findFirst({
           where: { id, client: clientScope(user) },
-          include: { client: { select: { accountantUserId: true } } },
         })
       : null;
     if (!document) {
@@ -180,7 +180,7 @@ export const documentsService = {
     await publishDocumentEvent({
       documentId: id,
       clientId: document.clientId,
-      accountantUserId: document.client.accountantUserId,
+      audienceUserIds: await clientAudience(document.clientId),
       status: "uploaded",
       errorMessage: null,
     });

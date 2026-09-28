@@ -93,7 +93,7 @@ describe("WebSocket /ws", () => {
     await publishDocumentEvent({
       documentId: "d-1",
       clientId: clientA.id,
-      accountantUserId: a.user.id,
+      audienceUserIds: [a.user.id],
       status: "processed",
       errorMessage: null,
     });
@@ -102,7 +102,7 @@ describe("WebSocket /ws", () => {
     const updates = (list: Record<string, unknown>[]) => list.filter((m) => m.type === "document.updated");
     expect(updates(sa.received)).toHaveLength(1);
     expect(updates(sa.received)[0]).toMatchObject({ documentId: "d-1", clientId: clientA.id, status: "processed" });
-    expect(updates(sa.received)[0]).not.toHaveProperty("accountantUserId");
+    expect(updates(sa.received)[0]).not.toHaveProperty("audienceUserIds");
     expect(updates(sb.received)).toHaveLength(0);
     expect(updates(sadmin.received)).toHaveLength(1);
 

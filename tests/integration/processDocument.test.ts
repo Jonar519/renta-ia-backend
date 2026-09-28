@@ -189,7 +189,7 @@ describe("Worker processDocument: notificaciones en tiempo real", () => {
     await unsubscribe();
 
     expect(events.map((e) => e.status)).toEqual(["processing", "processed"]);
-    expect(events[1]).toMatchObject({ clientId, accountantUserId: user.user.id, documentId: doc.id });
+    expect(events[1]).toMatchObject({ clientId, audienceUserIds: [user.user.id], documentId: doc.id });
     expect(events[1]!.errorMessage).toMatch(/Procesado con advertencias/);
   });
 

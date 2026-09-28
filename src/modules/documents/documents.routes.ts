@@ -10,6 +10,7 @@ import {
 } from "./documents.schema";
 import { authMiddleware } from "../../middlewares/auth.middleware";
 import { requireClientAccess } from "../../middlewares/ownership.middleware";
+import { forbidRoles } from "../../middlewares/role.middleware";
 import { validate } from "../../middlewares/validate.middleware";
 import { uploadLimiter } from "../../middlewares/rateLimit.middleware";
 import { asyncHandler } from "../../utils/asyncHandler";
@@ -41,8 +42,12 @@ export const documentsRouter = Router();
 
 documentsRouter.use(authMiddleware);
 
+// El rol "client" (portal del contribuyente) es de solo lectura.
+const readOnlyClient = forbidRoles("client");
+
 documentsRouter.post(
   "/",
+  readOnlyClient,
   validate({ body: createDocumentSchema }),
   requireClientAccess("body", "clientId"),
   asyncHandler(documentsController.create)
@@ -51,6 +56,7 @@ documentsRouter.post(
 // firma del archivo → validación de campos → verificación de dueño.
 documentsRouter.post(
   "/upload",
+  readOnlyClient,
   uploadLimiter,
   upload.single("file"),
   checkFileSignature,
@@ -76,6 +82,7 @@ documentsRouter.get("/:id", validate({ params: documentIdParams }), asyncHandler
 // Reintentar el análisis con IA. Cuesta lo mismo que una subida: mismo límite.
 documentsRouter.post(
   "/:id/reprocess",
+  readOnlyClient,
   uploadLimiter,
   validate({ params: documentIdParams }),
   asyncHandler(documentsController.reprocess)

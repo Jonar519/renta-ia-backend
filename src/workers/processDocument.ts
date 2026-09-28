@@ -8,6 +8,7 @@ import { replaceEmbeddings } from "../modules/ai/embeddings.repository";
 import { rulesService } from "../modules/ai/rules.service";
 import type { DocumentProcessingJob } from "../queues/documentQueue";
 import { publishDocumentEvent } from "../services/events/documentEvents";
+import { clientAudience } from "../services/access/clientAudience";
 
 /**
  * Pipeline de IA de un documento. Separado del arranque del Worker
@@ -19,14 +20,14 @@ export async function processDocument(job: Job<DocumentProcessingJob>) {
 
   const document = await prisma.document.findUniqueOrThrow({
     where: { id: documentId },
-    include: { client: { select: { accountantUserId: true } } },
   });
+  const audienceUserIds = await clientAudience(document.clientId);
   // Notificación en tiempo real al dueño del cliente (nunca interrumpe el pipeline).
   const notify = (status: "processing" | "processed" | "error", errorMessage: string | null) =>
     publishDocumentEvent({
       documentId,
       clientId: document.clientId,
-      accountantUserId: document.client.accountantUserId,
+      audienceUserIds,
       status,
       errorMessage,
     });
