@@ -2,7 +2,7 @@ import http from "http";
 import type { AddressInfo } from "net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import bcrypt from "bcryptjs";
+import bcrypt from "bcrypt";
 import { WebSocket } from "ws";
 import { app, authHeader, createClient, createDocument, registerUser, TEST_PASSWORD, unique } from "../helpers";
 import { prisma } from "../../src/config/prisma";

@@ -1,4 +1,4 @@
-import bcrypt from "bcryptjs";
+import bcrypt from "bcrypt";
 import { z } from "zod";
 import { prisma } from "../../config/prisma";
 import { ApiError } from "../../utils/apiError";

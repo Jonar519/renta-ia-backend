@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import bcrypt from "bcryptjs";
+import bcrypt from "bcrypt";
 import { app, authHeader, registerUser, TEST_PASSWORD, unique } from "../helpers";
 import { prisma } from "../../src/config/prisma";
 import { metricsService } from "../../src/modules/metrics/metrics.service";

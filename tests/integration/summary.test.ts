@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
-import bcrypt from "bcryptjs";
+import bcrypt from "bcrypt";
 import { app, authHeader, createClient, createDocument, registerUser, TEST_PASSWORD, unique } from "../helpers";
 import { prisma } from "../../src/config/prisma";
 import { SUMMARY_DISCLAIMER } from "../../src/modules/clients/summary.service";
