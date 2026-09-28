@@ -7,6 +7,7 @@ import { documentQueue } from "../../queues/documentQueue";
 import { publishDocumentEvent } from "../../services/events/documentEvents";
 import { AuthPayload } from "../../middlewares/auth.middleware";
 import { clientScope } from "../../middlewares/ownership.middleware";
+import { afterCursor, PageParams, toPage } from "../../utils/pagination";
 
 // El acceso al cliente (clientId) de create/upload/listByClient se verifica
 // en la ruta con requireClientAccess, antes de llegar aquí.
@@ -67,11 +68,24 @@ export const documentsService = {
     return document;
   },
 
-  async listByClient(clientId: string) {
-    return prisma.document.findMany({
-      where: { clientId },
-      orderBy: { uploadedAt: "desc" },
+  async listByClient(clientId: string, { limit, cursor }: PageParams) {
+    const rows = await prisma.document.findMany({
+      where: { clientId, ...afterCursor("uploadedAt", cursor) },
+      orderBy: [{ uploadedAt: "desc" }, { id: "desc" }],
+      take: limit + 1,
+      // storageKey es una ruta interna del almacenamiento: no se expone.
+      select: {
+        id: true,
+        clientId: true,
+        docType: true,
+        originalName: true,
+        status: true,
+        errorMessage: true,
+        uploadedAt: true,
+        processedAt: true,
+      },
     });
+    return toPage(rows, limit, (d) => d.uploadedAt);
   },
 
   async getById(id: string, user: AuthPayload) {

@@ -112,11 +112,11 @@ describe("GET /api/clients (listado del admin)", () => {
 
     const res = await request(app).get("/api/clients").set(authHeader(login.body.token));
     expect(res.status).toBe(200);
-    const listed = res.body.find((c: { id: string }) => c.id === client.id);
+    const listed = res.body.items.find((c: { id: string }) => c.id === client.id);
     expect(listed.accountant).toEqual({ id: accountant.user.id, name: "Contador listado" });
 
     // Un contador sigue viendo solo los suyos.
     const own = await request(app).get("/api/clients").set(authHeader(accountant.token));
-    expect(own.body.map((c: { id: string }) => c.id)).toEqual([client.id]);
+    expect(own.body).toEqual({ items: [expect.objectContaining({ id: client.id })], nextCursor: null });
   });
 });

@@ -6,6 +6,7 @@ import { requireClientAccess } from "../../middlewares/ownership.middleware";
 import { validate } from "../../middlewares/validate.middleware";
 import { requireRole } from "../../middlewares/role.middleware";
 import { asyncHandler } from "../../utils/asyncHandler";
+import { paginationQuerySchema } from "../../utils/pagination";
 import { runDeadlineCheck } from "./deadlines.service";
 
 export const alertsRouter = Router();
@@ -14,7 +15,7 @@ alertsRouter.use(authMiddleware);
 
 alertsRouter.get(
   "/client/:clientId",
-  validate({ params: alertClientParams }),
+  validate({ params: alertClientParams, query: paginationQuerySchema }),
   requireClientAccess("params", "clientId"),
   asyncHandler(alertsController.listByClient)
 );

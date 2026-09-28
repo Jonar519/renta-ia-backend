@@ -4,6 +4,7 @@ import { ApiError } from "../../utils/apiError";
 import { isUuid } from "../../utils/uuid";
 import { AuthPayload } from "../../middlewares/auth.middleware";
 import { clientScope } from "../../middlewares/ownership.middleware";
+import { afterCursor, PageParams, toPage } from "../../utils/pagination";
 
 export interface ActiveAlertInput {
   clientId: string;
@@ -53,11 +54,13 @@ const ALLOWED_TRANSITIONS: Record<AlertStatus, AlertStatus[]> = {
 export const alertsService = {
   upsertActiveAlert,
 
-  async listByClient(clientId: string) {
-    return prisma.alert.findMany({
-      where: { clientId },
-      orderBy: { createdAt: "desc" },
+  async listByClient(clientId: string, { limit, cursor }: PageParams) {
+    const rows = await prisma.alert.findMany({
+      where: { clientId, ...afterCursor("createdAt", cursor) },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: limit + 1,
     });
+    return toPage(rows, limit, (a) => a.createdAt);
   },
 
   /** Cambia el estado de una alerta del usuario (404 si no existe o no es suya). */

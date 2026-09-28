@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { documentsService } from "./documents.service";
 import { ApiError } from "../../utils/apiError";
 import { routeParam } from "../../utils/params";
+import type { PageParams } from "../../utils/pagination";
 
 export const documentsController = {
   async create(req: Request, res: Response) {
@@ -31,7 +32,10 @@ export const documentsController = {
   },
 
   async listByClient(req: Request, res: Response) {
-    const documents = await documentsService.listByClient(routeParam(req, "clientId"));
+    const documents = await documentsService.listByClient(
+      routeParam(req, "clientId"),
+      req.query as unknown as PageParams
+    );
     res.json(documents);
   },
 

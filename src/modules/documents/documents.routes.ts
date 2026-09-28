@@ -7,6 +7,7 @@ import { requireClientAccess } from "../../middlewares/ownership.middleware";
 import { validate } from "../../middlewares/validate.middleware";
 import { uploadLimiter } from "../../middlewares/rateLimit.middleware";
 import { asyncHandler } from "../../utils/asyncHandler";
+import { paginationQuerySchema } from "../../utils/pagination";
 import { ApiError } from "../../utils/apiError";
 import { MAX_UPLOAD_BYTES, hasValidSignature, isAllowedMimeAndExtension } from "../../utils/fileType";
 
@@ -53,7 +54,7 @@ documentsRouter.post(
 );
 documentsRouter.get(
   "/client/:clientId",
-  validate({ params: documentClientParams }),
+  validate({ params: documentClientParams, query: paginationQuerySchema }),
   requireClientAccess("params", "clientId"),
   asyncHandler(documentsController.listByClient)
 );

@@ -1,6 +1,7 @@
 import { prisma } from "../../config/prisma";
 import { AuthPayload } from "../../middlewares/auth.middleware";
 import { assertClientAccess, clientScope } from "../../middlewares/ownership.middleware";
+import { afterCursor, PageParams, toPage } from "../../utils/pagination";
 
 interface CreateClientInput {
   accountantUserId: string;
@@ -47,12 +48,14 @@ export const clientsService = {
    * contador ve los suyos; el admin ve todos, con el nombre del contador
    * responsable para poder distinguirlos.
    */
-  async list(user: AuthPayload) {
-    return prisma.client.findMany({
-      where: clientScope(user),
-      orderBy: { createdAt: "desc" },
+  async list(user: AuthPayload, { limit, cursor }: PageParams) {
+    const rows = await prisma.client.findMany({
+      where: { ...clientScope(user), ...afterCursor("createdAt", cursor) },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: limit + 1,
       include: user.role === "admin" ? { accountant: { select: { id: true, name: true } } } : undefined,
     });
+    return toPage(rows, limit, (c) => c.createdAt);
   },
 
   async getById(id: string, user: AuthPayload) {
@@ -71,9 +74,12 @@ export const clientsService = {
 
   async listTaxConcepts(id: string, user: AuthPayload) {
     await assertClientAccess(id, user);
+    // Solo los campos que muestra la UI: con miles de conceptos, cada campo
+    // de más son decenas de KB de JSON.
     return prisma.taxConcept.findMany({
       where: { clientId: id },
       orderBy: [{ periodYear: "desc" }, { createdAt: "desc" }],
+      select: { id: true, documentId: true, conceptType: true, description: true, amount: true, periodYear: true },
     });
   },
 };

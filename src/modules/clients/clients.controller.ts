@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { clientsService } from "./clients.service";
 import { summaryService } from "./summary.service";
 import { routeParam } from "../../utils/params";
+import type { PageParams } from "../../utils/pagination";
 
 export const clientsController = {
   async create(req: Request, res: Response) {
@@ -13,7 +14,7 @@ export const clientsController = {
   },
 
   async list(req: Request, res: Response) {
-    const clients = await clientsService.list(req.user!);
+    const clients = await clientsService.list(req.user!, req.query as unknown as PageParams);
     res.json(clients);
   },
 

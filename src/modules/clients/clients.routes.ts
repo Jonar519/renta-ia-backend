@@ -5,13 +5,14 @@ import { authMiddleware } from "../../middlewares/auth.middleware";
 import { summaryLimiter } from "../../middlewares/rateLimit.middleware";
 import { validate } from "../../middlewares/validate.middleware";
 import { asyncHandler } from "../../utils/asyncHandler";
+import { paginationQuerySchema } from "../../utils/pagination";
 
 export const clientsRouter = Router();
 
 clientsRouter.use(authMiddleware);
 
 clientsRouter.post("/", validate({ body: createClientSchema }), asyncHandler(clientsController.create));
-clientsRouter.get("/", asyncHandler(clientsController.list));
+clientsRouter.get("/", validate({ query: paginationQuerySchema }), asyncHandler(clientsController.list));
 clientsRouter.get("/:id", validate({ params: clientIdParams }), asyncHandler(clientsController.getById));
 clientsRouter.get(
   "/:id/tax-concepts",
