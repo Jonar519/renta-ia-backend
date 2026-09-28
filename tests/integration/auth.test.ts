@@ -35,7 +35,7 @@ describe("auth.service", () => {
       password: TEST_PASSWORD,
     });
     expect(result.user).not.toHaveProperty("passwordHash");
-    expect(result.token).toEqual(expect.any(String));
+    expect(result.accessToken).toEqual(expect.any(String));
   });
 
   it("login con contraseña incorrecta da 401", async () => {
@@ -55,12 +55,12 @@ describe("auth.service", () => {
     expect(res.body.error).toBe("Credenciales inválidas");
   });
 
-  it("login correcto devuelve token", async () => {
+  it("login correcto devuelve access token", async () => {
     const email = `ok-${unique()}@test.local`;
     await authService.register({ name: "Ok", email, password: TEST_PASSWORD });
     const res = await request(app).post("/api/auth/login").send({ email, password: TEST_PASSWORD });
     expect(res.status).toBe(200);
-    expect(res.body.token).toEqual(expect.any(String));
+    expect(res.body.accessToken).toEqual(expect.any(String));
   });
 
   it("email duplicado da 409", async () => {

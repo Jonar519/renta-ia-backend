@@ -4,7 +4,8 @@ import { prisma } from "../src/config/prisma";
 
 export const app = createApp();
 
-export const TEST_PASSWORD = "Password123!";
+// Cumple la política de contraseñas (src/modules/auth/passwordPolicy.ts).
+export const TEST_PASSWORD = "Tributo-Seguro-2026";
 
 let counter = 0;
 /** Sufijo único para emails/cédulas: los tests comparten la base de datos. */
@@ -21,7 +22,7 @@ export async function registerUser(name = "Contador de prueba") {
   const email = `user-${unique()}@test.local`;
   const res = await request(app).post("/api/auth/register").send({ name, email, password: TEST_PASSWORD });
   if (res.status !== 201) throw new Error(`registerUser falló (${res.status}): ${JSON.stringify(res.body)}`);
-  return { token: res.body.token as string, user: res.body.user as { id: string; role: string }, email };
+  return { token: res.body.accessToken as string, user: res.body.user as { id: string; role: string }, email };
 }
 
 export async function createClient(token: string) {

@@ -19,12 +19,21 @@ export function createApp() {
 
   app.set("trust proxy", env.trustProxy);
 
+  // helmet revisado (Fase 4, docs/threat-model.md): la API solo sirve JSON, así
+  // que los defaults son correctos: CSP "default-src 'self'" (no aplica a
+  // JSON, pero protege si un error devolviera HTML), X-Content-Type-Options
+  // nosniff, frame-ancestors 'none'/X-Frame-Options, Referrer-Policy
+  // no-referrer, HSTS (efectivo detrás de HTTPS) y Cross-Origin-Resource-Policy
+  // same-origin (no afecta a fetch con CORS; impide incrustar respuestas con
+  // <img>/<script> desde otros sitios). Se quita X-Powered-By.
   app.use(helmet());
   // gzip/brotli de las respuestas (> 1 KB). Medido: el detalle de un cliente
   // con 4.000 conceptos transfería 824 KB de JSON sin comprimir
   // (docs/performance-report.md del frontend).
   app.use(compression({ threshold: 1024 }));
-  app.use(cors({ origin: env.corsOrigins }));
+  // credentials: true para que el navegador envíe la cookie de refresh a
+  // /api/auth (solo a los orígenes listados en CORS_ORIGIN).
+  app.use(cors({ origin: env.corsOrigins, credentials: true }));
   app.use(express.json({ limit: "100kb" }));
 
   // "dev" (colores, conciso) solo en desarrollo; "combined" (formato Apache

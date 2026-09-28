@@ -83,7 +83,7 @@ describe("WebSocket /ws", () => {
       data: { name: "Admin", email: adminEmail, role: "admin", passwordHash: await bcrypt.hash(TEST_PASSWORD, 4) },
     });
     const adminToken = (await request(app).post("/api/auth/login").send({ email: adminEmail, password: TEST_PASSWORD }))
-      .body.token;
+      .body.accessToken;
 
     const sa = connect(a.token);
     const sb = connect(b.token);

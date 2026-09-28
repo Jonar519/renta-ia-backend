@@ -110,7 +110,7 @@ describe("GET /api/clients (listado del admin)", () => {
     });
     const login = await request(app).post("/api/auth/login").send({ email, password: TEST_PASSWORD });
 
-    const res = await request(app).get("/api/clients").set(authHeader(login.body.token));
+    const res = await request(app).get("/api/clients").set(authHeader(login.body.accessToken));
     expect(res.status).toBe(200);
     const listed = res.body.items.find((c: { id: string }) => c.id === client.id);
     expect(listed.accountant).toEqual({ id: accountant.user.id, name: "Contador listado" });

@@ -58,7 +58,7 @@ describe("GET /api/metrics/web-vitals/summary", () => {
     await prisma.user.create({
       data: { name: "Admin", email, role: "admin", passwordHash: await bcrypt.hash(TEST_PASSWORD, 4) },
     });
-    adminToken = (await request(app).post("/api/auth/login").send({ email, password: TEST_PASSWORD })).body.token;
+    adminToken = (await request(app).post("/api/auth/login").send({ email, password: TEST_PASSWORD })).body.accessToken;
 
     // INP: 100, 200, 300, 400 → p75 (interpolación lineal de percentile_cont) = 325.
     await metricsService.record({

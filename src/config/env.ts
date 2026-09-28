@@ -34,7 +34,12 @@ export const env = {
   port: Number(process.env.PORT ?? 4000),
   databaseUrl: required("DATABASE_URL"),
   jwtSecret: required("JWT_SECRET"),
-  jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "1d",
+  // Access token: corto, solo en memoria del navegador (nunca en localStorage).
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "15m",
+  // Refresh token (cookie httpOnly, rotativo): días de vida de una sesión inactiva.
+  refreshTokenTtlDays: Number(process.env.REFRESH_TOKEN_TTL_DAYS ?? 7),
+  // Cookie Secure (solo HTTPS). Por defecto en producción; en local (http) no.
+  cookieSecure: (process.env.COOKIE_SECURE ?? (nodeEnv === "production" ? "true" : "false")) === "true",
   nodeEnv,
   logLevel: process.env.LOG_LEVEL ?? (nodeEnv === "test" ? "silent" : "info"),
 
