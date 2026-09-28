@@ -17,7 +17,7 @@ function refreshSetCookie(res: request.Response): string | undefined {
 
 function cookieValue(setCookie: string | undefined): string {
   if (!setCookie) throw new Error("No llegó la cookie de refresh");
-  return setCookie.split(";")[0];
+  return setCookie.split(";")[0]!;
 }
 
 async function registerWithCookie() {
@@ -47,7 +47,7 @@ describe("Sesión: access token corto + refresh token rotativo", () => {
     expect(setCookie).toMatch(/SameSite=Strict/i);
     expect(setCookie).toMatch(/Path=\/api\/auth/i);
     // En la BD solo se guarda el hash, nunca el token.
-    const raw = decodeURIComponent(cookieValue(setCookie).split("=")[1]);
+    const raw = decodeURIComponent(cookieValue(setCookie).split("=")[1]!);
     expect(await prisma.refreshToken.count({ where: { tokenHash: raw } })).toBe(0);
   });
 
@@ -64,9 +64,9 @@ describe("Sesión: access token corto + refresh token rotativo", () => {
 
     const tokens = await prisma.refreshToken.findMany({ where: { userId }, orderBy: { createdAt: "asc" } });
     expect(tokens).toHaveLength(2);
-    expect(tokens[0].revokeReason).toBe("rotated");
-    expect(tokens[0].replacedById).toBe(tokens[1].id);
-    expect(tokens[1].revokedAt).toBeNull();
+    expect(tokens[0]!.revokeReason).toBe("rotated");
+    expect(tokens[0]!.replacedById).toBe(tokens[1]!.id);
+    expect(tokens[1]!.revokedAt).toBeNull();
   });
 
   it("reutilizar un refresh token ya rotado revoca toda la familia (robo detectado) y se audita", async () => {
