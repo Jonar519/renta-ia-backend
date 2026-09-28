@@ -23,7 +23,8 @@ async function main() {
 
   /**
    * Apagado ordenado (SIGTERM del orquestador, o Ctrl+C = SIGINT en la consola):
-   *  1. /ready empieza a responder 503: el balanceador deja de enviar tráfico.
+   *  1. /ready empieza a responder 503 y se esperan SHUTDOWN_DRAIN_DELAY_MS
+   *     para que el balanceador lo vea y deje de enviar tráfico.
    *  2. Se cierran los WebSocket (el navegador reconecta a otra instancia).
    *  3. Se dejan de aceptar conexiones y se esperan las solicitudes en curso.
    *  4. Se escriben los registros de auditoría pendientes y se cierran la
@@ -34,6 +35,10 @@ async function main() {
   const shutdown = createGracefulShutdown(
     [
       { name: "readiness en 503", run: async () => markShuttingDown() },
+      {
+        name: "drenaje del balanceador",
+        run: () => new Promise((resolve) => setTimeout(resolve, env.shutdownDrainDelayMs)),
+      },
       { name: "WebSocket", run: () => realtime.close() },
       { name: "servidor HTTP", run: () => closeHttpServer(server) },
       { name: "auditoría pendiente", run: () => flushAudit() },

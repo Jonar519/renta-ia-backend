@@ -82,6 +82,10 @@ export const env = {
   workerConcurrency: positiveInt("WORKER_CONCURRENCY", 2),
   // Tiempo máximo del apagado ordenado (SIGTERM/SIGINT) antes de forzar la salida.
   shutdownTimeoutMs: positiveInt("SHUTDOWN_TIMEOUT_MS", 10_000),
+  // Espera entre "/ready = 503" y dejar de aceptar conexiones, para que el
+  // balanceador alcance a ver el 503 y saque la instancia. 0 en local; en
+  // producción, al menos el intervalo del health check del balanceador.
+  shutdownDrainDelayMs: Number(process.env.SHUTDOWN_DRAIN_DELAY_MS ?? 0),
 
   // Cola de tareas
   redisUrl: process.env.REDIS_URL ?? "redis://localhost:6379",
