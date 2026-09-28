@@ -93,38 +93,47 @@ Debe devolver `{"status":"ok"}`.
 
 ## Variables de entorno (`.env`)
 
-| Variable                               | Descripción                                                                                                                         |
-| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                         | Cadena de conexión a Postgres. Igual a la que usaste en `renta-ia-database`                                                         |
-| `JWT_SECRET`                           | Clave secreta para firmar los tokens. Cámbiala por un valor largo y aleatorio                                                       |
-| `JWT_EXPIRES_IN`                       | Duración del token (ej. `1d`, `12h`)                                                                                                |
-| `PORT`                                 | Puerto donde corre el servidor (por defecto 4000)                                                                                   |
-| `NODE_ENV`                             | `development`, `production` o `test` (cambia el formato de logs y de morgan)                                                        |
-| `LOG_LEVEL`                            | Nivel de logs (pino). Por defecto `info`                                                                                            |
-| `CORS_ORIGIN`                          | Orígenes permitidos por CORS, separados por coma. En desarrollo, por defecto `http://localhost:5173`; **obligatorio en producción** |
-| `TRUST_PROXY`                          | Proxies delante de la API (0 en local, 1 detrás de un balanceador)                                                                  |
-| `REDIS_URL`                            | Redis para la cola de documentos y los contadores de rate limiting                                                                  |
-| `ANTHROPIC_API_KEY` / `VOYAGE_API_KEY` | Claves de IA (solo necesarias para procesar documentos y usar el chat)                                                              |
+| Variable                               | Descripción                                                                                                                                                                  |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                         | Cadena de conexión a Postgres. Igual a la que usaste en `renta-ia-database`                                                                                                  |
+| `JWT_SECRET`                           | Clave secreta para firmar los tokens. Cámbiala por un valor largo y aleatorio                                                                                                |
+| `JWT_EXPIRES_IN`                       | Duración del token (ej. `1d`, `12h`)                                                                                                                                         |
+| `PORT`                                 | Puerto donde corre el servidor (por defecto 4000)                                                                                                                            |
+| `NODE_ENV`                             | `development`, `production` o `test` (cambia el formato de logs y de morgan)                                                                                                 |
+| `LOG_LEVEL`                            | Nivel de logs (pino). Por defecto `info`                                                                                                                                     |
+| `CORS_ORIGIN`                          | Orígenes permitidos por CORS, separados por coma. En desarrollo, por defecto `http://localhost:5173`; **obligatorio en producción**                                          |
+| `TRUST_PROXY`                          | Proxies delante de la API (0 en local, 1 detrás de un balanceador)                                                                                                           |
+| `REDIS_URL`                            | Redis para la cola de documentos y los contadores de rate limiting                                                                                                           |
+| `AI_PROVIDER`                          | `anthropic` (por defecto) o `mock`. **`mock` es solo para E2E y pruebas de carga**: no llama a ninguna API y el servidor se niega a arrancar con él si `NODE_ENV=production` |
+| `AI_MOCK_LATENCY_MS`                   | Solo con `AI_PROVIDER=mock`: latencia artificial por llamada (ms)                                                                                                            |
+| `TAX_CALENDAR_PATH` / `TAX_RULES_PATH` | Opcionales: rutas a otros JSON de calendario tributario / parámetros (por defecto `src/config/tax-calendar.json` y `tax-rules.json`)                                         |
+| `EXOGENOUS_TOLERANCE_RATIO`            | Opcional: tolerancia de la regla exógena vs. certificado (por defecto 0.05 = 5%)                                                                                             |
+| `ANTHROPIC_API_KEY` / `VOYAGE_API_KEY` | Claves de IA (solo necesarias para procesar documentos y usar el chat)                                                                                                       |
 
 ## Endpoints
 
-| Método | Ruta                              | Descripción                                                                                                           | Requiere token |
-| ------ | --------------------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------- |
-| POST   | `/api/auth/register`              | Crea un usuario con rol **contador** (el campo `role` se ignora; admin/asistente solo se asignan en la base de datos) | No             |
-| POST   | `/api/auth/login`                 | Inicia sesión y devuelve un JWT (el correo no distingue mayúsculas)                                                   | No             |
-| GET    | `/api/users/me`                   | Perfil del usuario autenticado                                                                                        | Sí             |
-| POST   | `/api/clients`                    | Crea un cliente contribuyente                                                                                         | Sí             |
-| GET    | `/api/clients`                    | Lista los clientes del contador autenticado                                                                           | Sí             |
-| GET    | `/api/clients/:id`                | Detalle de un cliente                                                                                                 | Sí             |
-| GET    | `/api/clients/:id/tax-concepts`   | Todos los conceptos tributarios del cliente (una sola consulta)                                                       | Sí             |
-| PATCH  | `/api/clients/:id`                | Actualiza un cliente                                                                                                  | Sí             |
-| DELETE | `/api/clients/:id`                | Elimina un cliente                                                                                                    | Sí             |
-| POST   | `/api/documents`                  | Registra metadatos de un documento (sin IA)                                                                           | Sí             |
-| POST   | `/api/documents/upload`           | Sube el archivo real y dispara el pipeline de IA                                                                      | Sí             |
-| GET    | `/api/documents/client/:clientId` | Lista documentos de un cliente                                                                                        | Sí             |
-| GET    | `/api/documents/:id`              | Detalle de un documento (con sus conceptos tributarios)                                                               | Sí             |
-| GET    | `/api/alerts/client/:clientId`    | Lista alertas de un cliente                                                                                           | Sí             |
-| POST   | `/api/ai/chat`                    | Pregunta en lenguaje natural sobre un cliente (RAG)                                                                   | Sí             |
+| Método | Ruta                              | Descripción                                                                                                           | Requiere token                    |
+| ------ | --------------------------------- | --------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| POST   | `/api/auth/register`              | Crea un usuario con rol **contador** (el campo `role` se ignora; admin/asistente solo se asignan en la base de datos) | No                                |
+| POST   | `/api/auth/login`                 | Inicia sesión y devuelve un JWT (el correo no distingue mayúsculas)                                                   | No                                |
+| GET    | `/api/users/me`                   | Perfil del usuario autenticado                                                                                        | Sí                                |
+| POST   | `/api/clients`                    | Crea un cliente contribuyente                                                                                         | Sí                                |
+| GET    | `/api/clients`                    | Lista los clientes del contador autenticado                                                                           | Sí                                |
+| GET    | `/api/clients/:id`                | Detalle de un cliente                                                                                                 | Sí                                |
+| POST   | `/api/clients/:id/summary`        | Resumen ejecutivo: totales y saldo estimado calculados en código + texto redactado por IA (20/h por usuario)          | Sí                                |
+| GET    | `/api/clients/:id/tax-concepts`   | Todos los conceptos tributarios del cliente (una sola consulta)                                                       | Sí                                |
+| PATCH  | `/api/clients/:id`                | Actualiza un cliente                                                                                                  | Sí                                |
+| DELETE | `/api/clients/:id`                | Elimina un cliente                                                                                                    | Sí                                |
+| POST   | `/api/documents`                  | Registra metadatos de un documento (sin IA)                                                                           | Sí                                |
+| POST   | `/api/documents/upload`           | Sube el archivo real y dispara el pipeline de IA                                                                      | Sí                                |
+| GET    | `/api/documents/client/:clientId` | Lista documentos de un cliente                                                                                        | Sí                                |
+| POST   | `/api/documents/:id/reprocess`    | Reintentar el análisis con IA (solo si terminó con error o advertencias; 409 si está en cola)                         | Sí                                |
+| GET    | `/api/documents/:id`              | Detalle de un documento (con sus conceptos tributarios)                                                               | Sí                                |
+| GET    | `/api/alerts/client/:clientId`    | Lista alertas de un cliente                                                                                           | Sí                                |
+| PATCH  | `/api/alerts/:id`                 | Cambiar estado: `{ "status": "acknowledged"                                                                           | "resolved" }` (resuelta es final) | Sí  |
+| POST   | `/api/alerts/deadlines/run`       | Ejecutar ya la revisión de vencimientos (el job corre a diario a las 06:00)                                           | Sí (admin)                        |
+| WS     | `/ws`                             | Notificaciones en tiempo real del estado de los documentos (ver abajo)                                                | Sí (primer mensaje)               |
+| POST   | `/api/ai/chat`                    | Pregunta en lenguaje natural sobre un cliente (RAG)                                                                   | Sí                                |
 
 Todas las rutas que reciben un cliente (`:id`, `:clientId` o `clientId` en el body) verifican que pertenezca al usuario autenticado (o que sea admin). Si no, responden **404** (no 403) para no revelar que el recurso existe.
 
@@ -158,6 +167,20 @@ Copia el `token` de la respuesta y úsalo así:
 curl http://localhost:4000/api/clients ^
   -H "Authorization: Bearer PEGA_AQUI_EL_TOKEN"
 ```
+
+## Tiempo real (WebSocket `/ws`)
+
+El worker publica cada cambio de estado de un documento en Redis (pub/sub); la API lo reenvía por WebSocket **solo** al contador dueño del cliente (y a los admin).
+
+- Conexión: `ws://localhost:4000/ws`, con un `Origin` permitido por `CORS_ORIGIN`.
+- Primer mensaje (antes de 5 s): `{ "type": "auth", "token": "<token>" }` → responde `{ "type": "ready" }`.
+- Eventos: `{ "type": "document.updated", "documentId", "clientId", "status", "errorMessage", "at" }`.
+- Cierres: `4401` token inválido, `4408` no se autenticó a tiempo, `4409` token expirado.
+- Si el socket no está disponible, el frontend hace polling con backoff mientras haya documentos pendientes.
+
+## Alertas de vencimiento y calendario tributario
+
+`src/config/tax-calendar.json` define, por año gravable, la fecha límite de la declaración según los dos últimos dígitos del NIT/cédula. **Las fechas incluidas son de EJEMPLO** (`"esEjemplo": true`) y cada alerta lo advierte: reemplázalas con el calendario oficial de la DIAN. El worker (`npm run worker`) programa un job diario (06:00, America/Bogota) que crea o escala las alertas sin duplicarlas y sin recrear las resueltas.
 
 ## Tests y calidad de código
 
