@@ -18,7 +18,7 @@ export const documentsController = {
       throw new ApiError(400, "No se envió ningún archivo (campo 'file')");
     }
     // clientId y docType ya vienen validados por uploadDocumentSchema.
-    const { clientId, docType } = req.body;
+    const { clientId, docType, sha256 } = req.body;
 
     const document = await documentsService.uploadAndEnqueue({
       clientId,
@@ -26,6 +26,7 @@ export const documentsController = {
       uploadedBy: req.user!.userId,
       originalName: req.file.originalname,
       buffer: req.file.buffer,
+      clientSha256: sha256,
     });
 
     res.status(201).json(document);
@@ -37,6 +38,10 @@ export const documentsController = {
       req.query as unknown as PageParams
     );
     res.json(documents);
+  },
+
+  async findByHash(req: Request, res: Response) {
+    res.json(await documentsService.findByHash(routeParam(req, "clientId"), routeParam(req, "sha256")));
   },
 
   async getById(req: Request, res: Response) {

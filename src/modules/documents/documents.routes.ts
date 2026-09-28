@@ -1,7 +1,13 @@
 import { NextFunction, Request, Response, Router } from "express";
 import multer from "multer";
 import { documentsController } from "./documents.controller";
-import { createDocumentSchema, documentClientParams, documentIdParams, uploadDocumentSchema } from "./documents.schema";
+import {
+  byHashParams,
+  createDocumentSchema,
+  documentClientParams,
+  documentIdParams,
+  uploadDocumentSchema,
+} from "./documents.schema";
 import { authMiddleware } from "../../middlewares/auth.middleware";
 import { requireClientAccess } from "../../middlewares/ownership.middleware";
 import { validate } from "../../middlewares/validate.middleware";
@@ -57,6 +63,14 @@ documentsRouter.get(
   validate({ params: documentClientParams, query: paginationQuerySchema }),
   requireClientAccess("params", "clientId"),
   asyncHandler(documentsController.listByClient)
+);
+// Consulta previa a la subida: el navegador calcula el SHA-256 en un Web
+// Worker y pregunta si ya existe, sin transferir el archivo.
+documentsRouter.get(
+  "/client/:clientId/by-hash/:sha256",
+  validate({ params: byHashParams }),
+  requireClientAccess("params", "clientId"),
+  asyncHandler(documentsController.findByHash)
 );
 documentsRouter.get("/:id", validate({ params: documentIdParams }), asyncHandler(documentsController.getById));
 // Reintentar el análisis con IA. Cuesta lo mismo que una subida: mismo límite.

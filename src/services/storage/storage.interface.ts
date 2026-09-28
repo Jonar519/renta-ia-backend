@@ -9,4 +9,6 @@ export interface StorageService {
   save(input: SaveFileInput): Promise<string>;
   /** Lee el archivo de vuelta como Buffer, a partir de su storageKey */
   readAsBuffer(storageKey: string): Promise<Buffer>;
+  /** Borra el archivo (no falla si ya no existe). */
+  delete(storageKey: string): Promise<void>;
 }
