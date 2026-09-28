@@ -118,6 +118,7 @@ model Alert {
   dueDate    DateTime?     @map("due_date") @db.Date
   createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   resolvedAt DateTime?     @map("resolved_at") @db.Timestamptz(6)
+  dedupeKey  String?       @map("dedupe_key") @db.VarChar(100)
   client     Client        @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   document   Document?     @relation(fields: [documentId], references: [id], onUpdate: NoAction)
 
@@ -126,6 +127,7 @@ model Alert {
   @@index([status], map: "idx_alerts_status")
   @@index([clientId, createdAt(sort: Desc)], map: "idx_alerts_client_created")
   @@index([documentId], map: "idx_alerts_document")
+  @@index([clientId, dedupeKey], map: "idx_alerts_client_dedupe")
   @@map("alerts")
 }
 

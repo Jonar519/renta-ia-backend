@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createClient, createDocument, registerUser } from "../helpers";
 import { prisma } from "../../src/config/prisma";
-import { rulesService } from "../../src/modules/ai/rules.service";
+import { findExogenousMismatches, rulesService } from "../../src/modules/ai/rules.service";
 
 /** Cliente nuevo con ingreso bruto y deducciones dados. */
 async function clientWith(grossIncome: number, deductions: number) {
@@ -77,5 +77,51 @@ describe("rulesService: sin alertas duplicadas", () => {
     await rulesService.evaluateClientConcepts(clientId, documentId);
     const alerts = await inconsistencyAlerts(clientId);
     expect(alerts.map((a) => a.status).sort()).toEqual(["open", "resolved"]);
+  });
+});
+
+describe("findExogenousMismatches (función pura)", () => {
+  const c = (
+    docType: "exogenous_info" | "income_certificate" | "bank_statement",
+    amount: number,
+    periodYear = 2025,
+    conceptType = "gross_income"
+  ) => ({
+    docType,
+    amount,
+    periodYear,
+    conceptType,
+  });
+
+  it("detecta una diferencia mayor que la tolerancia", () => {
+    expect(findExogenousMismatches([c("exogenous_info", 100), c("income_certificate", 80)], 0.05)).toEqual([
+      { periodYear: 2025, exogenousTotal: 100, certificateTotal: 80, differenceRatio: 0.2 },
+    ]);
+  });
+
+  it("no alerta dentro de la tolerancia (ni exactamente en el límite)", () => {
+    expect(findExogenousMismatches([c("exogenous_info", 100), c("income_certificate", 95)], 0.05)).toEqual([]);
+  });
+
+  it("suma varios certificados del mismo año antes de comparar", () => {
+    const concepts = [c("exogenous_info", 100), c("income_certificate", 60), c("income_certificate", 40)];
+    expect(findExogenousMismatches(concepts, 0.05)).toEqual([]);
+  });
+
+  it("no compara si falta uno de los dos tipos de documento", () => {
+    expect(findExogenousMismatches([c("exogenous_info", 100)], 0.05)).toEqual([]);
+    expect(findExogenousMismatches([c("income_certificate", 100)], 0.05)).toEqual([]);
+  });
+
+  it("compara por año e ignora otros conceptos y otros tipos de documento", () => {
+    const concepts = [
+      c("exogenous_info", 100, 2024),
+      c("income_certificate", 100, 2024),
+      c("exogenous_info", 200, 2025),
+      c("income_certificate", 100, 2025),
+      c("bank_statement", 999, 2025),
+      c("income_certificate", 999, 2025, "withholding"),
+    ];
+    expect(findExogenousMismatches(concepts, 0.05).map((m) => m.periodYear)).toEqual([2025]);
   });
 });
