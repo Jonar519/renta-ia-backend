@@ -4,6 +4,7 @@ import { createClient, createDocument, registerUser } from "../helpers";
 import { prisma } from "../../src/config/prisma";
 import { processDocument } from "../../src/workers/processDocument";
 import type { DocumentProcessingJob } from "../../src/queues/documentQueue";
+import { DocumentEvent, documentEventBus } from "../../src/services/events/documentEvents";
 import { textExtractionService } from "../../src/modules/ai/text-extraction.service";
 import { extractionService } from "../../src/modules/ai/extraction.service";
 import { embeddingsService } from "../../src/modules/ai/embeddings.service";
@@ -167,5 +168,41 @@ describe("Worker processDocument: reprocesamiento", () => {
     await processDocument(jobFor(doc.id));
 
     expect(await prisma.taxConcept.count({ where: { documentId: doc.id } })).toBe(1);
+  });
+});
+
+describe("Worker processDocument: notificaciones en tiempo real", () => {
+  it("publica processing y luego processed (con advertencias) al dueño del cliente", async () => {
+    const user = await registerUser();
+    const clientId = (await createClient(user.token)).id;
+    const doc = await createDocument(clientId, user.user.id);
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    extractText.mockResolvedValue("texto");
+    extractTaxConcepts.mockRejectedValue(new Error("sin crédito"));
+    chunkText.mockReturnValue(["a"]);
+    embed.mockResolvedValue([new Array(1024).fill(0.1)]);
+
+    const events: DocumentEvent[] = [];
+    const unsubscribe = await documentEventBus.subscribe((e) => events.push(e));
+    await processDocument(jobFor(doc.id));
+    await unsubscribe();
+
+    expect(events.map((e) => e.status)).toEqual(["processing", "processed"]);
+    expect(events[1]).toMatchObject({ clientId, accountantUserId: user.user.id, documentId: doc.id });
+    expect(events[1]!.errorMessage).toMatch(/Procesado con advertencias/);
+  });
+
+  it("publica error cuando falla la extracción de texto", async () => {
+    const user = await registerUser();
+    const doc = await createDocument((await createClient(user.token)).id, user.user.id);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    extractText.mockRejectedValue(new Error("PDF escaneado"));
+
+    const events: DocumentEvent[] = [];
+    const unsubscribe = await documentEventBus.subscribe((e) => events.push(e));
+    await expect(processDocument(jobFor(doc.id))).rejects.toThrow();
+    await unsubscribe();
+    expect(events.map((e) => e.status)).toEqual(["processing", "error"]);
   });
 });

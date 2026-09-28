@@ -58,3 +58,10 @@ documentsRouter.get(
   asyncHandler(documentsController.listByClient)
 );
 documentsRouter.get("/:id", validate({ params: documentIdParams }), asyncHandler(documentsController.getById));
+// Reintentar el análisis con IA. Cuesta lo mismo que una subida: mismo límite.
+documentsRouter.post(
+  "/:id/reprocess",
+  uploadLimiter,
+  validate({ params: documentIdParams }),
+  asyncHandler(documentsController.reprocess)
+);

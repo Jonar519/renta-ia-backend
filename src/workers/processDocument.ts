@@ -7,6 +7,7 @@ import { embeddingsService } from "../modules/ai/embeddings.service";
 import { replaceEmbeddings } from "../modules/ai/embeddings.repository";
 import { rulesService } from "../modules/ai/rules.service";
 import type { DocumentProcessingJob } from "../queues/documentQueue";
+import { publishDocumentEvent } from "../services/events/documentEvents";
 
 /**
  * Pipeline de IA de un documento. Separado del arranque del Worker
@@ -16,8 +17,22 @@ export async function processDocument(job: Job<DocumentProcessingJob>) {
   const { documentId } = job.data;
   console.log(`[worker] procesando documento ${documentId} ...`);
 
-  const document = await prisma.document.findUniqueOrThrow({ where: { id: documentId } });
+  const document = await prisma.document.findUniqueOrThrow({
+    where: { id: documentId },
+    include: { client: { select: { accountantUserId: true } } },
+  });
+  // Notificación en tiempo real al dueño del cliente (nunca interrumpe el pipeline).
+  const notify = (status: "processing" | "processed" | "error", errorMessage: string | null) =>
+    publishDocumentEvent({
+      documentId,
+      clientId: document.clientId,
+      accountantUserId: document.client.accountantUserId,
+      status,
+      errorMessage,
+    });
+
   await prisma.document.update({ where: { id: documentId }, data: { status: "processing" } });
+  await notify("processing", null);
 
   const warnings: string[] = [];
 
@@ -85,14 +100,12 @@ export async function processDocument(job: Job<DocumentProcessingJob>) {
       warnings.push(`Generación de embeddings falló: ${message}`);
     }
 
+    const finalMessage = warnings.length > 0 ? `Procesado con advertencias: ${warnings.join(" | ")}` : null;
     await prisma.document.update({
       where: { id: documentId },
-      data: {
-        status: "processed",
-        processedAt: new Date(),
-        errorMessage: warnings.length > 0 ? `Procesado con advertencias: ${warnings.join(" | ")}` : null,
-      },
+      data: { status: "processed", processedAt: new Date(), errorMessage: finalMessage },
     });
+    await notify("processed", finalMessage);
 
     console.log(
       `[worker] documento ${documentId} procesado${warnings.length > 0 ? " (con advertencias)" : " correctamente"}`
@@ -110,6 +123,7 @@ export async function processDocument(job: Job<DocumentProcessingJob>) {
       where: { id: documentId },
       data: { status: "error", errorMessage: message },
     });
+    await notify("error", message);
 
     throw err;
   }

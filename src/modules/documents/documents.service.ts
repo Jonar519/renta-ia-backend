@@ -4,6 +4,7 @@ import { ApiError } from "../../utils/apiError";
 import { isUuid } from "../../utils/uuid";
 import { storageService } from "../../services/storage";
 import { documentQueue } from "../../queues/documentQueue";
+import { publishDocumentEvent } from "../../services/events/documentEvents";
 import { AuthPayload } from "../../middlewares/auth.middleware";
 import { clientScope } from "../../middlewares/ownership.middleware";
 
@@ -84,5 +85,43 @@ export const documentsService = {
       throw new ApiError(404, "Documento no encontrado");
     }
     return document;
+  },
+
+  /**
+   * Vuelve a encolar el análisis de un documento (p. ej. cuando falló por
+   * falta de crédito en la API de IA). Solo si ya terminó (processed o
+   * error); uno en cola o procesándose responde 409. Al reprocesar, el
+   * worker reemplaza los conceptos y embeddings anteriores del documento.
+   */
+  async reprocess(id: string, user: AuthPayload) {
+    const document = isUuid(id)
+      ? await prisma.document.findFirst({
+          where: { id, client: clientScope(user) },
+          include: { client: { select: { accountantUserId: true } } },
+        })
+      : null;
+    if (!document) {
+      throw new ApiError(404, "Documento no encontrado");
+    }
+
+    // Transición condicional en una sola sentencia: dos clics simultáneos no
+    // encolan el documento dos veces.
+    const { count } = await prisma.document.updateMany({
+      where: { id, status: { in: ["processed", "error"] } },
+      data: { status: "uploaded", errorMessage: null, processedAt: null },
+    });
+    if (count === 0) {
+      throw new ApiError(409, "El documento ya está en cola o procesándose");
+    }
+
+    await documentQueue.add("process-document", { documentId: id });
+    await publishDocumentEvent({
+      documentId: id,
+      clientId: document.clientId,
+      accountantUserId: document.client.accountantUserId,
+      status: "uploaded",
+      errorMessage: null,
+    });
+    return prisma.document.findUniqueOrThrow({ where: { id } });
   },
 };

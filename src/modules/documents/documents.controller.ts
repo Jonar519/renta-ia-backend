@@ -39,4 +39,9 @@ export const documentsController = {
     const document = await documentsService.getById(routeParam(req, "id"), req.user!);
     res.json(document);
   },
+
+  async reprocess(req: Request, res: Response) {
+    const document = await documentsService.reprocess(routeParam(req, "id"), req.user!);
+    res.status(202).json(document);
+  },
 };
