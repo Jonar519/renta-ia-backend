@@ -1,0 +1,6 @@
+# Falsos positivos revisados: ejemplos de curl en README.md con el marcador
+# PEGA_AQUI_EL_TOKEN (no son secretos). Formato: <commit>:<archivo>:<regla>:<línea>
+fc46d0c1b2b3e1f1d4bf203fe9dfca0cf9e4f65d:README.md:curl-auth-header:183
+fc46d0c1b2b3e1f1d4bf203fe9dfca0cf9e4f65d:README.md:curl-auth-header:193
+fc46d0c1b2b3e1f1d4bf203fe9dfca0cf9e4f65d:README.md:curl-auth-header:202
+2cadf02cff9161ba25366a11f0b230b69f1e455b:README.md:curl-auth-header:123
