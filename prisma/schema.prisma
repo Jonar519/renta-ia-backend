@@ -167,6 +167,23 @@ model SchemaMigration {
   @@map("schema_migrations")
 }
 
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model WebVital {
+  id             BigInt   @id @default(autoincrement())
+  metric         String   @db.VarChar(12)
+  value          Float
+  rating         String?  @db.VarChar(20)
+  route          String   @db.VarChar(100)
+  device         String   @db.VarChar(10)
+  navigationType String?  @map("navigation_type") @db.VarChar(20)
+  attribution    String?  @db.VarChar(200)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([createdAt], map: "idx_web_vitals_created")
+  @@index([metric, route, createdAt(sort: Desc)], map: "idx_web_vitals_metric_route_created")
+  @@map("web_vitals")
+}
+
 enum UserRole {
   admin
   accountant

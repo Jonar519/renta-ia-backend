@@ -81,3 +81,6 @@ export const summaryLimiter = limiter(
   "Alcanzaste el límite de resúmenes ejecutivos por hora.",
   { keyGenerator: byUser }
 );
+
+/** Beacons de Web Vitals (anónimos): por IP, holgado para una sesión normal. */
+export const metricsLimiter = limiter("web-vitals", MINUTE, 60, "Demasiadas métricas enviadas.");

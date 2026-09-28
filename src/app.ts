@@ -9,6 +9,7 @@ import { clientsRouter } from "./modules/clients/clients.routes";
 import { documentsRouter } from "./modules/documents/documents.routes";
 import { alertsRouter } from "./modules/alerts/alerts.routes";
 import { aiRouter } from "./modules/ai/ai.routes";
+import { metricsRouter } from "./modules/metrics/metrics.routes";
 import { errorMiddleware, notFoundMiddleware } from "./middlewares/error.middleware";
 import { globalLimiter } from "./middlewares/rateLimit.middleware";
 
@@ -38,6 +39,7 @@ export function createApp() {
   app.use("/api/documents", documentsRouter);
   app.use("/api/alerts", alertsRouter);
   app.use("/api/ai", aiRouter);
+  app.use("/api/metrics", metricsRouter);
 
   app.use(notFoundMiddleware);
   app.use(errorMiddleware);
