@@ -20,7 +20,12 @@ export const textExtractionService = {
     const ext = path.extname(originalName).toLowerCase();
 
     if (ext === ".pdf") {
-      const result = await pdfParse(buffer);
+      // Copia a un Uint8Array con memoria propia: fs.readFileSync devuelve,
+      // para archivos pequeños (< 4 KB), un Buffer que es una VISTA dentro
+      // del pool compartido de Node (byteOffset ≠ 0), y el pdf.js que usa
+      // pdf-parse lee su ArrayBuffer subyacente ignorando ese desplazamiento
+      // → "bad XRef entry" en PDFs válidos. La copia cuesta O(tamaño).
+      const result = await pdfParse(new Uint8Array(buffer) as unknown as Buffer);
       const text = (result.text ?? "").trim();
 
       if (text.length > 20) {
