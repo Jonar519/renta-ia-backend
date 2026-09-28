@@ -15,7 +15,14 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
     "lint": "eslint . && prettier --check .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "loadtest:setup": "node loadtests/setup.mjs",
+    "loadtest:login": "node loadtests/login.mjs",
+    "loadtest:list": "node loadtests/list.mjs",
+    "loadtest:mixed": "node loadtests/mixed.mjs",
+    "loadtest:chat": "node loadtests/chat.mjs",
+    "loadtest:upload": "node loadtests/upload-burst.mjs",
+    "loadtest:ratelimit": "node loadtests/ratelimit.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.27.3",

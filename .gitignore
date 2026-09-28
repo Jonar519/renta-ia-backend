@@ -7,3 +7,6 @@ dist/
 coverage/
 .DS_Store
 uploads/
+
+# Pruebas de carga: estado local (cuentas sintéticas) y archivos temporales
+loadtests/.state.json

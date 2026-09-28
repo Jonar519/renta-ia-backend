@@ -1,0 +1,50 @@
+{
+  "measuredAt": "2026-09-28T17:04:14.101Z",
+  "api": "http://localhost:4300",
+  "machine": {
+    "cpu": "AMD Ryzen 9 7900 12-Core Processor",
+    "logicalCpus": 24,
+    "ramGb": 31.1,
+    "os": "Windows_NT 10.0.26200",
+    "node": "v24.13.1"
+  },
+  "scenario": "mixed",
+  "login": {
+    "name": "login (simultáneo)",
+    "connections": 20,
+    "durationSeconds": 20.04,
+    "requests": 1460,
+    "throughputRps": 72.9,
+    "latencyMs": {
+      "p50": 272.5,
+      "p95": 289.2,
+      "p99": 305.5,
+      "max": 376.2
+    },
+    "statusCodes": {
+      "200": 1460
+    },
+    "socketErrors": 0,
+    "timeouts": 0,
+    "errorRate": 0
+  },
+  "list": {
+    "name": "list (simultáneo)",
+    "connections": 50,
+    "durationSeconds": 20.05,
+    "requests": 23147,
+    "throughputRps": 1154.5,
+    "latencyMs": {
+      "p50": 42.6,
+      "p95": 52.6,
+      "p99": 57.4,
+      "max": 87
+    },
+    "statusCodes": {
+      "200": 23147
+    },
+    "socketErrors": 0,
+    "timeouts": 0,
+    "errorRate": 0
+  }
+}

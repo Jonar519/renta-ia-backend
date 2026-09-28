@@ -1,0 +1,33 @@
+{
+  "measuredAt": "2026-09-28T16:57:14.518Z",
+  "api": "http://localhost:4300",
+  "machine": {
+    "cpu": "AMD Ryzen 9 7900 12-Core Processor",
+    "logicalCpus": 24,
+    "ramGb": 31.1,
+    "os": "Windows_NT 10.0.26200",
+    "node": "v24.13.1"
+  },
+  "scenario": "chat",
+  "aiProvider": "mock",
+  "aiMockLatencyMsPerCall": "300",
+  "result": {
+    "name": "chat",
+    "connections": 20,
+    "durationSeconds": 20.16,
+    "requests": 580,
+    "throughputRps": 28.8,
+    "latencyMs": {
+      "p50": 682,
+      "p95": 693.6,
+      "p99": 704.3,
+      "max": 705.4
+    },
+    "statusCodes": {
+      "200": 580
+    },
+    "socketErrors": 0,
+    "timeouts": 0,
+    "errorRate": 0
+  }
+}
