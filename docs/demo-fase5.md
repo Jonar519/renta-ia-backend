@@ -111,3 +111,30 @@ solicitudes"): es el limitador por IP funcionando, no un error de estos estados.
 Evidencia del cierre de B2 (stack E2E, base `renta_ia_e2e`): axe sin ninguna violación en
 cargando, error, vacío, sin conexión y resumen inicial, y en todas las vistas con datos, en
 ambos temas. Capturas de antes y después en `files/.capturas/B2/`.
+
+## B3: Guard de rutas por rol y menú de usuario
+
+Detalle técnico: `renta-ia-frontend/docs/shell.md`. Usuarios del seed (contraseña `Password123!`).
+
+1. **Un asistente escribe la URL de administración.** Inicia sesión como `luis@example.com`
+   (no ve el enlace "Rendimiento"). Escribe a mano en la barra `http://localhost:5173/#/performance`
+   y pulsa Enter. Vuelves a "Tus clientes" con el aviso: _No tienes permiso para ver
+   "Rendimiento". Tu rol (Asistente) no tiene acceso. Te llevamos a Clientes._
+   - En DevTools → Network, filtra por `performance`: el código de esa vista **no se descargó**.
+   - Pulsa "Atrás" en el navegador: vuelves a la página anterior, no a la prohibida.
+   - Con `ana@example.com` (contador) pasa lo mismo; con `admin@example.com` sí entras.
+2. **Ruta inexistente.** Escribe `#/no-existe`: Clientes, con "La página que buscabas no existe."
+3. **Menú de usuario** (abajo en el sidebar; arriba a la derecha en una ventana angosta):
+   - Con el ratón: muestra nombre, rol y correo, más "Mi perfil" y "Salir".
+   - Con el teclado: Tab hasta el botón, Enter (el foco pasa a "Mi perfil"), ↓ y ↑ recorren,
+     Escape cierra y el foco vuelve al botón.
+   - Ábrelo y haz clic en cualquier otra parte: se cierra.
+   - "Mi perfil" abre tus datos; "Salir" cierra la sesión con el aviso "Cerraste sesión.".
+4. **Sin conexión.** DevTools → Network → Offline: el banner aparece arriba y el menú del
+   sidebar sigue completo (antes "Cerrar sesión" quedaba cortado abajo).
+5. **Pruebas automatizadas:** `npm test` (incluye `tests/guard.test.js` y
+   `tests/userMenu.test.js`) y, con el stack E2E y el seed cargado,
+   `npx playwright test e2e/guard.spec.js`.
+
+Evidencia del cierre de B3: capturas de antes y después (rebote, menú en escritorio y móvil,
+perfil, sidebar sin conexión, en ambos temas) en `files/.capturas/B3/`.
