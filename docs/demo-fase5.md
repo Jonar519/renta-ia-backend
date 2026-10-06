@@ -454,3 +454,41 @@ Solo necesitas el frontend de esta carpeta (la pantalla de login no llama a la A
 
 Capturas antes y después en `files/.capturas/B10/` (flujo de ejemplo) y `files/.capturas/B10b/`
 (cambio a la composición de marca).
+
+## B11: Mi perfil
+
+Necesitas la migración 020 (`scripts\migrate.bat`), la API y el frontend de esta carpeta. Entra
+como `ana@example.com` y abre **Mi perfil** (menú de la cuenta).
+
+1. **Nombre y teléfono.** Cambia el nombre y escribe un teléfono (`+57 300 123 4567`). Al
+   guardar, el menú de la cuenta muestra el nombre nuevo sin recargar. Prueba un teléfono con
+   letras: el formulario muestra el motivo. Dejarlo vacío lo borra. El rol no se edita aquí.
+2. **Cambiar el correo.**
+   - Escribe un correo nuevo y una contraseña incorrecta: "La contraseña actual no es correcta."
+     (cuenta como intento fallido, igual que en el login).
+   - Con la contraseña correcta aparece "Esperando confirmación de …", y el correo **todavía no
+     cambia**. Mira la bandeja simulada:
+
+     ```bat
+     docker exec renta_ia_postgres psql -U postgres -d renta_ia -c "SELECT to_address, template, subject FROM email_outbox ORDER BY created_at DESC LIMIT 2"
+     ```
+
+     Llegan dos correos: el enlace al correo **nuevo** y el aviso al **anterior**.
+
+   - Abre el enlace (`body_text` del correo nuevo) en una ventana privada, sin sesión: "Listo: tu
+     correo cambió". El token desaparece de la barra. Al anterior le llega otro aviso. Desde ahora
+     se entra con el correo nuevo.
+   - Abrir el mismo enlace otra vez: "no es válido o ya venció". "Cancelar el cambio" anula uno
+     pendiente.
+   - Si el correo nuevo ya es de otra cuenta, la pantalla responde igual (no lo revela); a ese
+     correo llega un aviso **sin enlace**.
+3. **Cambiar la contraseña.** Abre otra sesión (otra ventana privada) con la misma cuenta. En
+   "Contraseña" escribe la actual y dos veces la nueva: "Cambiaste tu contraseña y cerramos N
+   sesiones más". La otra ventana, al recargar, vuelve al login; esta sigue abierta. Llega un
+   aviso por correo (`password_change_notice`).
+4. **Auditoría** (`GET /api/admin/audit` como admin): `user.profile.update`,
+   `user.email_change.requested/completed`, `user.password.change`, sin correos, teléfonos ni tokens.
+5. **Pruebas automatizadas:** backend `npx vitest run tests/integration/profile.test.ts tests/integration/profileRateLimit.test.ts`;
+   frontend `npm test` (`tests/profile.test.js`) y `npx playwright test e2e/profile.spec.js`.
+
+Capturas en `files/.capturas/B11/` y huellas de la base antes y después de la 020 en `files/.huellas/B11-*.txt`.

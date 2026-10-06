@@ -129,6 +129,10 @@ curl http://localhost:4000/ready
   la contraseña o activar MFA invalida los access tokens al instante (costo medido en
   `docs/load-test-report.md`).
 - Contraseñas: 10–72 caracteres, sin contraseñas comunes ni el correo o el nombre.
+- **Mi perfil** (`/api/users/me`): nombre y teléfono se editan directamente. Cambiar el correo o la
+  contraseña pide la actual (cuenta en el bloqueo). El correo nuevo se confirma con un enlace de
+  24 h y un solo uso (solo su hash), con aviso al correo anterior; cambiar la contraseña cierra las
+  demás sesiones y avisa por correo.
 - Roles: `admin`, `accountant`, `assistant` (clientes de su contador, sin crear ni
   borrar) y `client` (solo lectura de su expediente). Todos se crean por invitación; la
   relación del asistente con su contador y la del portal con su expediente se crean al invitar.
@@ -170,6 +174,7 @@ test falla si quedó desactualizada).
 | Grupo        | Rutas                                                                                                                                                                                         |
 | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Auth         | `POST /api/auth/login` · `login/mfa` · `refresh` · `logout` · `invitations/lookup` · `invitations/accept` · `password-reset/request` · `lookup` · `confirm` · `GET /api/users/me`             |
+| Perfil       | `GET/PATCH /api/users/me` · `POST/DELETE /api/users/me/email` · `POST /api/users/me/password` · `POST /api/auth/email-change/confirm`                                                         |
 | MFA          | `GET /api/users/me/mfa` · `POST /api/users/me/mfa/setup` · `enable` · `disable` · `recovery-codes`                                                                                            |
 | Clientes     | `GET/POST /api/clients` · `GET/PATCH/DELETE /api/clients/:id` · `GET /api/clients/:id/tax-concepts` · `POST /api/clients/:id/summary`                                                         |
 | Documentos   | `POST /api/documents/upload` · `GET /api/documents/client/:clientId` · `GET /api/documents/client/:clientId/by-hash/:sha256` · `GET /api/documents/:id` · `POST /api/documents/:id/reprocess` |
