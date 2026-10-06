@@ -90,3 +90,19 @@ describe("Migración 010: integridad y normalización", () => {
     expect(res.status).toBe(200);
   });
 });
+
+/**
+ * Regla de tema (Fase 5): el tema lo decide solo el sistema operativo del
+ * usuario (prefers-color-scheme, CSS puro). Ninguna tabla guarda una
+ * preferencia de tema; si alguien la agrega, este test lo detecta.
+ */
+describe("Regla de tema: sin preferencia de tema en la base", () => {
+  it("ninguna columna de ninguna tabla se llama *theme*, *tema* ni *color_scheme*", async () => {
+    const columns = await prisma.$queryRaw<{ table_name: string; column_name: string }[]>`
+      SELECT table_name, column_name FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND (column_name ILIKE '%theme%' OR column_name ILIKE '%tema%' OR column_name ILIKE '%color_scheme%'
+             OR column_name ILIKE '%dark_mode%')`;
+    expect(columns).toEqual([]);
+  });
+});
