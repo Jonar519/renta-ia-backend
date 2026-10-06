@@ -126,6 +126,12 @@ export const env = {
 
   // Correo (ver emailProvider): "mock" por defecto fuera de producción.
   emailProvider: emailProvider(),
+  // URL pública del frontend: base de los enlaces que viajan por correo
+  // (invitación, recuperación…). Obligatoria en producción.
+  appUrl: (process.env.APP_URL || (nodeEnv === "production" ? required("APP_URL") : "http://localhost:5173")).replace(
+    /\/+$/,
+    ""
+  ),
   emailFrom: process.env.EMAIL_FROM ?? "Renta IA <no-responder@renta-ia.local>",
   sesRegion: process.env.SES_REGION,
 

@@ -35,6 +35,19 @@ const MINUTE = 60 * 1000;
 // DESPUÉS de authMiddleware.
 const byUser = (req: Request) => req.user?.userId ?? ipKeyGenerator(req.ip ?? "");
 
+/**
+ * Enlaces de invitación (consultar / aceptar), por IP: solo cuentan los
+ * intentos fallidos (token inválido, vencido o contraseña rechazada). Con
+ * 256 bits de token no se pueden adivinar; esto frena el ruido y el abuso.
+ */
+export const invitationLimiter = limiter(
+  "invitation",
+  15 * MINUTE,
+  20,
+  "Demasiados intentos con enlaces de invitación. Espera 15 minutos.",
+  { skipSuccessfulRequests: true }
+);
+
 /** Límite general por IP para toda la API. */
 export const globalLimiter = limiter(
   "global",
