@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 import { prisma } from "../../config/prisma";
+import { ApiError } from "../../utils/apiError";
 
 /**
  * Bloqueo progresivo tras logins fallidos, POR CUENTA.
@@ -13,6 +14,13 @@ import { prisma } from "../../config/prisma";
  * cada fallo bloquea 1, 2, 4, 8… minutos, con tope de MAX_LOCK_MINUTES.
  * Un login exitoso borra el contador.
  */
+export class AccountLockedError extends ApiError {
+  constructor(remainingMs: number) {
+    const minutes = Math.max(1, Math.ceil(remainingMs / 60_000));
+    super(429, `Demasiados intentos fallidos. Intenta de nuevo en ${minutes} minuto${minutes === 1 ? "" : "s"}.`);
+  }
+}
+
 export const FREE_ATTEMPTS = 5;
 export const MAX_LOCK_MINUTES = 60;
 

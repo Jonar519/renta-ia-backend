@@ -12,10 +12,15 @@ export interface AuthPayload {
   role: AppRole;
 }
 
+/** Lo que queda en req.user: la cuenta y su sesión (sid), p. ej. para cerrar las DEMÁS sesiones. */
+export interface RequestUser extends AuthPayload {
+  sid: string;
+}
+
 // Agrega req.user al tipo Request de Express (module augmentation).
 declare module "express-serve-static-core" {
   interface Request {
-    user?: AuthPayload;
+    user?: RequestUser;
   }
 }
 
@@ -35,7 +40,7 @@ export function authMiddleware(req: Request, _res: Response, next: NextFunction)
     .isActive(payload.sid)
     .then((active) => {
       if (!active) return next(new ApiError(401, SESSION_CLOSED));
-      req.user = { userId: payload.userId, role: payload.role };
+      req.user = { userId: payload.userId, role: payload.role, sid: payload.sid };
       next();
     })
     .catch(next);

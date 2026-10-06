@@ -64,6 +64,28 @@ function rateLimitScale(): number {
   return value;
 }
 
+/**
+ * Clave de cifrado de los secretos TOTP (AES-256-GCM): 32 bytes en base64.
+ * Generarla: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+ *  - Obligatoria en producción (el servidor no arranca sin ella).
+ *  - Fuera de producción es opcional: sin ella la API arranca igual y solo
+ *    las rutas de MFA responden 503 explicando qué falta.
+ *  - Si se pierde o se cambia, los secretos guardados no se pueden descifrar
+ *    y cada cuenta con MFA tendría que volver a configurarlo.
+ */
+function mfaEncryptionKey(): Buffer | undefined {
+  const value = process.env.MFA_ENCRYPTION_KEY;
+  if (!value) {
+    if (nodeEnv === "production") required("MFA_ENCRYPTION_KEY");
+    return undefined;
+  }
+  const key = Buffer.from(value, "base64");
+  if (key.length !== 32 || key.toString("base64") !== value) {
+    throw new Error("MFA_ENCRYPTION_KEY debe ser exactamente 32 bytes codificados en base64 (44 caracteres).");
+  }
+  return key;
+}
+
 function positiveInt(name: string, fallback: number): number {
   const value = Number(process.env[name] ?? fallback);
   if (!Number.isInteger(value) || value < 1) throw new Error(`${name} debe ser un entero positivo.`);
@@ -87,6 +109,8 @@ export const env = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "15m",
   // Refresh token (cookie httpOnly, rotativo): días de vida de una sesión inactiva.
   refreshTokenTtlDays: Number(process.env.REFRESH_TOKEN_TTL_DAYS ?? 7),
+  // Cifrado de los secretos TOTP (ver mfaEncryptionKey).
+  mfaEncryptionKey: mfaEncryptionKey(),
   // Cookie Secure (solo HTTPS). Por defecto en producción; en local (http) no.
   cookieSecure: (process.env.COOKIE_SECURE ?? (nodeEnv === "production" ? "true" : "false")) === "true",
   nodeEnv,

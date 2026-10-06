@@ -2,8 +2,8 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { env } from "../config/env";
 
 /**
- * Tokens de un solo uso que viajan por correo (invitación; luego
- * recuperación de contraseña y cambio de correo).
+ * Tokens de un solo uso: los que viajan por correo (invitación, recuperación
+ * de contraseña, cambio de correo) y el paso de verificación del login con MFA.
  *
  *   token = <32 bytes aleatorios, base64url> "." <HMAC-SHA256 de esos bytes>
  *
@@ -14,7 +14,7 @@ import { env } from "../config/env";
  *    base no puede reconstruir el enlace.
  *  - Un solo uso y vencimiento: los impone la tabla de cada propósito.
  */
-export type TokenPurpose = "invitation" | "password_reset" | "email_change";
+export type TokenPurpose = "invitation" | "password_reset" | "email_change" | "mfa_challenge";
 
 const MAX_TOKEN_LENGTH = 200;
 

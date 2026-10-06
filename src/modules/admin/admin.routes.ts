@@ -9,6 +9,8 @@ import { adminService } from "./admin.service";
 import { auditQuerySchema, portalClientsQuerySchema } from "./admin.schema";
 import { invitationsService } from "../invitations/invitations.service";
 import { invitedUserParams, inviteSchema } from "../invitations/invitations.schema";
+import { mfaService } from "../mfa/mfa.service";
+import { mfaUserParams } from "../mfa/mfa.schema";
 
 export const adminRouter = Router();
 
@@ -52,6 +54,21 @@ adminRouter.delete(
   asyncHandler(async (req, res) => {
     await invitationsService.cancel(req.params.userId as string);
     audit(req, { action: "admin.invitation.cancel", entity: "user", entityId: req.params.userId as string });
+    res.status(204).end();
+  })
+);
+
+/**
+ * Restablecer el MFA de OTRA cuenta (perdió el teléfono y los códigos de
+ * recuperación): se borra su segundo factor y se cierran sus sesiones. El
+ * admin no ve ni define nada secreto; la persona lo vuelve a configurar.
+ */
+adminRouter.delete(
+  "/users/:userId/mfa",
+  validate({ params: mfaUserParams }),
+  asyncHandler(async (req, res) => {
+    await mfaService.adminReset(req.user!.userId, req.params.userId as string);
+    audit(req, { action: "admin.mfa.reset", entity: "user", entityId: req.params.userId as string });
     res.status(204).end();
   })
 );

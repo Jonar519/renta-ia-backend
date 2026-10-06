@@ -71,6 +71,28 @@ export const passwordResetLimiter = limiter(
   { skipSuccessfulRequests: true }
 );
 
+/**
+ * Segundo paso del login (código de la app o de recuperación), por IP: solo
+ * cuentan los fallidos. Además cada paso admite 5 intentos y cada fallo
+ * suma al bloqueo progresivo de la cuenta.
+ */
+export const mfaLoginLimiter = limiter(
+  "mfa-login",
+  15 * MINUTE,
+  10,
+  "Demasiados códigos incorrectos. Espera 15 minutos.",
+  { skipSuccessfulRequests: true }
+);
+
+/** Configurar, desactivar o regenerar el MFA propio, por usuario: solo cuentan los fallidos. */
+export const mfaManageLimiter = limiter(
+  "mfa-manage",
+  15 * MINUTE,
+  10,
+  "Demasiados intentos fallidos con la verificación en dos pasos. Espera 15 minutos.",
+  { skipSuccessfulRequests: true, keyGenerator: byUser }
+);
+
 /** Límite general por IP para toda la API. */
 export const globalLimiter = limiter(
   "global",

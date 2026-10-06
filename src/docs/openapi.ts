@@ -30,6 +30,14 @@ import { alertClientParams, alertIdParams, updateAlertStatusSchema } from "../mo
 import { chatSchema } from "../modules/ai/ai.schema";
 import { summaryQuerySchema, webVitalsPayloadSchema } from "../modules/metrics/metrics.schema";
 import { auditQuerySchema, portalClientsQuerySchema } from "../modules/admin/admin.schema";
+import {
+  loginMfaSchema,
+  mfaDisableSchema,
+  mfaEnableSchema,
+  mfaRegenerateSchema,
+  mfaSetupSchema,
+  mfaUserParams,
+} from "../modules/mfa/mfa.schema";
 import { paginationQuerySchema } from "../utils/pagination";
 
 /**
@@ -204,7 +212,39 @@ route({
   summary: "Login. Bloqueo progresivo por cuenta y límite por IP. Deja la cookie de refresh.",
   secure: false,
   body: loginSchema,
-  responses: { 200: json(Session, "Sesión iniciada"), 401: errors[401], 429: errors[429] },
+  responses: {
+    200: json(
+      z.union([
+        Session,
+        z
+          .object({
+            mfaRequired: z.literal(true),
+            challengeToken: z.string(),
+            expiresAt: z.string().datetime(),
+          })
+          .describe("Cuenta con MFA activo: todavía SIN sesión ni cookie. Continuar en POST /api/auth/login/mfa."),
+      ]),
+      "Sesión iniciada, o paso de verificación si la cuenta tiene MFA"
+    ),
+    401: errors[401],
+    429: errors[429],
+    503: json(ErrorResponse, "Cuenta con MFA y servidor sin MFA_ENCRYPTION_KEY"),
+  },
+});
+route({
+  method: "post",
+  path: "/api/auth/login/mfa",
+  tag: "Auth",
+  summary:
+    "Segundo paso del login: código de 6 dígitos de la app o un código de recuperación. Paso de 5 min y 5 intentos; deja la cookie de refresh.",
+  secure: false,
+  body: loginMfaSchema,
+  responses: {
+    200: json(Session, "Sesión iniciada"),
+    400: errors[400],
+    401: json(ErrorResponse, "Código incorrecto, o paso vencido, usado o agotado"),
+    429: errors[429],
+  },
 });
 for (const [path, summary, ok] of [
   [
@@ -315,6 +355,83 @@ route({
   tag: "Auth",
   summary: "Usuario actual",
   responses: { 200: json(User, "Usuario"), 401: errors[401] },
+});
+
+// ---------- MFA de la propia cuenta ----------
+const RecoveryCodes = z
+  .object({ recoveryCodes: z.array(z.string()).length(10) })
+  .describe("Se muestran UNA sola vez (Cache-Control: no-store); en la base solo queda su hash.");
+const mfaErrors = {
+  400: json(ErrorResponse, "Datos inválidos, contraseña o código incorrectos"),
+  401: errors[401],
+  429: json(ErrorResponse, "Límite de intentos o cuenta bloqueada por intentos fallidos"),
+  503: json(ErrorResponse, "Servidor sin MFA_ENCRYPTION_KEY"),
+};
+route({
+  method: "get",
+  path: "/api/users/me/mfa",
+  tag: "MFA",
+  summary: "Estado de la verificación en dos pasos",
+  responses: {
+    200: json(
+      z.object({
+        enabled: z.boolean(),
+        enabledAt: z.string().datetime().nullable(),
+        recoveryCodesRemaining: z.number().int(),
+      }),
+      "Estado"
+    ),
+    401: errors[401],
+  },
+});
+route({
+  method: "post",
+  path: "/api/users/me/mfa/setup",
+  tag: "MFA",
+  summary: "Paso 1: con la contraseña actual, genera el secreto (guardado cifrado, sin activar; vence en 10 min)",
+  body: mfaSetupSchema,
+  responses: {
+    201: json(
+      z.object({
+        secret: z.string().describe("Base32, para escribirlo a mano en la app"),
+        otpauthUri: z.string().describe("otpauth://totp/… (contenido del QR)"),
+        expiresAt: z.string().datetime(),
+      }),
+      "Secreto para la app de autenticación"
+    ),
+    ...mfaErrors,
+    409: json(ErrorResponse, "MFA ya está activo"),
+  },
+});
+route({
+  method: "post",
+  path: "/api/users/me/mfa/enable",
+  tag: "MFA",
+  summary:
+    "Paso 2: confirma con un código; activa MFA, entrega los códigos de recuperación y cierra las DEMÁS sesiones",
+  body: mfaEnableSchema,
+  responses: {
+    200: json(RecoveryCodes, "MFA activo"),
+    ...mfaErrors,
+    409: json(ErrorResponse, "Ya estaba activo"),
+    410: json(ErrorResponse, "La configuración venció o no se empezó"),
+  },
+});
+route({
+  method: "post",
+  path: "/api/users/me/mfa/disable",
+  tag: "MFA",
+  summary: "Desactiva MFA: contraseña actual + código de la app o de recuperación",
+  body: mfaDisableSchema,
+  responses: { 204: { description: "Desactivado" }, ...mfaErrors, 409: json(ErrorResponse, "No estaba activo") },
+});
+route({
+  method: "post",
+  path: "/api/users/me/mfa/recovery-codes",
+  tag: "MFA",
+  summary: "Códigos de recuperación nuevos (invalida los anteriores). Pide un código de la app.",
+  body: mfaRegenerateSchema,
+  responses: { 200: json(RecoveryCodes, "Códigos nuevos"), ...mfaErrors, 409: json(ErrorResponse, "MFA no activo") },
 });
 
 // ---------- Clientes ----------
@@ -555,6 +672,18 @@ route({
   summary: "Cancelar: elimina la cuenta pendiente (nunca una activa) y su enlace",
   params: invitedUserParams,
   responses: { 204: { description: "Cancelada" }, 403: errors[403], 404: errors[404] },
+});
+route({
+  method: "delete",
+  path: "/api/admin/users/{userId}/mfa",
+  tag: "Admin",
+  summary: "Restablece el MFA de OTRA cuenta (perdió el teléfono y los códigos): lo borra y cierra todas sus sesiones",
+  params: mfaUserParams,
+  responses: {
+    204: { description: "MFA restablecido; la persona entra con su contraseña y lo configura de nuevo" },
+    403: json(ErrorResponse, "No es admin, o intenta restablecer su propio MFA"),
+    404: json(ErrorResponse, "Esa cuenta no tiene MFA activo"),
+  },
 });
 route({
   method: "get",

@@ -472,6 +472,112 @@
         },
         "responses": {
           "200": {
+            "description": "Sesión iniciada, o paso de verificación si la cuenta tiene MFA",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Session"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "mfaRequired": {
+                          "type": "boolean",
+                          "enum": [
+                            true
+                          ]
+                        },
+                        "challengeToken": {
+                          "type": "string"
+                        },
+                        "expiresAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "mfaRequired",
+                        "challengeToken",
+                        "expiresAt"
+                      ],
+                      "description": "Cuenta con MFA activo: todavía SIN sesión ni cookie. Continuar en POST /api/auth/login/mfa."
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Cuenta con MFA y servidor sin MFA_ENCRYPTION_KEY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login/mfa": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Segundo paso del login: código de 6 dígitos de la app o un código de recuperación. Paso de 5 min y 5 intentos; deja la cookie de refresh.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "challengeToken": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "code": {
+                    "type": "string",
+                    "minLength": 6,
+                    "maxLength": 24,
+                    "description": "6 dígitos de la app de autenticación, o un código de recuperación (XXXX-XXXX-XXXX-XXXX)"
+                  }
+                },
+                "required": [
+                  "challengeToken",
+                  "code"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
             "description": "Sesión iniciada",
             "content": {
               "application/json": {
@@ -481,8 +587,18 @@
               }
             }
           },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "401": {
-            "description": "Sin sesión o token vencido",
+            "description": "Código incorrecto, o paso vencido, usado o agotado",
             "content": {
               "application/json": {
                 "schema": {
@@ -1036,6 +1152,494 @@
           },
           "401": {
             "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me/mfa": {
+      "get": {
+        "tags": [
+          "MFA"
+        ],
+        "summary": "Estado de la verificación en dos pasos",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Estado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "enabledAt": {
+                      "type": "string",
+                      "nullable": true,
+                      "format": "date-time"
+                    },
+                    "recoveryCodesRemaining": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "enabled",
+                    "enabledAt",
+                    "recoveryCodesRemaining"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me/mfa/setup": {
+      "post": {
+        "tags": [
+          "MFA"
+        ],
+        "summary": "Paso 1: con la contraseña actual, genera el secreto (guardado cifrado, sin activar; vence en 10 min)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "password": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "description": "Contraseña actual (se vuelve a pedir)"
+                  }
+                },
+                "required": [
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Secreto para la app de autenticación",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "secret": {
+                      "type": "string",
+                      "description": "Base32, para escribirlo a mano en la app"
+                    },
+                    "otpauthUri": {
+                      "type": "string",
+                      "description": "otpauth://totp/… (contenido del QR)"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "secret",
+                    "otpauthUri",
+                    "expiresAt"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos, contraseña o código incorrectos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "MFA ya está activo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de intentos o cuenta bloqueada por intentos fallidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Servidor sin MFA_ENCRYPTION_KEY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me/mfa/enable": {
+      "post": {
+        "tags": [
+          "MFA"
+        ],
+        "summary": "Paso 2: confirma con un código; activa MFA, entrega los códigos de recuperación y cierra las DEMÁS sesiones",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "pattern": "^\\d{6}$",
+                    "description": "6 dígitos de la app de autenticación"
+                  }
+                },
+                "required": [
+                  "code"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "MFA activo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "recoveryCodes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "recoveryCodes"
+                  ],
+                  "description": "Se muestran UNA sola vez (Cache-Control: no-store); en la base solo queda su hash."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos, contraseña o código incorrectos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Ya estaba activo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "La configuración venció o no se empezó",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de intentos o cuenta bloqueada por intentos fallidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Servidor sin MFA_ENCRYPTION_KEY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me/mfa/disable": {
+      "post": {
+        "tags": [
+          "MFA"
+        ],
+        "summary": "Desactiva MFA: contraseña actual + código de la app o de recuperación",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "password": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "description": "Contraseña actual (se vuelve a pedir)"
+                  },
+                  "code": {
+                    "type": "string",
+                    "minLength": 6,
+                    "maxLength": 24,
+                    "description": "6 dígitos de la app de autenticación, o un código de recuperación (XXXX-XXXX-XXXX-XXXX)"
+                  }
+                },
+                "required": [
+                  "password",
+                  "code"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Desactivado"
+          },
+          "400": {
+            "description": "Datos inválidos, contraseña o código incorrectos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No estaba activo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de intentos o cuenta bloqueada por intentos fallidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Servidor sin MFA_ENCRYPTION_KEY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me/mfa/recovery-codes": {
+      "post": {
+        "tags": [
+          "MFA"
+        ],
+        "summary": "Códigos de recuperación nuevos (invalida los anteriores). Pide un código de la app.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "pattern": "^\\d{6}$",
+                    "description": "6 dígitos de la app de autenticación"
+                  }
+                },
+                "required": [
+                  "code"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Códigos nuevos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "recoveryCodes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "recoveryCodes"
+                  ],
+                  "description": "Se muestran UNA sola vez (Cache-Control: no-store); en la base solo queda su hash."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos, contraseña o código incorrectos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "MFA no activo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de intentos o cuenta bloqueada por intentos fallidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Servidor sin MFA_ENCRYPTION_KEY",
             "content": {
               "application/json": {
                 "schema": {
@@ -2712,6 +3316,55 @@
           },
           "404": {
             "description": "No existe o no es accesible (no se revela cuál)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users/{userId}/mfa": {
+      "delete": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Restablece el MFA de OTRA cuenta (perdió el teléfono y los códigos): lo borra y cierra todas sus sesiones",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "userId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "MFA restablecido; la persona entra con su contraseña y lo configura de nuevo"
+          },
+          "403": {
+            "description": "No es admin, o intenta restablecer su propio MFA",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Esa cuenta no tiene MFA activo",
             "content": {
               "application/json": {
                 "schema": {

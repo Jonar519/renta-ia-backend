@@ -1,8 +1,11 @@
 import bcrypt from "bcrypt";
 import { prisma } from "../../config/prisma";
 import { ApiError } from "../../utils/apiError";
-import { lockoutService } from "./lockout.service";
+import { AccountLockedError, lockoutService } from "./lockout.service";
 import { sessionsService } from "./sessions.service";
+import { mfaService } from "../mfa/mfa.service";
+
+export { AccountLockedError };
 
 interface LoginInput {
   email: string;
@@ -27,13 +30,6 @@ export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-export class AccountLockedError extends ApiError {
-  constructor(remainingMs: number) {
-    const minutes = Math.max(1, Math.ceil(remainingMs / 60_000));
-    super(429, `Demasiados intentos fallidos. Intenta de nuevo en ${minutes} minuto${minutes === 1 ? "" : "s"}.`);
-  }
-}
-
 export const authService = {
   async login(input: LoginInput) {
     const email = normalizeEmail(input.email);
@@ -52,7 +48,12 @@ export const authService = {
       throw new ApiError(401, INVALID_CREDENTIALS);
     }
 
+    // Con MFA activo la contraseña no basta: no hay sesión todavía, sino un
+    // paso de verificación (el bloqueo se limpia al completarlo).
+    if (await mfaService.isEnabled(user.id)) {
+      return { mfaRequired: true as const, userId: user.id, ...(await mfaService.startChallenge(user.id)) };
+    }
     await lockoutService.registerSuccess(email);
-    return sessionsService.start(user);
+    return { mfaRequired: false as const, ...(await sessionsService.start(user)) };
   },
 };

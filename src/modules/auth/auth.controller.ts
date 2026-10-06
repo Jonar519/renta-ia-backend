@@ -11,6 +11,7 @@ import { audit } from "../../services/audit/audit.service";
 import { ApiError } from "../../utils/apiError";
 import { InvalidInvitationError, invitationsService } from "../invitations/invitations.service";
 import { InvalidResetTokenError, passwordResetService } from "./passwordReset.service";
+import { InvalidChallengeError, MfaCodeError, mfaService } from "../mfa/mfa.service";
 
 /** Audita los enlaces de invitación rechazados (sin el token: solo IP y user agent). */
 async function auditingInvalid<T>(req: Request, work: () => Promise<T>): Promise<T> {
@@ -54,13 +55,43 @@ function sendSession(res: Response, status: number, session: Awaited<ReturnType<
 export const authController = {
   async login(req: Request, res: Response) {
     try {
-      const session = await authService.login(req.body);
-      audit(req, { action: "auth.login.success", userId: session.user.id, entity: "user", entityId: session.user.id });
-      sendSession(res, 200, session);
+      const result = await authService.login(req.body);
+      if (result.mfaRequired) {
+        // Contraseña correcta, falta el segundo factor: todavía no hay sesión ni cookie.
+        audit(req, {
+          action: "auth.login.mfa_challenge",
+          userId: result.userId,
+          entity: "user",
+          entityId: result.userId,
+        });
+        res.json({ mfaRequired: true, challengeToken: result.challengeToken, expiresAt: result.expiresAt });
+        return;
+      }
+      audit(req, { action: "auth.login.success", userId: result.user.id, entity: "user", entityId: result.user.id });
+      sendSession(res, 200, result);
     } catch (err) {
       // Sin el correo: la auditoría de fallos solo guarda IP y user agent.
       if (err instanceof AccountLockedError) audit(req, { action: "auth.login.locked" });
       else if (err instanceof ApiError && err.statusCode === 401) audit(req, { action: "auth.login.failure" });
+      throw err;
+    }
+  },
+
+  /** Segundo paso del login: código de la app (o de recuperación) → sesión. */
+  async loginMfa(req: Request, res: Response) {
+    try {
+      const { user, method } = await mfaService.completeChallenge(req.body.challengeToken, req.body.code);
+      const session = await sessionsService.start(user);
+      audit(req, { action: "auth.login.success", userId: user.id, entity: "user", entityId: user.id });
+      if (method === "recovery") {
+        audit(req, { action: "auth.mfa.recovery_code_used", userId: user.id, entity: "user", entityId: user.id });
+      }
+      sendSession(res, 200, session);
+    } catch (err) {
+      if (err instanceof MfaCodeError) {
+        audit(req, { action: "auth.mfa.failure", userId: err.userId, entity: "user", entityId: err.userId });
+      } else if (err instanceof InvalidChallengeError) audit(req, { action: "auth.mfa.failure" });
+      else if (err instanceof AccountLockedError) audit(req, { action: "auth.login.locked" });
       throw err;
     }
   },

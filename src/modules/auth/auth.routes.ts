@@ -7,10 +7,12 @@ import {
   passwordResetTokenSchema,
 } from "./auth.schema";
 import { acceptInvitationSchema, invitationTokenSchema } from "../invitations/invitations.schema";
+import { loginMfaSchema } from "../mfa/mfa.schema";
 import { validate } from "../../middlewares/validate.middleware";
 import {
   authLimiter,
   invitationLimiter,
+  mfaLoginLimiter,
   passwordResetLimiter,
   passwordResetRequestLimiter,
 } from "../../middlewares/rateLimit.middleware";
@@ -23,6 +25,13 @@ export const authRouter = Router();
 // /refresh sin sesión responde 401 en cada arranque sin sesión y no debe
 // consumir ese cupo.
 authRouter.post("/login", authLimiter, validate({ body: loginSchema }), asyncHandler(authController.login));
+// Segundo paso del login cuando la cuenta tiene MFA activo (ver mfa.service).
+authRouter.post(
+  "/login/mfa",
+  mfaLoginLimiter,
+  validate({ body: loginMfaSchema }),
+  asyncHandler(authController.loginMfa)
+);
 
 // No hay registro público: las cuentas se crean por invitación de un admin
 // (POST /api/admin/invitations). Estas dos rutas son la pantalla pública

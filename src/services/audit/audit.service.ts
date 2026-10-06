@@ -37,6 +37,14 @@ export type AuditAction =
   | "auth.password_reset.requested"
   | "auth.password_reset.completed"
   | "auth.password_reset.invalid"
+  | "auth.login.mfa_challenge"
+  | "auth.mfa.failure"
+  | "auth.mfa.recovery_code_used"
+  | "mfa.setup.started"
+  | "mfa.enabled"
+  | "mfa.disabled"
+  | "mfa.recovery_codes.regenerated"
+  | "admin.mfa.reset"
   | "admin.audit.view";
 
 export interface AuditEntry {
