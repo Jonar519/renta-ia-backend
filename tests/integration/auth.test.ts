@@ -25,7 +25,7 @@ describe("auth.service", () => {
     const stored = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
     expect(stored.passwordHash).not.toBe(TEST_PASSWORD);
     expect(stored.passwordHash).toMatch(/^\$2[aby]\$10\$/);
-    expect(await bcrypt.compare(TEST_PASSWORD, stored.passwordHash)).toBe(true);
+    expect(await bcrypt.compare(TEST_PASSWORD, stored.passwordHash!)).toBe(true);
   });
 
   it("la respuesta del registro no expone el hash", async () => {
