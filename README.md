@@ -122,7 +122,9 @@ curl http://localhost:4000/ready
   `POST /api/auth/login` responde `{ mfaRequired: true, challengeToken, expiresAt }` **sin sesión
   ni cookie**, y `POST /api/auth/login/mfa` (código de la app o de recuperación) inicia la sesión.
   El secreto se guarda cifrado (AES-256-GCM, `MFA_ENCRYPTION_KEY`); los 10 códigos de recuperación,
-  solo como hash. Activar MFA cierra las demás sesiones de la cuenta.
+  solo como hash. Activar MFA cierra las demás sesiones de la cuenta. **Obligatoria para admin:** sin
+  MFA activo, la API solo le responde `GET /api/users/me` y `/api/users/me/mfa/*` (el resto: 403
+  `code: mfa_enrollment_required`) y no puede desactivarla; el admin del seed la activa en su primer login.
 - Cada petición autenticada comprueba que su sesión (`sid`) siga viva: cerrar sesión, restablecer
   la contraseña o activar MFA invalida los access tokens al instante (costo medido en
   `docs/load-test-report.md`).

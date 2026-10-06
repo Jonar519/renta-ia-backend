@@ -54,6 +54,20 @@ Authenticator, 1Password, Aegis) y que no dependa de un proveedor externo de SMS
    - los códigos y los pasos del login cuelgan de `user_mfa`;
    - por lo tanto, una cuenta pendiente no puede tener ninguno de los tres.
 
+10. **MFA obligatorio para administradores (B9).** Un admin sin MFA activo puede iniciar sesión
+    con su contraseña, pero la API solo le responde lo necesario para activarlo
+    (`GET /api/users/me` y `/api/users/me/mfa/*`); todo lo demás responde 403 con
+    `code: "mfa_enrollment_required"` y el frontend lo lleva a "Seguridad". No puede desactivarlo.
+    La misma consulta que verifica la sesión en cada petición trae si la cuenta tiene MFA:
+    no hay una consulta extra por petición. La política está en `src/modules/mfa/policy.ts`.
+11. **QR generado en el servidor (B9).** Se midió antes de decidir (minificado + gzip, con el
+    código que dibuja el QR): `qrcode` 9,7 KB, `qrcode-generator` 7,9 KB, `uqr` y `lean-qr`
+    4,4 KB. Las dos primeras rompían el tope de 6 KB por chunk y las otras dos, el presupuesto
+    de JS total. El servidor calcula la matriz con `uqr` (MIT, sin dependencias) y dibuja un
+    SVG, que `/setup` devuelve y el navegador muestra como `<img src="data:image/svg+xml,…">`
+    (la CSP ya permitía `img-src data:`). No se inserta marcado del servidor en el DOM y el
+    cliente no descarga código de QR.
+
 ## Alternativas consideradas
 
 - **Librería (`otplib`, `speakeasy`).** Ahorra poco código y agrega una dependencia en una
@@ -79,10 +93,8 @@ Authenticator, 1Password, Aegis) y que no dependa de un proveedor externo de SMS
 - **El login con MFA responde 200 con `mfaRequired`.** Eso revela que la contraseña era
   correcta, algo inherente a cualquier login en dos pasos y mitigado por el bloqueo y los
   límites.
-- **MFA obligatorio para administradores.** El backend ya expone el dato
-  (`mfaRequired` en la invitación); exigirlo queda para el bloque B9, junto con las
-  pantallas. Hacerlo en B8 dejaría a los admins sin poder entrar mientras no existe la
-  interfaz del segundo paso.
+- **Admins: perder el teléfono y los códigos exige a OTRO admin.** Con un solo admin, la
+  recuperación sería por SQL (borrar su fila de `user_mfa`); por eso conviene tener al menos dos.
 
 ## Evidencia
 

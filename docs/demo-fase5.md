@@ -385,3 +385,44 @@ autenticación en el teléfono (Google o Microsoft Authenticator, 1Password, Aeg
    `totp.test.ts` compara con los vectores oficiales de los RFC 4226 y 6238.
 
 Huellas de la base antes y después de la 019 en `files/.huellas/B8-*.txt`.
+
+## B9: Pantallas de verificación en dos pasos y MFA obligatorio para admin
+
+Necesitas `MFA_ENCRYPTION_KEY` en `renta-ia-backend\.env` (ver B8), la API y el frontend de
+esta carpeta. Sin celular: el comando de abajo calcula el código igual que una app.
+
+**Código TOTP sin celular** (cmd.exe o PowerShell). Pega la clave tal como la muestra la pantalla,
+con espacios, en lugar de `CLAVE DE LA PANTALLA`. Imprime el código de 6 dígitos de los
+próximos segundos (cambia cada 30 s):
+
+```bat
+node -e "const s=process.argv.slice(1).join('').toUpperCase(),A='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567',b=[...s].map(c=>A.indexOf(c).toString(2).padStart(5,'0')).join(''),k=Buffer.from(b.match(/.{8}/g).map(x=>parseInt(x,2))),m=Buffer.alloc(8);m.writeBigUInt64BE(BigInt(Math.floor(Date.now()/30000)));const h=require('crypto').createHmac('sha1',k).update(m).digest(),o=h[19]&15;console.log(String(h.readUInt32BE(o)&0x7fffffff).padStart(6,'0').slice(-6))" CLAVE DE LA PANTALLA
+```
+
+1. **Primer login del admin del seed.** Entra con `admin@example.com` / `Password123!`. Como la
+   verificación es obligatoria para admin, la app te lleva a **Seguridad** con el aviso
+   "primero debes activar la verificación en dos pasos". Intenta ir a `#/admin/users`: vuelves
+   a Seguridad (y la API responde 403 `mfa_enrollment_required` a cualquier otra ruta).
+2. **Activar.** Confirma tu contraseña y pulsa "Empezar". Aparece el **QR** (lo genera el
+   servidor) y la **clave** en grupos de 4. Escanéalo con la app, o corre el comando de arriba
+   con la clave. Escribe el código y pulsa "Activar".
+3. **Códigos de recuperación.** Se muestran 10, **una sola vez**. "Descargar (.txt)" los guarda
+   en un archivo. "Listo" no avanza hasta marcar "Los guardé en un lugar seguro". Al terminar:
+   "Activa desde…", sin opción de desactivarla (eres admin). Ya puedes ir a Clientes o Usuarios.
+4. **Login en dos pasos.** Sal (menú de la cuenta → Salir) y vuelve a entrar como admin. Después
+   de la contraseña aparece "Verificación en dos pasos": escribe el código (vuelve a correr el
+   comando: un código ya usado no sirve otra vez, espera al siguiente).
+   - Un código incorrecto muestra "El código no es correcto." y te deja reintentar.
+   - "Usar un código de recuperación": escribe uno de los 10; entra, y ese código queda gastado.
+5. **Otros roles: opcional.** Como `ana@example.com`, menú de la cuenta → **Seguridad**: puede
+   activarla y también desactivarla (pide contraseña y código).
+6. **Invitar un admin.** Al abrir el enlace de invitación de un admin, "Completa tu cuenta" avisa
+   que luego activará la verificación; al activar la cuenta, la app lo lleva a Seguridad.
+7. **Si un admin pierde el teléfono y los códigos:** otro admin hace
+   `DELETE /api/admin/users/{id}/mfa` (Swagger). Esa persona entra con su contraseña y vuelve
+   a quedar obligada a activarla.
+8. **Pruebas automatizadas:** `npm test` en el frontend (`tests/mfa.test.js`) y, con el stack E2E,
+   `npx playwright test e2e/mfa.spec.js` (activa MFA leyendo la clave de la pantalla, como el
+   comando de arriba).
+
+Capturas en `files/.capturas/B9/`.
