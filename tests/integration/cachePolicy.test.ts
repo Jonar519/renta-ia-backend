@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import request from "supertest";
-import { app, authHeader, createClient, registerUser } from "../helpers";
+import { app, authHeader, createClient, createAccount } from "../helpers";
 
 describe("Política de caché de la API", () => {
   it("las respuestas con datos tributarios llevan Cache-Control: no-store", async () => {
-    const { token } = await registerUser();
+    const { token } = await createAccount();
     const client = await createClient(token);
     for (const path of [`/api/clients/${client.id}`, `/api/clients/${client.id}/tax-concepts`, "/api/clients"]) {
       const res = await request(app).get(path).set(authHeader(token));

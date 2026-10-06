@@ -3,7 +3,7 @@ import path from "path";
 import { createHash } from "crypto";
 import { beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import { app, authHeader, createClient, registerUser } from "../helpers";
+import { app, authHeader, createClient, createAccount } from "../helpers";
 import { prisma } from "../../src/config/prisma";
 
 const pdf = fs.readFileSync(path.join(__dirname, "../fixtures/certificado-pequeno.pdf"));
@@ -16,7 +16,7 @@ describe("Documentos duplicados (SHA-256 por cliente)", () => {
   let clientId: string;
 
   beforeAll(async () => {
-    token = (await registerUser()).token;
+    token = (await createAccount()).token;
     clientId = (await createClient(token)).id;
   });
 
@@ -69,7 +69,7 @@ describe("Documentos duplicados (SHA-256 por cliente)", () => {
       .set(authHeader(token));
     expect(notFound.body).toEqual({ exists: false, document: null });
 
-    const intruder = await registerUser();
+    const intruder = await createAccount();
     const res = await request(app)
       .get(`/api/documents/client/${clientId}/by-hash/${sha256}`)
       .set(authHeader(intruder.token));

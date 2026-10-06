@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import request from "supertest";
 import jwt from "jsonwebtoken";
-import { app, authHeader, TEST_PASSWORD, unique } from "../helpers";
+import { app, authHeader, invitationTokenFor, invite, TEST_PASSWORD, unique } from "../helpers";
 import { prisma } from "../../src/config/prisma";
 import { flushAudit } from "../../src/services/audit/audit.service";
 import { REFRESH_COOKIE } from "../../src/modules/auth/sessions.service";
+import { hashToken } from "../../src/utils/signedToken";
 import { FREE_ATTEMPTS, lockMinutesFor, lockoutService } from "../../src/modules/auth/lockout.service";
 
 const CSRF = { "X-Requested-With": "renta-ia" };
@@ -20,11 +21,19 @@ function cookieValue(setCookie: string | undefined): string {
   return setCookie.split(";")[0]!;
 }
 
+/** Cuenta activada por invitación: la activación también deja la cookie de refresh. */
 async function registerWithCookie() {
-  const email = `sesion-${unique()}@test.local`;
-  const res = await request(app).post("/api/auth/register").send({ name: "Sesión", email, password: TEST_PASSWORD });
-  expect(res.status).toBe(201);
-  return { email, res, cookie: cookieValue(refreshSetCookie(res)), userId: res.body.user.id as string };
+  const { email } = await invite({ role: "accountant", name: "Sesión" });
+  const token = await invitationTokenFor(email);
+  const res = await request(app).post("/api/auth/invitations/accept").send({ token, password: TEST_PASSWORD });
+  expect(res.status).toBe(200);
+  return {
+    email,
+    res,
+    cookie: cookieValue(refreshSetCookie(res)),
+    userId: res.body.user.id as string,
+    invitationToken: token,
+  };
 }
 
 const refresh = (cookie?: string) => {
@@ -177,15 +186,20 @@ describe("Bloqueo progresivo por cuenta", () => {
 });
 
 describe("Auditoría", () => {
-  it("no guarda datos sensibles: ni correo, ni contraseña, ni tokens", async () => {
-    const { email, userId, cookie } = await registerWithCookie();
+  it("no guarda datos sensibles: ni correo, ni contraseña, ni tokens (sesión ni invitación)", async () => {
+    const { email, userId, cookie, invitationToken } = await registerWithCookie();
     await request(app).post("/api/auth/login").send({ email, password: TEST_PASSWORD });
     await flushAudit();
     const rows = await prisma.auditLog.findMany({ where: { userId } });
-    expect(rows.map((r) => r.action)).toEqual(expect.arrayContaining(["auth.register", "auth.login.success"]));
+    expect(rows.map((r) => r.action)).toEqual(expect.arrayContaining(["auth.invitation.accept", "auth.login.success"]));
     const dump = JSON.stringify(rows, (_k, v) => (typeof v === "bigint" ? v.toString() : v));
     expect(dump).not.toContain(email);
     expect(dump).not.toContain(TEST_PASSWORD);
     expect(dump).not.toContain(cookie.split("=")[1]);
+    // Ni el token completo, ni una parte (cuerpo o firma: una filtración
+    // parcial también sirve para reconstruirlo o rastrearlo), ni su hash.
+    for (const secret of [invitationToken, ...invitationToken.split("."), hashToken(invitationToken)]) {
+      expect(dump).not.toContain(secret);
+    }
   });
 });

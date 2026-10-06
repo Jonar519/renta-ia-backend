@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { createClient, createDocument, registerUser } from "../helpers";
+import { createClient, createDocument, createAccount } from "../helpers";
 import { prisma } from "../../src/config/prisma";
 import { findExogenousMismatches, rulesService } from "../../src/modules/ai/rules.service";
 
 /** Cliente nuevo con ingreso bruto y deducciones dados. */
 async function clientWith(grossIncome: number, deductions: number) {
-  const user = await registerUser();
+  const user = await createAccount();
   const client = await createClient(user.token);
   const document = await createDocument(client.id, user.user.id);
   await prisma.taxConcept.createMany({

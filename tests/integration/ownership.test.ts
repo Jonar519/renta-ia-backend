@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import { app, authHeader, createClient, createDocument, FAKE_PDF, registerUser } from "../helpers";
+import { app, authHeader, createClient, createDocument, FAKE_PDF, createAccount } from "../helpers";
 import { prisma } from "../../src/config/prisma";
 
 /**
@@ -16,8 +16,8 @@ describe("Autorización por dueño del cliente", () => {
   let documentAId: string;
 
   beforeAll(async () => {
-    const a = await registerUser("Contador A");
-    const b = await registerUser("Contador B");
+    const a = await createAccount("Contador A");
+    const b = await createAccount("Contador B");
     tokenA = a.token;
     tokenB = b.token;
     userAId = a.user.id;
@@ -76,7 +76,7 @@ describe("Autorización por dueño del cliente", () => {
   });
 
   it("PATCH ignora accountantUserId (no permite reasignar el cliente)", async () => {
-    const b = await registerUser("Otro contador");
+    const b = await createAccount("Otro contador");
     const res = await request(app)
       .patch(`/api/clients/${clientAId}`)
       .set(authHeader(tokenA))

@@ -1,7 +1,15 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import bcrypt from "bcrypt";
-import { app, authHeader, createClient, FAKE_PDF, registerUser, TEST_PASSWORD, unique } from "../helpers";
+import {
+  app,
+  authHeader,
+  createAccount,
+  createAccountWithRole,
+  createClient,
+  FAKE_PDF,
+  testAdmin,
+  unique,
+} from "../helpers";
 import { prisma } from "../../src/config/prisma";
 import { flushAudit } from "../../src/services/audit/audit.service";
 import { clientAudience } from "../../src/services/access/clientAudience";
@@ -12,15 +20,9 @@ import { clientAudience } from "../../src/services/access/clientAudience";
  *  - client: solo lectura de su propio expediente; no sube, no edita, no usa la IA.
  */
 
-async function login(email: string) {
-  const res = await request(app).post("/api/auth/login").send({ email, password: TEST_PASSWORD });
-  expect(res.status).toBe(200);
-  return res.body.accessToken as string;
-}
-
 let adminToken: string;
-let accountant: Awaited<ReturnType<typeof registerUser>>;
-let otherAccountant: Awaited<ReturnType<typeof registerUser>>;
+let accountant: Awaited<ReturnType<typeof createAccount>>;
+let otherAccountant: Awaited<ReturnType<typeof createAccount>>;
 let ownClientId: string;
 let foreignClientId: string;
 let assistantToken: string;
@@ -29,40 +31,24 @@ let portalToken: string;
 let portalId: string;
 
 beforeAll(async () => {
-  const adminEmail = `admin-roles-${unique()}@test.local`;
-  await prisma.user.create({
-    data: { name: "Admin", email: adminEmail, role: "admin", passwordHash: await bcrypt.hash(TEST_PASSWORD, 4) },
-  });
-  adminToken = await login(adminEmail);
+  adminToken = (await testAdmin()).token;
 
-  accountant = await registerUser("Contador titular");
-  otherAccountant = await registerUser("Contador ajeno");
+  accountant = await createAccount("Contador titular");
+  otherAccountant = await createAccount("Contador ajeno");
   ownClientId = (await createClient(accountant.token)).id;
   foreignClientId = (await createClient(otherAccountant.token)).id;
 
-  const assistantEmail = `asistente-${unique()}@test.local`;
-  const createdAssistant = await request(app).post("/api/admin/users").set(authHeader(adminToken)).send({
+  // Asistente y portal: por invitación; la relación se crea al invitar.
+  const assistant = await createAccountWithRole("assistant", {
     name: "Asistente Uno",
-    email: assistantEmail,
-    password: TEST_PASSWORD,
-    role: "assistant",
     accountantUserId: accountant.user.id,
   });
-  expect(createdAssistant.status).toBe(201);
-  assistantId = createdAssistant.body.id;
-  assistantToken = await login(assistantEmail);
+  assistantId = assistant.user.id;
+  assistantToken = assistant.token;
 
-  const portalEmail = `portal-${unique()}@test.local`;
-  const createdPortal = await request(app).post("/api/admin/users").set(authHeader(adminToken)).send({
-    name: "Contribuyente Portal",
-    email: portalEmail,
-    password: TEST_PASSWORD,
-    role: "client",
-    clientId: ownClientId,
-  });
-  expect(createdPortal.status).toBe(201);
-  portalId = createdPortal.body.id;
-  portalToken = await login(portalEmail);
+  const portal = await createAccountWithRole("client", { name: "Contribuyente Portal", clientId: ownClientId });
+  portalId = portal.user.id;
+  portalToken = portal.token;
 });
 
 const as = (token: string) => ({
@@ -137,31 +123,31 @@ describe("Notificaciones en tiempo real por rol", () => {
 });
 
 describe("Administración", () => {
-  it("solo el admin crea usuarios y consulta la auditoría", async () => {
+  it("solo el admin invita, gestiona invitaciones y consulta la auditoría", async () => {
     const body = {
       name: "Intento",
       email: `intento-${unique()}@test.local`,
-      password: TEST_PASSWORD,
       role: "assistant",
       accountantUserId: accountant.user.id,
     };
-    expect((await as(accountant.token).post("/api/admin/users", body)).status).toBe(403);
+    for (const token of [accountant.token, assistantToken, portalToken]) {
+      expect((await as(token).post("/api/admin/invitations", body)).status).toBe(403);
+      expect((await as(token).get("/api/admin/invitations")).status).toBe(403);
+      expect((await as(token).delete(`/api/admin/invitations/${assistantId}`)).status).toBe(403);
+    }
     expect((await as(assistantToken).get("/api/admin/audit")).status).toBe(403);
     expect((await as(portalToken).get("/api/admin/audit")).status).toBe(403);
   });
 
   it("valida los vínculos: el asistente debe ligarse a un contador y el expediente a un solo usuario de portal", async () => {
-    const base = { password: TEST_PASSWORD };
-    const notAccountant = await as(adminToken).post("/api/admin/users", {
-      ...base,
+    const notAccountant = await as(adminToken).post("/api/admin/invitations", {
       name: "Mal ligado",
       email: `mal-${unique()}@test.local`,
       role: "assistant",
       accountantUserId: portalId,
     });
     expect(notAccountant.status).toBe(400);
-    const duplicatedPortal = await as(adminToken).post("/api/admin/users", {
-      ...base,
+    const duplicatedPortal = await as(adminToken).post("/api/admin/invitations", {
       name: "Segundo portal",
       email: `dup-${unique()}@test.local`,
       role: "client",

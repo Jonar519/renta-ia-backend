@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import bcrypt from "bcrypt";
 import { WebSocket } from "ws";
-import { app, authHeader, createClient, createDocument, registerUser, TEST_PASSWORD, unique } from "../helpers";
+import { app, authHeader, createClient, createDocument, createAccount, TEST_PASSWORD, unique } from "../helpers";
 import { prisma } from "../../src/config/prisma";
 import { attachRealtime, RealtimeServer, WS_CLOSE, WS_PATH } from "../../src/realtime/wsServer";
 import { publishDocumentEvent } from "../../src/services/events/documentEvents";
@@ -74,8 +74,8 @@ describe("WebSocket /ws", () => {
   });
 
   it("cada contador recibe solo los eventos de sus clientes; el admin recibe todos", async () => {
-    const a = await registerUser("Contador A");
-    const b = await registerUser("Contador B");
+    const a = await createAccount("Contador A");
+    const b = await createAccount("Contador B");
     const clientA = await createClient(a.token);
 
     const adminEmail = `admin-ws-${unique()}@test.local`;
@@ -112,12 +112,12 @@ describe("WebSocket /ws", () => {
 
 describe("POST /api/documents/:id/reprocess", () => {
   it("reencola un documento terminado y notifica por WebSocket; 409 si ya está en cola; 404 a otro contador", async () => {
-    const owner = await registerUser();
+    const owner = await createAccount();
     const clientId = (await createClient(owner.token)).id;
     const doc = await createDocument(clientId, owner.user.id);
     await prisma.document.update({ where: { id: doc.id }, data: { status: "error", errorMessage: "sin crédito" } });
 
-    const other = await registerUser();
+    const other = await createAccount();
     expect((await request(app).post(`/api/documents/${doc.id}/reprocess`).set(authHeader(other.token))).status).toBe(
       404
     );

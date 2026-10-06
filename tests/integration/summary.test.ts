@@ -1,7 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import bcrypt from "bcrypt";
-import { app, authHeader, createClient, createDocument, registerUser, TEST_PASSWORD, unique } from "../helpers";
+import { app, authHeader, createClient, createDocument, createAccount, TEST_PASSWORD, unique } from "../helpers";
 import { prisma } from "../../src/config/prisma";
 import { SUMMARY_DISCLAIMER } from "../../src/modules/clients/summary.service";
 
@@ -17,7 +17,7 @@ describe("POST /api/clients/:id/summary", () => {
   let clientName: string;
 
   beforeAll(async () => {
-    const user = await registerUser();
+    const user = await createAccount();
     token = user.token;
     const client = await createClient(token);
     clientId = client.id;
@@ -89,7 +89,7 @@ describe("POST /api/clients/:id/summary", () => {
   });
 
   it("otro contador recibe 404", async () => {
-    const other = await registerUser();
+    const other = await createAccount();
     expect((await summary({}, other.token)).status).toBe(404);
   });
 
@@ -101,7 +101,7 @@ describe("POST /api/clients/:id/summary", () => {
 
 describe("GET /api/clients (listado del admin)", () => {
   it("el admin ve los clientes de todos los contadores, con el nombre del contador", async () => {
-    const accountant = await registerUser("Contador listado");
+    const accountant = await createAccount("Contador listado");
     const client = await createClient(accountant.token);
 
     const email = `admin-${unique()}@test.local`;

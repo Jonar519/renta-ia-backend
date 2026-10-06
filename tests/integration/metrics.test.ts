@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import bcrypt from "bcrypt";
-import { app, authHeader, registerUser, TEST_PASSWORD, unique } from "../helpers";
+import { app, authHeader, createAccount, TEST_PASSWORD, unique } from "../helpers";
 import { prisma } from "../../src/config/prisma";
 import { metricsService } from "../../src/modules/metrics/metrics.service";
 
@@ -53,7 +53,7 @@ describe("GET /api/metrics/web-vitals/summary", () => {
   let accountantToken: string;
 
   beforeAll(async () => {
-    accountantToken = (await registerUser()).token;
+    accountantToken = (await createAccount()).token;
     const email = `admin-metrics-${unique()}@test.local`;
     await prisma.user.create({
       data: { name: "Admin", email, role: "admin", passwordHash: await bcrypt.hash(TEST_PASSWORD, 4) },

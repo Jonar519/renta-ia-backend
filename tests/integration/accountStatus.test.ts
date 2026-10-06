@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { randomBytes, randomUUID, createHash } from "crypto";
 import request from "supertest";
-import { app, TEST_PASSWORD, unique } from "../helpers";
+import { acceptInvitation, app, invite, TEST_PASSWORD, unique } from "../helpers";
 import { prisma } from "../../src/config/prisma";
 
 /**
@@ -64,13 +64,16 @@ describe("017: estado de la cuenta (users)", () => {
     ).rejects.toThrow(/chk_users_password_by_status/);
   });
 
-  it("las cuentas existentes y las del registro actual quedan activas por defecto", async () => {
-    const res = await request(app)
-      .post("/api/auth/register")
-      .send({ name: "Activa por defecto", email: `def-${unique()}` + "@t.local", password: TEST_PASSWORD });
-    expect(res.status).toBe(201);
-    const user = await prisma.user.findUniqueOrThrow({ where: { id: res.body.user.id } });
+  it("una invitación crea la cuenta pendiente; al activarla queda activa con la contraseña elegida", async () => {
+    const { email, userId } = await invite({ role: "accountant", name: "Activa al aceptar" });
+    expect(await prisma.user.findUniqueOrThrow({ where: { id: userId } })).toMatchObject({
+      status: "invited",
+      passwordHash: null,
+    });
+    await acceptInvitation(email);
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
     expect(user.status).toBe("active");
+    expect(user.passwordHash).toMatch(/^\$2[aby]\$10\$/);
   });
 });
 

@@ -1,6 +1,17 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import { app, authHeader, createClient, createDocument, registerUser, TEST_PASSWORD, unique } from "../helpers";
+import {
+  acceptInvitation,
+  app,
+  authHeader,
+  createAccount,
+  createClient,
+  createDocument,
+  invite,
+  testAdmin,
+  TEST_PASSWORD,
+  unique,
+} from "../helpers";
 import { prisma } from "../../src/config/prisma";
 
 /** Restricciones de la migración 010_hardening.sql, verificadas contra la base real. */
@@ -11,7 +22,7 @@ describe("Migración 010: integridad y normalización", () => {
   let documentId: string;
 
   beforeAll(async () => {
-    const user = await registerUser();
+    const user = await createAccount();
     token = user.token;
     userId = user.user.id;
     clientId = (await createClient(token)).id;
@@ -63,22 +74,23 @@ describe("Migración 010: integridad y normalización", () => {
     ).rejects.toThrow(/uq_users_email_lower|Unique constraint/);
   });
 
-  it("el backend normaliza el correo: registro y login sin distinguir mayúsculas", async () => {
+  it("el backend normaliza el correo: invitación, activación y login sin distinguir mayúsculas", async () => {
     const mixed = `Mixto-${unique()}@Test.LOCAL`;
-    const reg = await request(app)
-      .post("/api/auth/register")
-      .send({ name: "Mixto", email: mixed, password: TEST_PASSWORD });
-    expect(reg.status).toBe(201);
-    expect(reg.body.user.email).toBe(mixed.toLowerCase());
+    const invited = await invite({ role: "accountant", name: "Mixto", email: mixed });
+    expect(invited.view.email).toBe(mixed.toLowerCase());
+    const account = await acceptInvitation(mixed.toLowerCase());
+    expect(account.user.email).toBe(mixed.toLowerCase());
 
     const login = await request(app)
       .post("/api/auth/login")
       .send({ email: mixed.toUpperCase(), password: TEST_PASSWORD });
     expect(login.status).toBe(200);
 
+    const admin = await testAdmin();
     const dup = await request(app)
-      .post("/api/auth/register")
-      .send({ name: "Otra", email: mixed.toLowerCase(), password: TEST_PASSWORD });
+      .post("/api/admin/invitations")
+      .set(authHeader(admin.token))
+      .send({ name: "Otra", email: mixed.toLowerCase(), role: "accountant" });
     expect(dup.status).toBe(409);
   });
 
