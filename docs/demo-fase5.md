@@ -284,3 +284,58 @@ Necesitas la API, el frontend (`npm run dev` en cada uno) y la migración 017.
    con el stack E2E, `npx playwright test e2e/invitations.spec.js`.
 
 Capturas en `files/.capturas/B6/`.
+
+## B7: Recuperación de contraseña
+
+Necesitas la migración 018 (`scripts\migrate.bat` en `renta-ia-database`), la API y el
+frontend de **esta** carpeta (rama `feat/identidad-profesional`).
+
+1. **Pedir el enlace.** En el login, pulsa **¿Olvidaste tu contraseña?**, escribe
+   `ana@example.com` y pulsa "Enviar enlace". Aparece "Revisa tu correo".
+   - Repite con un correo que no existe (`nadie@example.com`): la pantalla, el código (202) y el
+     cuerpo de la respuesta son **idénticos**. Compruébalo en las herramientas del navegador
+     (pestaña Red). La respuesta sale antes de buscar la cuenta, así que el tiempo tampoco
+     revela nada.
+2. **Leer el correo** (bandeja simulada):
+
+   ```bat
+   docker exec renta_ia_postgres psql -U postgres -d renta_ia -c "SELECT body_text FROM email_outbox WHERE template = 'password_reset' ORDER BY created_at DESC LIMIT 1"
+   ```
+
+   En la base solo queda el hash, con 15 minutos de vigencia:
+
+   ```bat
+   docker exec renta_ia_postgres psql -U postgres -d renta_ia -c "SELECT token_hash, expires_at - created_at AS vigencia, used_at, revoked_at FROM password_reset_tokens ORDER BY created_at DESC LIMIT 3"
+   ```
+
+   - Si pides otro enlace **dentro del mismo minuto**, no llega un correo nuevo: sigue sirviendo
+     el anterior. Pasado el minuto, el nuevo **revoca** el anterior.
+
+3. **Prepara una "otra sesión".** En otra ventana privada, inicia sesión como `ana@example.com`
+   y deja abierta la lista de Clientes.
+4. **Nueva contraseña.** Abre el enlace del correo en la ventana normal.
+   - La barra pasa a `#/restablecer`: el token sale de la dirección apenas se lee.
+   - Escribe la nueva contraseña dos veces y pulsa "Guardar contraseña". Vuelves al login
+     con el aviso "se cerraron todas tus sesiones".
+   - En la **otra** ventana, recarga o navega: la sesión ya no sirve y aparece el login. El
+     access token que ya tenía se rechaza **al instante**, sin esperar sus 15 minutos: cada
+     petición autenticada y el WebSocket comprueban que su sesión (`sid`) siga viva.
+   - La contraseña anterior da error; la nueva entra.
+   - Abre el mismo enlace otra vez: "no es válido o ya venció", con un botón "Pedir un enlace nuevo".
+5. **Límite de solicitudes.** Hay como máximo 20 pedidos por IP cada 15 minutos (después, 429)
+   y un correo por minuto a la misma cuenta. Usar el enlace (consultarlo o confirmarlo) admite
+   20 intentos **fallidos** por IP.
+6. **Auditoría** (`GET /api/admin/audit` como admin): verás `auth.password_reset.requested`,
+   `auth.password_reset.completed` y `auth.password_reset.invalid`, sin el correo, el token ni
+   su hash. Las sesiones revocadas quedan con motivo `password_reset`:
+
+   ```bat
+   docker exec renta_ia_postgres psql -U postgres -d renta_ia -c "SELECT revoke_reason, count(*) FROM refresh_tokens GROUP BY 1"
+   ```
+
+7. **Pruebas automatizadas:**
+   - Backend: `npx vitest run tests/integration/passwordReset.test.ts tests/integration/passwordResetRateLimit.test.ts tests/integration/session.test.ts`.
+   - Frontend: `npm test` (incluye `tests/passwordReset.test.js`) y, con el stack E2E,
+     `npx playwright test e2e/passwordReset.spec.js`.
+
+Capturas en `files/.capturas/B7/`.
