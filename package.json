@@ -28,6 +28,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.27.3",
     "@asteasolutions/zod-to-openapi": "^7.3.4",
+    "@aws-sdk/client-sesv2": "^3.1146.0",
     "@prisma/client": "^5.19.0",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.12.0",
