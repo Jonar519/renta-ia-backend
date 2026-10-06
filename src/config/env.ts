@@ -22,6 +22,32 @@ function aiProvider(): "anthropic" | "mock" {
 }
 
 /**
+ * Proveedor de correo (services/email). Regla de proveedores externos:
+ *  - "mock" (por defecto fuera de producción): no envía nada; guarda cada
+ *    correo, con su contenido, en la tabla email_outbox para pruebas y demos.
+ *    Prohibido con NODE_ENV=production (el cuerpo puede llevar un token).
+ *  - "ses" (Amazon SES v2): exige SES_REGION y EMAIL_FROM al arrancar. Las
+ *    credenciales las resuelve el SDK (variables AWS_*, perfil o rol IAM) en
+ *    el momento de enviar; sin ellas el envío falla y queda registrado.
+ */
+function emailProvider(): "mock" | "ses" {
+  // || y no ??: una línea "EMAIL_PROVIDER=" vacía en el .env cuenta como no definida.
+  const value = process.env.EMAIL_PROVIDER || (nodeEnv === "production" ? "ses" : "mock");
+  if (value !== "mock" && value !== "ses") {
+    throw new Error(`EMAIL_PROVIDER="${value}" no es válido. Usa "mock" o "ses".`);
+  }
+  if (value === "mock" && nodeEnv === "production") {
+    throw new Error("EMAIL_PROVIDER=mock es solo para desarrollo y pruebas y no puede usarse con NODE_ENV=production.");
+  }
+  if (value === "ses") {
+    for (const name of ["SES_REGION", "EMAIL_FROM"]) {
+      if (!process.env[name]) throw new Error(`EMAIL_PROVIDER=ses requiere la variable de entorno ${name}.`);
+    }
+  }
+  return value;
+}
+
+/**
  * Multiplicador de TODOS los límites de rate limiting. Existe solo para las
  * pruebas de carga (loadtests/): con el valor por defecto (1) un solo equipo
  * choca contra el límite global de 300 solicitudes / 15 min en segundos.
@@ -97,6 +123,11 @@ export const env = {
   // "anthropic" (real, por defecto) o "mock" (SOLO pruebas; prohibido en producción).
   aiProvider: aiProvider(),
   aiMockLatencyMs: Number(process.env.AI_MOCK_LATENCY_MS ?? 0),
+
+  // Correo (ver emailProvider): "mock" por defecto fuera de producción.
+  emailProvider: emailProvider(),
+  emailFrom: process.env.EMAIL_FROM ?? "Renta IA <no-responder@renta-ia.local>",
+  sesRegion: process.env.SES_REGION,
 
   // Almacenamiento de documentos (Fase 3: disco local · Fase 6: S3)
   storageDriver: process.env.STORAGE_DRIVER ?? "local",
