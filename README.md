@@ -18,7 +18,8 @@ renta-ia-backend/
 │   ├── config/                   # env (validación), logger (pino), prisma, redis, calendario y reglas tributarias
 │   ├── middlewares/              # auth (JWT), ownership (clientScope por rol), role, csrf, validate (zod), rateLimit, error
 │   ├── modules/                  # routes → (schema zod) → controller → service → Prisma
-│   │   ├── auth/                 # registro, login, refresh, logout, bloqueo progresivo, política de contraseñas
+│   │   ├── auth/                 # login, refresh, logout, bloqueo progresivo, política de contraseñas
+│   │   ├── invitations/          # alta de cuentas SOLO por invitación (token firmado, 72 h, un solo uso)
 │   │   ├── admin/                # alta de usuarios assistant/client, consulta de auditoría
 │   │   ├── users/ clients/ documents/ alerts/ ai/ metrics/
 │   ├── services/
@@ -100,18 +101,25 @@ curl http://localhost:4000/ready
 | `STORAGE_DRIVER` / `STORAGE_LOCAL_PATH` | `local` / `./uploads`                             | Almacenamiento de archivos                                                                                                                                                                  |
 | `EMAIL_PROVIDER`                        | `mock` (fuera de producción) / `ses` (producción) | `mock` no envía nada: guarda cada correo completo en `email_outbox` (**prohibido en producción**). `ses`: Amazon SES v2 ([ADR 0010](docs/adr/0010-proveedores-externos-intercambiables.md)) |
 | `EMAIL_FROM` / `SES_REGION`             | remitente local / vacía                           | Obligatorias con `EMAIL_PROVIDER=ses`; las credenciales las toma el SDK de AWS (`AWS_*`, perfil o rol IAM)                                                                                  |
+| `APP_URL`                               | `http://localhost:5173`                           | URL pública del frontend: base de los enlaces de los correos (obligatoria en producción)                                                                                                    |
 | `TAX_CALENDAR_PATH` / `TAX_RULES_PATH`  | JSON en `src/config/`                             | Calendario (fechas **de ejemplo**) y parámetros tributarios                                                                                                                                 |
 
 ## Sesión y seguridad
 
-- `POST /api/auth/login` y `/register` devuelven `{ accessToken, user }` y dejan la
+- **No hay registro público ni alta con contraseña por un admin.** Las cuentas se crean
+  por invitación (`POST /api/admin/invitations`): la cuenta nace pendiente y sin contraseña,
+  el enlace (token firmado, 72 h, un solo uso; en la base solo su SHA-256) viaja solo por
+  correo, y la persona la activa con su contraseña (`POST /api/auth/invitations/accept`).
+  La base impide que una cuenta pendiente tenga sesiones ([ADR 0009](docs/adr/0009-cuentas-pendientes-garantizadas-por-el-esquema.md)).
+- `POST /api/auth/login` y `/invitations/accept` devuelven `{ accessToken, user }` y dejan la
   cookie `renta_ia_refresh` (httpOnly, `SameSite=Strict`, `Path=/api/auth`).
 - `POST /api/auth/refresh` rota la cookie y entrega un access token nuevo;
   `POST /api/auth/logout` revoca la sesión. Ambos exigen `X-Requested-With: renta-ia`.
 - Bloqueo progresivo por cuenta tras 5 fallos (1, 2, 4… hasta 60 min) y 10 fallos / 15 min por IP.
 - Contraseñas: 10–72 caracteres, sin contraseñas comunes ni el correo o el nombre.
 - Roles: `admin`, `accountant`, `assistant` (clientes de su contador, sin crear ni
-  borrar) y `client` (solo lectura de su expediente). Se crean con `POST /api/admin/users`.
+  borrar) y `client` (solo lectura de su expediente). Todos se crean por invitación; la
+  relación del asistente con su contador y la del portal con su expediente se crean al invitar.
 - Auditoría en `audit_log` (sin datos sensibles), consultable en `GET /api/admin/audit`.
 - Detalles y riesgos residuales: [`docs/threat-model.md`](docs/threat-model.md) y [ADR 0007](docs/adr/0007-esquema-de-sesion.md).
 
@@ -138,12 +146,12 @@ test falla si quedó desactualizada).
 
 | Grupo        | Rutas                                                                                                                                                                                         |
 | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Auth         | `POST /api/auth/register` · `login` · `refresh` · `logout` · `GET /api/users/me`                                                                                                              |
+| Auth         | `POST /api/auth/login` · `refresh` · `logout` · `invitations/lookup` · `invitations/accept` · `GET /api/users/me`                                                                             |
 | Clientes     | `GET/POST /api/clients` · `GET/PATCH/DELETE /api/clients/:id` · `GET /api/clients/:id/tax-concepts` · `POST /api/clients/:id/summary`                                                         |
 | Documentos   | `POST /api/documents/upload` · `GET /api/documents/client/:clientId` · `GET /api/documents/client/:clientId/by-hash/:sha256` · `GET /api/documents/:id` · `POST /api/documents/:id/reprocess` |
 | Alertas      | `GET /api/alerts/client/:clientId` · `PATCH /api/alerts/:id` · `POST /api/alerts/deadlines/run` (admin)                                                                                       |
 | IA           | `POST /api/ai/chat`                                                                                                                                                                           |
-| Admin        | `POST /api/admin/users` · `GET /api/admin/audit`                                                                                                                                              |
+| Admin        | `GET/POST /api/admin/invitations` · `POST /api/admin/invitations/:userId/resend` · `DELETE /api/admin/invitations/:userId` · `GET /api/admin/audit`                                           |
 | Métricas web | `POST /api/metrics/web-vitals` · `GET /api/metrics/web-vitals/summary` (admin)                                                                                                                |
 | Operación    | `GET /health` · `GET /ready` · `GET /metrics` (token) · `GET /docs` (no producción)                                                                                                           |
 | Tiempo real  | `WS /ws` (token en el primer mensaje)                                                                                                                                                         |

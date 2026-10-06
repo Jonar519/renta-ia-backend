@@ -202,3 +202,54 @@ Detalle: [ADR 0009](adr/0009-cuentas-pendientes-garantizadas-por-el-esquema.md),
 Huella de tu base: antes y después de la migración en `files/.huellas/B4-antes-migracion.txt`
 y `B4-despues-migracion.txt`. Cambian solo la migración nueva, dos tablas vacías y el hash del
 esquema; no cambia ninguna fila existente.
+
+## B5: Alta de cuentas solo por invitación (API)
+
+La pantalla de administración y la de "Completa tu cuenta" llegan en B6. Por ahora todo se
+prueba con Swagger UI. Necesitas la API (`npm run dev`) con tu `.env` (correo simulado por
+defecto) y la migración 017 aplicada.
+
+1. **Ya no hay registro.** En el login (`http://localhost:5173`) no aparece "Crear cuenta",
+   solo una nota que explica que las cuentas las crea el administrador.
+   `POST http://localhost:4000/api/auth/register` responde **404**, y `POST /api/admin/users`
+   (el alta con contraseña por un admin) también.
+2. **Invitar como admin.** Abre `http://localhost:4000/docs`:
+   - `POST /api/auth/login` → Try it out → `{"email":"admin@example.com","password":"Password123!"}`.
+     Copia el `accessToken` y pulsa **Authorize** (arriba a la derecha).
+   - `POST /api/admin/invitations` →
+     `{"name":"Asistente Demo","email":"asistente.demo@example.com","role":"assistant","accountantUserId":"11111111-1111-1111-1111-111111111111"}`
+     (Ana, del seed). La respuesta muestra el estado `pending` y el vencimiento (72 h), **y ningún
+     token ni enlace**.
+3. **Leer el correo "enviado"** (bandeja del proveedor simulado):
+
+   ```bat
+   docker exec renta_ia_postgres psql -U postgres -d renta_ia -c "SELECT body_text FROM email_outbox WHERE to_address = 'asistente.demo@example.com' ORDER BY created_at DESC LIMIT 1"
+   ```
+
+   El enlace tiene la forma `http://localhost:5173/#/invitacion/<token>`. Copia el token (lo que
+   sigue a `invitacion/`). Comprueba que en la base solo está su hash:
+
+   ```bat
+   docker exec renta_ia_postgres psql -U postgres -d renta_ia -c "SELECT token_hash, expires_at FROM user_invitations"
+   ```
+
+4. **Activar la cuenta** (lo que hará la pantalla de B6). En Swagger:
+   - `POST /api/auth/invitations/lookup` con `{"token":"<token>"}` → nombre, correo y rol.
+   - `POST /api/auth/invitations/accept` con `{"token":"<token>","password":"una frase larga propia"}`
+     → sesión iniciada.
+   - Repite el `accept` con el mismo token: **410** (un solo uso).
+   - Inicia sesión en la app con `asistente.demo@example.com` y esa frase: ves los clientes de Ana.
+5. **Reenviar y cancelar.** Invita otro correo, luego `POST /api/admin/invitations/{userId}/resend`:
+   llega un correo nuevo y el enlace anterior da 410. `DELETE /api/admin/invitations/{userId}` cancela
+   (elimina la cuenta pendiente). Con el `userId` de una cuenta activa, responde 404.
+6. **El token nunca queda en la auditoría.** `GET /api/admin/audit` muestra
+   `admin.invitation.create`, `resend`, `cancel` y `auth.invitation.accept`, sin el token.
+7. **Pruebas automatizadas** (desde `renta-ia-backend`):
+
+   ```bash
+   npx vitest run tests/integration/invitations.test.ts tests/integration/invitationRateLimit.test.ts tests/unit/signedToken.test.ts
+   ```
+
+   `invitations.test.ts` incluye la prueba que recorre todo lo que hace el admin (invitar,
+   listar, reenviar, ver la auditoría, cancelar) y verifica que el token, ninguna de sus partes
+   ni su hash aparecen en ninguna respuesta, cabecera ni fila de `audit_log`.
