@@ -8,9 +8,11 @@ import {
 } from "./auth.schema";
 import { acceptInvitationSchema, invitationTokenSchema } from "../invitations/invitations.schema";
 import { loginMfaSchema } from "../mfa/mfa.schema";
+import { emailChangeConfirmSchema } from "../users/profile.schema";
 import { validate } from "../../middlewares/validate.middleware";
 import {
   authLimiter,
+  emailChangeConfirmLimiter,
   invitationLimiter,
   mfaLoginLimiter,
   passwordResetLimiter,
@@ -67,6 +69,14 @@ authRouter.post(
   passwordResetLimiter,
   validate({ body: passwordResetConfirmSchema }),
   asyncHandler(authController.confirmPasswordReset)
+);
+
+// Confirmar el correo nuevo (pública: el enlace del correo prueba que es suyo).
+authRouter.post(
+  "/email-change/confirm",
+  emailChangeConfirmLimiter,
+  validate({ body: emailChangeConfirmSchema }),
+  asyncHandler(authController.confirmEmailChange)
 );
 
 // Estas dos se autentican con la cookie: requieren protección CSRF.

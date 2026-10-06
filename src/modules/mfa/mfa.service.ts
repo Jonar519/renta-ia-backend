@@ -1,4 +1,3 @@
-import bcrypt from "bcrypt";
 import { createHash, randomInt } from "crypto";
 import type { User } from "@prisma/client";
 import { env } from "../../config/env";
@@ -6,7 +5,8 @@ import { prisma } from "../../config/prisma";
 import { ApiError } from "../../utils/apiError";
 import { open, seal } from "../../utils/secretBox";
 import { createSignedToken, verifySignedToken } from "../../utils/signedToken";
-import { AccountLockedError, lockoutService } from "../auth/lockout.service";
+import { lockoutService } from "../auth/lockout.service";
+import { assertNotLocked, reconfirmPassword } from "../auth/reauth";
 import { base32Encode, generateSecret, otpauthUri, verifyTotp } from "./totp";
 import { qrSvg } from "./qr";
 import { mfaRequiredFor } from "./policy";
@@ -61,7 +61,6 @@ export class MfaCodeError extends ApiError {
 // un 401 ahí significaría "sesión inválida" para el cliente.
 const wrongCode = () =>
   new ApiError(400, "El código no es correcto. Revisa la hora de tu teléfono e intenta con el siguiente.");
-const wrongPassword = () => new ApiError(400, "La contraseña no es correcta.");
 
 function encryptionKey(): Buffer {
   if (!env.mfaEncryptionKey) throw new MfaNotConfiguredError();
@@ -97,20 +96,6 @@ async function loadUser(userId: string): Promise<User> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user || user.status !== "active") throw new ApiError(404, "Usuario no encontrado");
   return user;
-}
-
-async function assertNotLocked(email: string) {
-  const remaining = await lockoutService.remainingLockMs(email);
-  if (remaining > 0) throw new AccountLockedError(remaining);
-}
-
-/** Reconfirmar la contraseña (configurar o desactivar MFA): cuenta en el bloqueo si falla. */
-async function checkPassword(user: User, password: string) {
-  await assertNotLocked(user.email);
-  if (!user.passwordHash || !(await bcrypt.compare(password, user.passwordHash))) {
-    await lockoutService.registerFailure(user.email);
-    throw wrongPassword();
-  }
 }
 
 /**
@@ -165,7 +150,7 @@ export const mfaService = {
   async beginSetup(userId: string, password: string) {
     const key = encryptionKey();
     const user = await loadUser(userId);
-    await checkPassword(user, password);
+    await reconfirmPassword(user, password);
     if (await this.isEnabled(userId)) {
       throw new ApiError(
         409,
@@ -230,7 +215,7 @@ export const mfaService = {
         "Tu rol exige la verificación en dos pasos: no se puede desactivar. Si perdiste el teléfono y los códigos, pide a otro administrador que la restablezca."
       );
     }
-    await checkPassword(user, password);
+    await reconfirmPassword(user, password);
     if (!(await this.isEnabled(userId))) throw new ApiError(409, "La verificación en dos pasos no está activa.");
     if (!(await consumeSecondFactor(userId, code, { allowRecovery: true }))) {
       await lockoutService.registerFailure(user.email);

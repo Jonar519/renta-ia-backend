@@ -183,6 +183,66 @@
         ],
         "description": "Cuenta pendiente y su invitación. NUNCA incluye el token ni el enlace: solo viajan por correo."
       },
+      "Profile": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "accountant",
+              "assistant",
+              "client"
+            ]
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "mfaEnabled": {
+            "type": "boolean"
+          },
+          "pendingEmail": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "email": {
+                "type": "string",
+                "format": "email"
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "email",
+              "expiresAt"
+            ],
+            "description": "Cambio de correo esperando confirmación"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email",
+          "role",
+          "phone",
+          "mfaEnabled",
+          "pendingEmail"
+        ]
+      },
       "Session": {
         "type": "object",
         "properties": {
@@ -1140,9 +1200,9 @@
     "/api/users/me": {
       "get": {
         "tags": [
-          "Auth"
+          "Perfil"
         ],
-        "summary": "Usuario actual",
+        "summary": "La propia cuenta: datos, teléfono y cambio de correo pendiente",
         "security": [
           {
             "bearerAuth": []
@@ -1150,17 +1210,409 @@
         ],
         "responses": {
           "200": {
-            "description": "Usuario",
+            "description": "Perfil",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/User"
+                  "$ref": "#/components/schemas/Profile"
                 }
               }
             }
           },
           "401": {
             "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Perfil"
+        ],
+        "summary": "Editar nombre y/o teléfono ('' o null borra el teléfono). Rol y correo no se editan aquí.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 150
+                  },
+                  "phone": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          ""
+                        ]
+                      },
+                      {
+                        "nullable": true
+                      },
+                      {
+                        "type": "string",
+                        "maxLength": 30,
+                        "pattern": "^\\+?[0-9][0-9 ()-]{5,27}[0-9]$",
+                        "description": "Opcional. Vacío o null lo borra"
+                      },
+                      {
+                        "nullable": true
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Perfil actualizado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Profile"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me/email": {
+      "post": {
+        "tags": [
+          "Perfil"
+        ],
+        "summary": "Pedir cambio de correo (con la contraseña actual): enlace de 24 h al correo NUEVO y aviso al anterior. Responde igual aunque el nuevo ya tenga cuenta.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "newEmail": {
+                    "type": "string",
+                    "maxLength": 150,
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "description": "Contraseña actual (se vuelve a pedir)"
+                  }
+                },
+                "required": [
+                  "newEmail",
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Enlace enviado; el correo cambia al confirmarlo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "pendingEmail": {
+                      "type": "object",
+                      "properties": {
+                        "email": {
+                          "type": "string",
+                          "format": "email"
+                        },
+                        "expiresAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "email",
+                        "expiresAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "pendingEmail"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos, mismo correo o contraseña incorrecta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de intentos o cuenta bloqueada por intentos fallidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Perfil"
+        ],
+        "summary": "Cancelar el cambio de correo pendiente",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Cancelado"
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No hay cambio pendiente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me/password": {
+      "post": {
+        "tags": [
+          "Perfil"
+        ],
+        "summary": "Cambiar la contraseña (con la actual): aplica la política y cierra TODAS las demás sesiones",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "currentPassword": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "description": "Contraseña actual (se vuelve a pedir)"
+                  },
+                  "newPassword": {
+                    "type": "string",
+                    "maxLength": 72,
+                    "description": "10 a 72 caracteres; distinta de la actual; sin contraseñas comunes ni el correo o el nombre"
+                  }
+                },
+                "required": [
+                  "currentPassword",
+                  "newPassword"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contraseña cambiada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "closedSessions": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "closedSessions"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Contraseña actual incorrecta o la nueva no cumple la política",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de intentos o cuenta bloqueada por intentos fallidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/email-change/confirm": {
+      "post": {
+        "tags": [
+          "Perfil"
+        ],
+        "summary": "Confirmar el correo nuevo desde el enlace (token en el cuerpo; no exige sesión). Avisa al correo anterior.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "token"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Correo cambiado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "email": {
+                      "type": "string",
+                      "format": "email"
+                    }
+                  },
+                  "required": [
+                    "email"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Otra cuenta tomó ese correo mientras tanto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Enlace inválido, vencido, reemplazado o ya usado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes",
             "content": {
               "application/json": {
                 "schema": {

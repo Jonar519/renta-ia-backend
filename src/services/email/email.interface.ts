@@ -10,7 +10,12 @@
 
 /** Qué correo es (columna email_outbox.template; sirve para buscarlo en pruebas y demos). */
 export type EmailTemplate =
-  "invitation" | "password_reset" | "email_change_verification" | "email_change_notice" | "test";
+  | "invitation"
+  | "password_reset"
+  | "email_change_verification"
+  | "email_change_notice"
+  | "password_change_notice"
+  | "test";
 
 export interface EmailMessage {
   to: string;

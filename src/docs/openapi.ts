@@ -38,6 +38,12 @@ import {
   mfaSetupSchema,
   mfaUserParams,
 } from "../modules/mfa/mfa.schema";
+import {
+  changePasswordSchema,
+  emailChangeConfirmSchema,
+  emailChangeSchema,
+  updateProfileSchema,
+} from "../modules/users/profile.schema";
 import { paginationQuerySchema } from "../utils/pagination";
 
 /**
@@ -102,6 +108,19 @@ const Invitation = registry.register(
       client: z.object({ id: z.string().uuid(), fullName: z.string() }).nullable(),
     })
     .describe("Cuenta pendiente y su invitación. NUNCA incluye el token ni el enlace: solo viajan por correo.")
+);
+const PendingEmail = z.object({ email: z.string().email(), expiresAt: z.string().datetime() });
+const Profile = registry.register(
+  "Profile",
+  z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    email: z.string().email(),
+    role: Role,
+    phone: z.string().nullable(),
+    mfaEnabled: z.boolean(),
+    pendingEmail: PendingEmail.nullable().describe("Cambio de correo esperando confirmación"),
+  })
 );
 const Session = registry.register(
   "Session",
@@ -364,9 +383,69 @@ route({
 route({
   method: "get",
   path: "/api/users/me",
-  tag: "Auth",
-  summary: "Usuario actual",
-  responses: { 200: json(User, "Usuario"), 401: errors[401] },
+  tag: "Perfil",
+  summary: "La propia cuenta: datos, teléfono y cambio de correo pendiente",
+  responses: { 200: json(Profile, "Perfil"), 401: errors[401] },
+});
+route({
+  method: "patch",
+  path: "/api/users/me",
+  tag: "Perfil",
+  summary: "Editar nombre y/o teléfono ('' o null borra el teléfono). Rol y correo no se editan aquí.",
+  body: updateProfileSchema,
+  responses: { 200: json(Profile, "Perfil actualizado"), 400: errors[400], 401: errors[401] },
+});
+route({
+  method: "post",
+  path: "/api/users/me/email",
+  tag: "Perfil",
+  summary:
+    "Pedir cambio de correo (con la contraseña actual): enlace de 24 h al correo NUEVO y aviso al anterior. Responde igual aunque el nuevo ya tenga cuenta.",
+  body: emailChangeSchema,
+  responses: {
+    202: json(z.object({ pendingEmail: PendingEmail }), "Enlace enviado; el correo cambia al confirmarlo"),
+    400: json(ErrorResponse, "Datos inválidos, mismo correo o contraseña incorrecta"),
+    401: errors[401],
+    429: json(ErrorResponse, "Límite de intentos o cuenta bloqueada por intentos fallidos"),
+  },
+});
+route({
+  method: "delete",
+  path: "/api/users/me/email",
+  tag: "Perfil",
+  summary: "Cancelar el cambio de correo pendiente",
+  responses: {
+    204: { description: "Cancelado" },
+    401: errors[401],
+    404: json(ErrorResponse, "No hay cambio pendiente"),
+  },
+});
+route({
+  method: "post",
+  path: "/api/users/me/password",
+  tag: "Perfil",
+  summary: "Cambiar la contraseña (con la actual): aplica la política y cierra TODAS las demás sesiones",
+  body: changePasswordSchema,
+  responses: {
+    200: json(z.object({ closedSessions: z.number().int() }), "Contraseña cambiada"),
+    400: json(ErrorResponse, "Contraseña actual incorrecta o la nueva no cumple la política"),
+    401: errors[401],
+    429: json(ErrorResponse, "Límite de intentos o cuenta bloqueada por intentos fallidos"),
+  },
+});
+route({
+  method: "post",
+  path: "/api/auth/email-change/confirm",
+  tag: "Perfil",
+  summary: "Confirmar el correo nuevo desde el enlace (token en el cuerpo; no exige sesión). Avisa al correo anterior.",
+  secure: false,
+  body: emailChangeConfirmSchema,
+  responses: {
+    200: json(z.object({ email: z.string().email() }), "Correo cambiado"),
+    409: json(ErrorResponse, "Otra cuenta tomó ese correo mientras tanto"),
+    410: json(ErrorResponse, "Enlace inválido, vencido, reemplazado o ya usado"),
+    429: errors[429],
+  },
 });
 
 // ---------- MFA de la propia cuenta ----------

@@ -93,6 +93,21 @@ export const mfaManageLimiter = limiter(
   { skipSuccessfulRequests: true, keyGenerator: byUser }
 );
 
+/** Cambiar el correo o la contraseña propios (piden la actual), por usuario: solo cuentan los fallidos. */
+export const profileLimiter = limiter("profile", 15 * MINUTE, 10, "Demasiados intentos fallidos. Espera 15 minutos.", {
+  skipSuccessfulRequests: true,
+  keyGenerator: byUser,
+});
+
+/** Confirmar el correo nuevo desde el enlace, por IP: solo cuentan los fallidos. */
+export const emailChangeConfirmLimiter = limiter(
+  "email-change",
+  15 * MINUTE,
+  20,
+  "Demasiados intentos con enlaces de confirmación. Espera 15 minutos.",
+  { skipSuccessfulRequests: true }
+);
+
 /** Límite general por IP para toda la API. */
 export const globalLimiter = limiter(
   "global",

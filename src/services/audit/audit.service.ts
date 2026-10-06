@@ -45,6 +45,12 @@ export type AuditAction =
   | "mfa.disabled"
   | "mfa.recovery_codes.regenerated"
   | "admin.mfa.reset"
+  | "user.profile.update"
+  | "user.email_change.requested"
+  | "user.email_change.cancelled"
+  | "user.email_change.completed"
+  | "user.email_change.invalid"
+  | "user.password.change"
   | "admin.audit.view";
 
 export interface AuditEntry {

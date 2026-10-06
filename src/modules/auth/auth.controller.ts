@@ -12,6 +12,7 @@ import { ApiError } from "../../utils/apiError";
 import { InvalidInvitationError, invitationsService } from "../invitations/invitations.service";
 import { InvalidResetTokenError, passwordResetService } from "./passwordReset.service";
 import { InvalidChallengeError, MfaCodeError, mfaService } from "../mfa/mfa.service";
+import { InvalidEmailChangeError, profileService } from "../users/profile.service";
 
 /** Audita los enlaces de invitación rechazados (sin el token: solo IP y user agent). */
 async function auditingInvalid<T>(req: Request, work: () => Promise<T>): Promise<T> {
@@ -135,6 +136,18 @@ export const authController = {
       res.status(204).end();
     } catch (err) {
       if (err instanceof InvalidResetTokenError) audit(req, { action: "auth.password_reset.invalid" });
+      throw err;
+    }
+  },
+
+  /** Confirma el correo nuevo (enlace del correo; el token va en el cuerpo). */
+  async confirmEmailChange(req: Request, res: Response) {
+    try {
+      const { userId, email } = await profileService.confirmEmailChange(req.body.token);
+      audit(req, { action: "user.email_change.completed", userId, entity: "user", entityId: userId });
+      res.json({ email });
+    } catch (err) {
+      if (err instanceof InvalidEmailChangeError) audit(req, { action: "user.email_change.invalid" });
       throw err;
     }
   },
