@@ -1,7 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import bcrypt from "bcrypt";
-import { app, authHeader, createAccount, TEST_PASSWORD, unique } from "../helpers";
+import { app, authHeader, createAccount, testAdmin, unique } from "../helpers";
 import { prisma } from "../../src/config/prisma";
 import { metricsService } from "../../src/modules/metrics/metrics.service";
 
@@ -54,11 +53,8 @@ describe("GET /api/metrics/web-vitals/summary", () => {
 
   beforeAll(async () => {
     accountantToken = (await createAccount()).token;
-    const email = `admin-metrics-${unique()}@test.local`;
-    await prisma.user.create({
-      data: { name: "Admin", email, role: "admin", passwordHash: await bcrypt.hash(TEST_PASSWORD, 4) },
-    });
-    adminToken = (await request(app).post("/api/auth/login").send({ email, password: TEST_PASSWORD })).body.accessToken;
+    // Admin con MFA activo (obligatorio para su rol desde B9).
+    adminToken = (await testAdmin()).token;
 
     // INP: 100, 200, 300, 400 → p75 (interpolación lineal de percentile_cont) = 325.
     await metricsService.record({

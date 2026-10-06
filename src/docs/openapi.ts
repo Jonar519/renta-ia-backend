@@ -73,12 +73,19 @@ const ErrorResponse = registry.register(
   z.object({
     error: z.string(),
     details: z.array(z.object({ field: z.string(), message: z.string() })).optional(),
+    code: z.string().optional().describe("Identificador estable: mfa_enrollment_required, mfa_challenge_invalid"),
   })
 );
 const Role = z.enum(["admin", "accountant", "assistant", "client"]);
 const User = registry.register(
   "User",
-  z.object({ id: z.string().uuid(), name: z.string(), email: z.string().email(), role: Role })
+  z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    email: z.string().email(),
+    role: Role,
+    mfaEnabled: z.boolean().describe("Si es false y el rol lo exige (admin), solo puede activarlo"),
+  })
 );
 const Invitation = registry.register(
   "Invitation",
@@ -171,6 +178,11 @@ const errors = {
   429: json(ErrorResponse, "Límite de solicitudes"),
 };
 const auth = [{ [bearer.name]: [] }];
+// Toda ruta autenticada fuera de /api/users/me(/mfa) puede responder esto a un admin sin MFA.
+errors[403] = json(
+  ErrorResponse,
+  "El rol no permite esta acción, o (code: mfa_enrollment_required) un admin debe activar MFA primero"
+);
 
 type Method = "get" | "post" | "patch" | "delete";
 interface PathSpec {
@@ -378,6 +390,7 @@ route({
         enabled: z.boolean(),
         enabledAt: z.string().datetime().nullable(),
         recoveryCodesRemaining: z.number().int(),
+        required: z.boolean().describe("El rol exige MFA (admin): no se puede desactivar"),
       }),
       "Estado"
     ),
@@ -395,6 +408,9 @@ route({
       z.object({
         secret: z.string().describe("Base32, para escribirlo a mano en la app"),
         otpauthUri: z.string().describe("otpauth://totp/… (contenido del QR)"),
+        qrSvg: z
+          .string()
+          .describe("QR de otpauthUri en SVG, generado en el servidor (se muestra como imagen data:image/svg+xml)"),
         expiresAt: z.string().datetime(),
       }),
       "Secreto para la app de autenticación"

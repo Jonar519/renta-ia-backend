@@ -8,6 +8,8 @@ import { open, seal } from "../../utils/secretBox";
 import { createSignedToken, verifySignedToken } from "../../utils/signedToken";
 import { AccountLockedError, lockoutService } from "../auth/lockout.service";
 import { base32Encode, generateSecret, otpauthUri, verifyTotp } from "./totp";
+import { qrSvg } from "./qr";
+import { mfaRequiredFor } from "./policy";
 
 /**
  * Segundo factor TOTP (Fase 5, B8; migración 019).
@@ -43,7 +45,8 @@ export class MfaNotConfiguredError extends ApiError {
 export const INVALID_CHALLENGE = "La verificación venció o ya no es válida. Inicia sesión de nuevo.";
 export class InvalidChallengeError extends ApiError {
   constructor() {
-    super(401, INVALID_CHALLENGE);
+    // code: el cliente vuelve al paso de la contraseña.
+    super(401, INVALID_CHALLENGE, undefined, "mfa_challenge_invalid");
   }
 }
 
@@ -144,12 +147,13 @@ async function consumeSecondFactor(
 
 export const mfaService = {
   async status(userId: string) {
+    const user = await loadUser(userId);
     const mfa = await prisma.userMfa.findUnique({ where: { userId } });
     const enabled = Boolean(mfa?.enabledAt);
     const recoveryCodesRemaining = enabled
       ? await prisma.mfaRecoveryCode.count({ where: { userId, usedAt: null } })
       : 0;
-    return { enabled, enabledAt: mfa?.enabledAt ?? null, recoveryCodesRemaining };
+    return { enabled, enabledAt: mfa?.enabledAt ?? null, recoveryCodesRemaining, required: mfaRequiredFor(user.role) };
   },
 
   async isEnabled(userId: string): Promise<boolean> {
@@ -176,9 +180,11 @@ export const mfaService = {
       create: { userId, secretCiphertext, createdAt },
       update: { secretCiphertext, createdAt, lastUsedStep: null },
     });
+    const uri = otpauthUri(secret, user.email);
     return {
       secret: base32Encode(secret),
-      otpauthUri: otpauthUri(secret, user.email),
+      otpauthUri: uri,
+      qrSvg: qrSvg(uri),
       expiresAt: new Date(createdAt.getTime() + SETUP_TTL_MS),
     };
   },
@@ -218,6 +224,12 @@ export const mfaService = {
   async disable(userId: string, password: string, code: string) {
     encryptionKey();
     const user = await loadUser(userId);
+    if (mfaRequiredFor(user.role)) {
+      throw new ApiError(
+        403,
+        "Tu rol exige la verificación en dos pasos: no se puede desactivar. Si perdiste el teléfono y los códigos, pide a otro administrador que la restablezca."
+      );
+    }
     await checkPassword(user, password);
     if (!(await this.isEnabled(userId))) throw new ApiError(409, "La verificación en dos pasos no está activa.");
     if (!(await consumeSecondFactor(userId, code, { allowRecovery: true }))) {

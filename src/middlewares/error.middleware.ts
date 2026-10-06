@@ -70,7 +70,9 @@ function describeForLog(err: unknown) {
 export function errorMiddleware(err: unknown, req: Request, res: Response, _next: NextFunction) {
   const apiError = toApiError(err);
   if (apiError) {
-    return res.status(apiError.statusCode).json({ error: apiError.message, details: apiError.details });
+    return res
+      .status(apiError.statusCode)
+      .json({ error: apiError.message, details: apiError.details, code: apiError.code });
   }
 
   logger.error({ err: describeForLog(err), method: req.method, path: req.path }, "Error no controlado");

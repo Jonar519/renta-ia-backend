@@ -29,8 +29,14 @@ const sha256 = (value: string) => createHash("sha256").update(value).digest("hex
 
 type SessionUser = Pick<User, "id" | "name" | "email" | "role">;
 
-export function publicUser(user: SessionUser) {
-  return { id: user.id, name: user.name, email: user.email, role: user.role };
+/** mfaEnabled: el cliente lo usa para llevar a "Seguridad" a quien debe activarlo (mfa/policy.ts). */
+export function publicUser(user: SessionUser, mfaEnabled: boolean) {
+  return { id: user.id, name: user.name, email: user.email, role: user.role, mfaEnabled };
+}
+
+async function mfaEnabledFor(userId: string): Promise<boolean> {
+  const mfa = await prisma.userMfa.findUnique({ where: { userId }, select: { enabledAt: true } });
+  return Boolean(mfa?.enabledAt);
 }
 
 /** sid = familia de refresh tokens de la sesión (ver tokens.ts). */
@@ -81,14 +87,18 @@ export const sessionsService = {
   async start(user: SessionUser): Promise<RotationResult> {
     const familyId = randomUUID();
     const { raw } = await storeRefreshToken(user.id, familyId);
-    return { accessToken: issueAccessToken(user, familyId), refreshToken: raw, user: publicUser(user) };
+    return {
+      accessToken: issueAccessToken(user, familyId),
+      refreshToken: raw,
+      user: publicUser(user, await mfaEnabledFor(user.id)),
+    };
   },
 
   async rotate(rawToken: string | undefined): Promise<RotationResult> {
     if (!rawToken) throw new ApiError(401, "No hay una sesión activa");
     const current = await prisma.refreshToken.findUnique({
       where: { tokenHash: sha256(rawToken) },
-      include: { user: true },
+      include: { user: { include: { mfa: { select: { enabledAt: true } } } } },
     });
     if (!current) throw new ApiError(401, "Sesión inválida");
 
@@ -133,7 +143,7 @@ export const sessionsService = {
     return {
       accessToken: issueAccessToken(current.user, current.familyId),
       refreshToken: next,
-      user: publicUser(current.user),
+      user: publicUser(current.user, Boolean(current.user.mfa?.enabledAt)),
     };
   },
 
@@ -143,11 +153,20 @@ export const sessionsService = {
    * family_id en cada petición autenticada.
    */
   async isActive(sid: string): Promise<boolean> {
+    return (await this.state(sid)) !== null;
+  },
+
+  /**
+   * Estado de la sesión en UNA consulta: null si ya no está activa; si lo
+   * está, además si la cuenta tiene MFA activo (para el MFA obligatorio por
+   * rol, sin una segunda consulta por petición).
+   */
+  async state(sid: string): Promise<{ mfaEnabled: boolean } | null> {
     const live = await prisma.refreshToken.findFirst({
       where: { familyId: sid, revokedAt: null, expiresAt: { gt: new Date() } },
-      select: { id: true },
+      select: { user: { select: { mfa: { select: { enabledAt: true } } } } },
     });
-    return live !== null;
+    return live ? { mfaEnabled: Boolean(live.user.mfa?.enabledAt) } : null;
   },
 
   /** Cierre de sesión: revoca la familia del token presentado (todas sus rotaciones). */

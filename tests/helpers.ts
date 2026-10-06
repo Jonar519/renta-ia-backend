@@ -2,6 +2,7 @@ import bcrypt from "bcrypt";
 import request from "supertest";
 import { createApp } from "../src/app";
 import { prisma } from "../src/config/prisma";
+import { base32Decode, totp } from "../src/modules/mfa/totp";
 
 export const app = createApp();
 
@@ -22,10 +23,12 @@ export function authHeader(token: string) {
 type Role = "admin" | "accountant" | "assistant" | "client";
 export interface Account {
   token: string;
-  user: { id: string; name: string; email: string; role: Role };
+  user: { id: string; name: string; email: string; role: Role; mfaEnabled?: boolean };
   email: string;
   /** Cabecera Set-Cookie con el refresh token (para pruebas de sesión). */
   cookies: string[];
+  /** Secreto TOTP (base32) si la cuenta tiene MFA activo. */
+  mfaSecret?: string;
 }
 
 /**
@@ -42,7 +45,19 @@ export function testAdmin(): Promise<Account> {
     });
     const res = await request(app).post("/api/auth/login").send({ email, password: TEST_PASSWORD });
     if (res.status !== 200) throw new Error(`login del admin de pruebas falló (${res.status})`);
-    return { token: res.body.accessToken, user: res.body.user, email, cookies: [] };
+    // MFA obligatorio para admin (B9): lo activa por la API real con su primera
+    // sesión, que hasta entonces solo sirve para eso.
+    const token: string = res.body.accessToken;
+    const setup = await request(app)
+      .post("/api/users/me/mfa/setup")
+      .set(authHeader(token))
+      .send({ password: TEST_PASSWORD });
+    const enable = await request(app)
+      .post("/api/users/me/mfa/enable")
+      .set(authHeader(token))
+      .send({ code: totp(base32Decode(setup.body.secret)) });
+    if (enable.status !== 200) throw new Error(`MFA del admin de pruebas falló (${enable.status})`);
+    return { token, user: { ...res.body.user, mfaEnabled: true }, email, cookies: [], mfaSecret: setup.body.secret };
   })();
   return adminPromise;
 }

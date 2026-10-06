@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { base32Decode, base32Encode, hotp, otpauthUri, stepAt, totp, verifyTotp } from "../../src/modules/mfa/totp";
 import { open, seal } from "../../src/utils/secretBox";
+import { encode } from "uqr";
+import { qrSvg } from "../../src/modules/mfa/qr";
 import { normalizeRecoveryCode } from "../../src/modules/mfa/mfa.service";
 
 // Secreto de los vectores de prueba de los RFC 4226 y 6238 (SHA-1).
@@ -143,4 +145,26 @@ describe("MFA_ENCRYPTION_KEY al arrancar (env.ts)", () => {
       await expect(import("../../src/config/env")).rejects.toThrow(/32 bytes/);
     }
   );
+});
+
+describe("QR en SVG (servidor)", () => {
+  it("dibuja exactamente los módulos oscuros de la matriz, con margen de 4 módulos", () => {
+    const text = otpauthUri(RFC_SECRET, "ana@example.com");
+    const { size, data } = encode(text, { ecc: "M", border: 4 });
+    const svg = qrSvg(text);
+    expect(svg).toContain(`viewBox="0 0 ${size} ${size}"`);
+    const drawn = new Set<string>();
+    for (const [, x, y, w] of svg.matchAll(/M(\d+) (\d+)h(\d+)v1H\d+z/g)) {
+      for (let i = 0; i < Number(w); i++) drawn.add(`${Number(x) + i},${y}`);
+    }
+    const dark = new Set<string>();
+    data.forEach((row, y) => row.forEach((on, x) => on && dark.add(`${x},${y}`)));
+    expect(drawn).toEqual(dark);
+    // Margen: las 4 primeras filas y columnas, vacías.
+    for (const cell of dark) {
+      const [x, y] = cell.split(",").map(Number);
+      expect(x).toBeGreaterThanOrEqual(4);
+      expect(y).toBeGreaterThanOrEqual(4);
+    }
+  });
 });

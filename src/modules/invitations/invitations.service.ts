@@ -2,6 +2,7 @@ import bcrypt from "bcrypt";
 import { z } from "zod";
 import type { Prisma, UserRole } from "@prisma/client";
 import { prisma } from "../../config/prisma";
+import { mfaRequiredFor } from "../mfa/policy";
 import { logger } from "../../config/logger";
 import { ApiError } from "../../utils/apiError";
 import { createSignedToken, verifySignedToken } from "../../utils/signedToken";
@@ -196,8 +197,8 @@ export const invitationsService = {
       email: user.email,
       role: user.role,
       expiresAt: invitation.expiresAt,
-      // El admin debe activar MFA al completar su cuenta (bloque B8).
-      mfaRequired: user.role === "admin",
+      // Roles que deben activar MFA al completar su cuenta (mfa/policy.ts).
+      mfaRequired: mfaRequiredFor(user.role),
     };
   },
 

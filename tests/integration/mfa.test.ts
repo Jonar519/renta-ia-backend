@@ -83,7 +83,7 @@ describe("configurar", () => {
   it("empieza desactivado; configurar exige la contraseña actual (y un fallo cuenta en el bloqueo)", async () => {
     const account = await createAccount("Configura");
     const status = await request(app).get(ME).set(authHeader(account.token));
-    expect(status.body).toEqual({ enabled: false, enabledAt: null, recoveryCodesRemaining: 0 });
+    expect(status.body).toEqual({ enabled: false, enabledAt: null, recoveryCodesRemaining: 0, required: false });
 
     const wrong = await setup(account, "no es mi contraseña");
     expect(wrong.status).toBe(400);
@@ -481,5 +481,77 @@ describe("019: garantías del esquema", () => {
     await expect(insertChallenge(6)).rejects.toThrow(/chk_mfa_challenges_expiry/);
     await expect(insertChallenge(5, 6)).rejects.toThrow(/chk_mfa_challenges_attempts/);
     await expect(insertChallenge(5, 5)).resolves.toBe(1);
+  });
+});
+
+describe("MFA obligatorio para administradores (B9)", () => {
+  const get = (token: string, path: string) => request(app).get(path).set(authHeader(token));
+
+  it("un admin sin MFA solo puede activarlo: el resto de la API responde 403 mfa_enrollment_required", async () => {
+    const admin = await createAccountWithRole("admin", { name: "Admin nueva" });
+    expect(admin.user.mfaEnabled).toBe(false);
+    expect((await get(admin.token, "/api/users/me")).body).toMatchObject({ role: "admin", mfaEnabled: false });
+    expect((await get(admin.token, ME)).body).toMatchObject({ enabled: false, required: true });
+
+    for (const path of ["/api/clients", "/api/admin/invitations", "/api/admin/audit", "/api/users/me/mfa-otra"]) {
+      const res = await get(admin.token, path);
+      expect(res.status, path).toBe(403);
+      expect(res.body.code, path).toBe("mfa_enrollment_required");
+    }
+
+    // Con la MISMA sesión, al activarlo, se abre todo (la verificación es por petición).
+    const { secret } = (await setup(admin)).body;
+    expect((await enable(admin, codeFor(secret))).status).toBe(200);
+    expect((await get(admin.token, "/api/clients")).status).toBe(200);
+    expect((await get(admin.token, "/api/admin/invitations")).status).toBe(200);
+    expect((await get(admin.token, "/api/users/me")).body.mfaEnabled).toBe(true);
+  });
+
+  it("las rutas para activarlo admiten query string y barra final, pero no prefijos parecidos", async () => {
+    const admin = await createAccountWithRole("admin");
+    expect((await get(admin.token, "/api/users/me?x=1")).status).toBe(200);
+    expect((await get(admin.token, "/api/users/me/mfa/")).status).toBe(200);
+    expect((await get(admin.token, "/api/users/mexico")).body.code).toBe("mfa_enrollment_required");
+  });
+
+  it("otros roles no están obligados: un contador sin MFA usa la API normalmente", async () => {
+    const accountant = await createAccount("Sin obligación");
+    expect((await get(accountant.token, "/api/clients")).status).toBe(200);
+    expect((await get(accountant.token, ME)).body.required).toBe(false);
+  });
+
+  it("un admin no puede desactivar su MFA; si otro admin se lo restablece, vuelve a quedar obligado", async () => {
+    const admin = await createAccountWithRole("admin", { name: "Admin con MFA" });
+    const { secret } = await enableMfa(admin);
+    const disable = await request(app)
+      .post(`${ME}/disable`)
+      .set(authHeader(admin.token))
+      .send({ password: TEST_PASSWORD, code: codeFor(secret, 1) });
+    expect(disable.status).toBe(403);
+    expect(await prisma.userMfa.count({ where: { userId: admin.user.id, enabledAt: { not: null } } })).toBe(1);
+
+    const other = await testAdmin();
+    expect(
+      (await request(app).delete(`/api/admin/users/${admin.user.id}/mfa`).set(authHeader(other.token))).status
+    ).toBe(204);
+    const again = await login(admin.email);
+    expect(again.body.user).toMatchObject({ role: "admin", mfaEnabled: false });
+    expect((await get(again.body.accessToken, "/api/clients")).body.code).toBe("mfa_enrollment_required");
+  });
+
+  it("la sesión renovada (/refresh) también informa mfaEnabled", async () => {
+    const account = await createAccount("Refresh MFA");
+    const first = await login(account.email);
+    const cookie = String(first.headers["set-cookie"]).split(";")[0]!;
+    const refreshed = await request(app).post("/api/auth/refresh").set(CSRF).set("Cookie", cookie);
+    expect(refreshed.body.user).toMatchObject({ mfaEnabled: false });
+  });
+
+  it("configurar entrega el QR como SVG generado en el servidor (sin scripts ni referencias externas)", async () => {
+    const account = await createAccount("Con QR");
+    const { qrSvg } = (await setup(account)).body as { qrSvg: string };
+    expect(qrSvg).toMatch(/^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" viewBox="0 0 (\d+) \1"/);
+    expect(qrSvg).not.toMatch(/<script|href|on\w+=/i);
+    expect(qrSvg.length).toBeLessThan(12_000);
   });
 });

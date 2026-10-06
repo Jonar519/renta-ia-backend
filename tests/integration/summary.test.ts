@@ -1,7 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
-import bcrypt from "bcrypt";
-import { app, authHeader, createClient, createDocument, createAccount, TEST_PASSWORD, unique } from "../helpers";
+import { app, authHeader, createClient, createDocument, createAccount, testAdmin } from "../helpers";
 import { prisma } from "../../src/config/prisma";
 import { SUMMARY_DISCLAIMER } from "../../src/modules/clients/summary.service";
 
@@ -104,13 +103,9 @@ describe("GET /api/clients (listado del admin)", () => {
     const accountant = await createAccount("Contador listado");
     const client = await createClient(accountant.token);
 
-    const email = `admin-${unique()}@test.local`;
-    await prisma.user.create({
-      data: { name: "Admin", email, role: "admin", passwordHash: await bcrypt.hash(TEST_PASSWORD, 4) },
-    });
-    const login = await request(app).post("/api/auth/login").send({ email, password: TEST_PASSWORD });
-
-    const res = await request(app).get("/api/clients").set(authHeader(login.body.accessToken));
+    // Admin con MFA activo (obligatorio para su rol desde B9).
+    const admin = await testAdmin();
+    const res = await request(app).get("/api/clients").set(authHeader(admin.token));
     expect(res.status).toBe(200);
     const listed = res.body.items.find((c: { id: string }) => c.id === client.id);
     expect(listed.accountant).toEqual({ id: accountant.user.id, name: "Contador listado" });

@@ -8,6 +8,7 @@ export const usersController = {
     if (!user) {
       throw new ApiError(404, "Usuario no encontrado");
     }
-    res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
+    const mfa = await prisma.userMfa.findUnique({ where: { userId: user.id }, select: { enabledAt: true } });
+    res.json({ id: user.id, name: user.name, email: user.email, role: user.role, mfaEnabled: Boolean(mfa?.enabledAt) });
   },
 };
