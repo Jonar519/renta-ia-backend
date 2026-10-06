@@ -13,8 +13,10 @@ model User {
   id                 String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name               String                @db.VarChar(150)
   email              String                @unique @db.VarChar(150)
-  passwordHash       String                @map("password_hash") @db.VarChar(255)
+  /// NULL mientras la cuenta está pendiente (invited); CHECK chk_users_password_by_status.
+  passwordHash       String?               @map("password_hash") @db.VarChar(255)
   role               UserRole              @default(accountant)
+  status             AccountStatus         @default(active)
   createdAt          DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime              @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   aiConversations    AiConversation[]
@@ -23,11 +25,15 @@ model User {
   portalClients      Client[]              @relation("ClientPortalUser")
   uploadedDocs       Document[]            @relation("UploadedBy")
   refreshTokens      RefreshToken[]
+  invitations        UserInvitation[]      @relation("InvitedUser")
+  sentInvitations    UserInvitation[]      @relation("InvitedBy")
   /// Contadores a los que ayuda este usuario (si es assistant).
   assistsAccountants AccountantAssistant[] @relation("AssistantUser")
   /// Asistentes asignados a este usuario (si es accountant).
   assistants         AccountantAssistant[] @relation("AccountantUser")
 
+  /// Destino de las FK compuestas (user_id, user_status): migración 017.
+  @@unique([id, status], map: "uq_users_id_status")
   @@index([role], map: "idx_users_role")
   @@map("users")
 }
@@ -243,14 +249,60 @@ model RefreshToken {
   revokedAt    DateTime?      @map("revoked_at") @db.Timestamptz(6)
   revokeReason String?        @map("revoke_reason") @db.VarChar(30)
   replacedById String?        @map("replaced_by") @db.Uuid
+  /// Siempre active (CHECK): con la FK compuesta, una cuenta pendiente no puede tener sesiones.
+  userStatus   AccountStatus  @default(active) @map("user_status")
   replacedBy   RefreshToken?  @relation("RefreshTokenRotation", fields: [replacedById], references: [id], onUpdate: NoAction)
   replaces     RefreshToken[] @relation("RefreshTokenRotation")
-  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user         User           @relation(fields: [userId, userStatus], references: [id, status], onDelete: Cascade, onUpdate: NoAction, map: "fk_refresh_tokens_active_user")
 
   @@index([expiresAt], map: "idx_refresh_tokens_expires")
   @@index([familyId], map: "idx_refresh_tokens_family")
   @@index([userId], map: "idx_refresh_tokens_user")
   @@map("refresh_tokens")
+}
+
+/// Invitación de un solo uso (72 h). Solo el SHA-256 del token; la cuenta debe estar pendiente.
+model UserInvitation {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String        @map("user_id") @db.Uuid
+  /// Siempre invited (CHECK): la FK compuesta exige que la cuenta siga pendiente.
+  userStatus   AccountStatus @default(invited) @map("user_status")
+  tokenHash    String        @unique @map("token_hash") @db.Char(64)
+  invitedById  String?       @map("invited_by") @db.Uuid
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt    DateTime      @map("expires_at") @db.Timestamptz(6)
+  revokedAt    DateTime?     @map("revoked_at") @db.Timestamptz(6)
+  revokeReason String?       @map("revoke_reason") @db.VarChar(20)
+  user         User          @relation("InvitedUser", fields: [userId, userStatus], references: [id, status], onDelete: Cascade, onUpdate: NoAction, map: "fk_user_invitations_invited_user")
+  invitedBy    User?         @relation("InvitedBy", fields: [invitedById], references: [id], onUpdate: NoAction)
+
+  @@index([invitedById], map: "idx_user_invitations_invited_by")
+  @@map("user_invitations")
+}
+
+/// Correos "enviados" por el EmailProvider. Cuerpo solo con provider = mock (CHECK).
+model EmailOutbox {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  provider          String   @db.VarChar(10)
+  toAddress         String   @map("to_address") @db.VarChar(150)
+  template          String   @db.VarChar(40)
+  subject           String   @db.VarChar(200)
+  bodyText          String?  @map("body_text")
+  bodyHtml          String?  @map("body_html")
+  status            String   @db.VarChar(10)
+  providerMessageId String?  @map("provider_message_id") @db.VarChar(200)
+  error             String?  @db.VarChar(300)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([createdAt(sort: Desc)], map: "idx_email_outbox_created")
+  @@map("email_outbox")
+}
+
+enum AccountStatus {
+  invited
+  active
+
+  @@map("account_status")
 }
 
 enum UserRole {

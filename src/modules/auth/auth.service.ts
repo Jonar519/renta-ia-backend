@@ -71,8 +71,12 @@ export const authService = {
     if (remaining > 0) throw new AccountLockedError(remaining);
 
     const user = await prisma.user.findUnique({ where: { email } });
+    // Una cuenta pendiente (invitada) no tiene contraseña: se compara contra el
+    // hash ficticio y responde EXACTAMENTE igual que un correo inexistente
+    // (mismo mensaje y mismo tiempo), sin revelar que la cuenta existe. La
+    // base además le impide tener sesiones (migración 017).
     const valid = await bcrypt.compare(input.password, user?.passwordHash ?? DUMMY_HASH);
-    if (!user || !valid) {
+    if (!user || user.status !== "active" || !valid) {
       await lockoutService.registerFailure(email);
       throw new ApiError(401, INVALID_CREDENTIALS);
     }
