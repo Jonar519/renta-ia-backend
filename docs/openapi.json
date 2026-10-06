@@ -2514,6 +2514,156 @@
         }
       }
     },
+    "/api/admin/accountants": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Contadores activos (para ligar un asistente al invitarlo)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contadores",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string",
+                            "format": "email"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "email"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El rol no permite esta acción",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/portal-clients": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Expedientes sin usuario de portal, por nombre o documento (máx. 20)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "required": false,
+            "name": "q",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Expedientes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "documentNumber": {
+                            "type": "string"
+                          },
+                          "accountant": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "name"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "fullName",
+                          "documentNumber",
+                          "accountant"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El rol no permite esta acción",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/audit": {
       "get": {
         "tags": [

@@ -24,7 +24,7 @@ import {
 import { alertClientParams, alertIdParams, updateAlertStatusSchema } from "../modules/alerts/alerts.schema";
 import { chatSchema } from "../modules/ai/ai.schema";
 import { summaryQuerySchema, webVitalsPayloadSchema } from "../modules/metrics/metrics.schema";
-import { auditQuerySchema } from "../modules/admin/admin.schema";
+import { auditQuerySchema, portalClientsQuerySchema } from "../modules/admin/admin.schema";
 import { paginationQuerySchema } from "../utils/pagination";
 
 /**
@@ -513,6 +513,42 @@ route({
   summary: "Cancelar: elimina la cuenta pendiente (nunca una activa) y su enlace",
   params: invitedUserParams,
   responses: { 204: { description: "Cancelada" }, 403: errors[403], 404: errors[404] },
+});
+route({
+  method: "get",
+  path: "/api/admin/accountants",
+  tag: "Admin",
+  summary: "Contadores activos (para ligar un asistente al invitarlo)",
+  responses: {
+    200: json(
+      z.object({ items: z.array(z.object({ id: z.string().uuid(), name: z.string(), email: z.string().email() })) }),
+      "Contadores"
+    ),
+    403: errors[403],
+  },
+});
+route({
+  method: "get",
+  path: "/api/admin/portal-clients",
+  tag: "Admin",
+  summary: "Expedientes sin usuario de portal, por nombre o documento (máx. 20)",
+  query: portalClientsQuerySchema,
+  responses: {
+    200: json(
+      z.object({
+        items: z.array(
+          z.object({
+            id: z.string().uuid(),
+            fullName: z.string(),
+            documentNumber: z.string(),
+            accountant: z.object({ name: z.string() }),
+          })
+        ),
+      }),
+      "Expedientes"
+    ),
+    403: errors[403],
+  },
 });
 route({
   method: "get",

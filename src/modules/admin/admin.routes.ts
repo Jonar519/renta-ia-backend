@@ -6,7 +6,7 @@ import { validate } from "../../middlewares/validate.middleware";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { audit } from "../../services/audit/audit.service";
 import { adminService } from "./admin.service";
-import { auditQuerySchema } from "./admin.schema";
+import { auditQuerySchema, portalClientsQuerySchema } from "./admin.schema";
 import { invitationsService } from "../invitations/invitations.service";
 import { invitedUserParams, inviteSchema } from "../invitations/invitations.schema";
 
@@ -53,6 +53,23 @@ adminRouter.delete(
     await invitationsService.cancel(req.params.userId as string);
     audit(req, { action: "admin.invitation.cancel", entity: "user", entityId: req.params.userId as string });
     res.status(204).end();
+  })
+);
+
+// Datos para el formulario de invitación (solo lectura).
+adminRouter.get(
+  "/accountants",
+  asyncHandler(async (_req, res) => {
+    res.json({ items: await adminService.listAccountants() });
+  })
+);
+
+adminRouter.get(
+  "/portal-clients",
+  validate({ query: portalClientsQuerySchema }),
+  asyncHandler(async (req, res) => {
+    const query = req.query as z.infer<typeof portalClientsQuerySchema>;
+    res.json({ items: await adminService.listPortalCandidates(query) });
   })
 );
 

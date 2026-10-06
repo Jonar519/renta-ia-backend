@@ -234,3 +234,47 @@ describe("si el correo no se puede enviar", () => {
     expect((await lookup(await invitationTokenFor(to))).status).toBe(200);
   });
 });
+
+describe("datos para el formulario de invitación (solo admin)", () => {
+  it("contadores activos: incluye los activos y excluye pendientes y otros roles", async () => {
+    const admin = await testAdmin();
+    const active = await createAccount("Contador Activo Lista");
+    const pending = await invite({ role: "accountant", name: "Contador Pendiente Lista" });
+    const res = await request(app).get("/api/admin/accountants").set(authHeader(admin.token));
+    expect(res.status).toBe(200);
+    const ids = res.body.items.map((a: { id: string }) => a.id);
+    expect(ids).toContain(active.user.id);
+    expect(ids).not.toContain(pending.userId);
+    expect(ids).not.toContain(admin.user.id);
+    expect(Object.keys(res.body.items[0]).sort()).toEqual(["email", "id", "name"]);
+  });
+
+  it("expedientes sin portal: busca por nombre o documento, excluye los que ya tienen portal, máx. 20", async () => {
+    const admin = await testAdmin();
+    const accountant = await createAccount("Contador Expedientes");
+    const free = await createClient(accountant.token);
+    const taken = await createClient(accountant.token);
+    await invite({ role: "client", clientId: taken.id });
+    const doc = (await prisma.client.findUniqueOrThrow({ where: { id: free.id } })).documentNumber;
+
+    const byDoc = await request(app)
+      .get(`/api/admin/portal-clients?q=${encodeURIComponent(doc)}`)
+      .set(authHeader(admin.token));
+    expect(byDoc.body.items.map((c: { id: string }) => c.id)).toEqual([free.id]);
+    const all = await request(app).get("/api/admin/portal-clients?q=cliente de prueba").set(authHeader(admin.token));
+    const ids = all.body.items.map((c: { id: string }) => c.id);
+    expect(ids).not.toContain(taken.id);
+
+    // Con más de 20 coincidencias, devuelve exactamente 20 (puede haber miles de expedientes).
+    for (let i = 0; i < 21; i++) await createClient(accountant.token);
+    const capped = await request(app).get("/api/admin/portal-clients?q=cliente de prueba").set(authHeader(admin.token));
+    expect(capped.body.items).toHaveLength(20);
+  });
+
+  it("los demás roles no pueden consultarlos (403)", async () => {
+    const accountant = await createAccount("Curioso");
+    for (const url of ["/api/admin/accountants", "/api/admin/portal-clients"]) {
+      expect((await request(app).get(url).set(authHeader(accountant.token))).status).toBe(403);
+    }
+  });
+});
