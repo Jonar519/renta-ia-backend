@@ -76,33 +76,34 @@ curl http://localhost:4000/ready
 
 ## Variables de entorno
 
-| Variable                                | Por defecto                                       | Descripción                                                                                                                                                                                 |
-| --------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                          | — (obligatoria)                                   | PostgreSQL de `renta-ia-database` (puerto **5433** en local)                                                                                                                                |
-| `JWT_SECRET`                            | — (obligatoria)                                   | Clave para firmar los access tokens (HS256)                                                                                                                                                 |
-| `JWT_EXPIRES_IN`                        | `15m`                                             | Vida del access token (el navegador lo guarda solo en memoria)                                                                                                                              |
-| `REFRESH_TOKEN_TTL_DAYS`                | `7`                                               | Vida del refresh token (cookie httpOnly rotativa)                                                                                                                                           |
-| `COOKIE_SECURE`                         | `true` en producción                              | Cookie `Secure` (solo HTTPS)                                                                                                                                                                |
-| `PORT`                                  | `4000`                                            | Puerto de la API y del WebSocket                                                                                                                                                            |
-| `NODE_ENV`                              | `development`                                     | `production` activa `Secure`, exige `CORS_ORIGIN`, oculta `/docs` y prohíbe `AI_PROVIDER=mock` y `RATE_LIMIT_SCALE`                                                                         |
-| `LOG_LEVEL`                             | `info`                                            | Nivel de pino                                                                                                                                                                               |
-| `CORS_ORIGIN`                           | `http://localhost:5173`                           | Orígenes permitidos (coma). **Obligatorio en producción**                                                                                                                                   |
-| `TRUST_PROXY`                           | `0`                                               | Proxies delante de la API (1 detrás de un balanceador)                                                                                                                                      |
-| `REDIS_URL`                             | `redis://localhost:6379`                          | Cola, rate limiting y eventos                                                                                                                                                               |
-| `WORKER_CONCURRENCY`                    | `2`                                               | Documentos en paralelo por worker (ver informe de carga)                                                                                                                                    |
-| `METRICS_TOKEN`                         | vacío                                             | Token para `GET /metrics` (API) y `:WORKER_METRICS_PORT/metrics` (worker). Vacío = 404                                                                                                      |
-| `WORKER_METRICS_PORT`                   | `9464`                                            | Puerto de métricas del worker                                                                                                                                                               |
-| `SHUTDOWN_TIMEOUT_MS`                   | `10000`                                           | Tiempo máximo del apagado ordenado                                                                                                                                                          |
-| `SHUTDOWN_DRAIN_DELAY_MS`               | `0`                                               | Espera entre `/ready = 503` y cerrar el servidor (en producción ≥ intervalo del health check)                                                                                               |
-| `AI_PROVIDER`                           | `anthropic`                                       | `mock` **solo para E2E y pruebas de carga** (rechazado con `NODE_ENV=production`)                                                                                                           |
-| `AI_MOCK_LATENCY_MS`                    | `0`                                               | Latencia simulada por llamada con `AI_PROVIDER=mock`                                                                                                                                        |
-| `RATE_LIMIT_SCALE`                      | `1`                                               | **Solo pruebas de carga**: multiplica todos los límites (rechazado en producción)                                                                                                           |
-| `ANTHROPIC_API_KEY` / `VOYAGE_API_KEY`  | vacías                                            | Claves de IA                                                                                                                                                                                |
-| `STORAGE_DRIVER` / `STORAGE_LOCAL_PATH` | `local` / `./uploads`                             | Almacenamiento de archivos                                                                                                                                                                  |
-| `EMAIL_PROVIDER`                        | `mock` (fuera de producción) / `ses` (producción) | `mock` no envía nada: guarda cada correo completo en `email_outbox` (**prohibido en producción**). `ses`: Amazon SES v2 ([ADR 0010](docs/adr/0010-proveedores-externos-intercambiables.md)) |
-| `EMAIL_FROM` / `SES_REGION`             | remitente local / vacía                           | Obligatorias con `EMAIL_PROVIDER=ses`; las credenciales las toma el SDK de AWS (`AWS_*`, perfil o rol IAM)                                                                                  |
-| `APP_URL`                               | `http://localhost:5173`                           | URL pública del frontend: base de los enlaces de los correos (obligatoria en producción)                                                                                                    |
-| `TAX_CALENDAR_PATH` / `TAX_RULES_PATH`  | JSON en `src/config/`                             | Calendario (fechas **de ejemplo**) y parámetros tributarios                                                                                                                                 |
+| Variable                                | Por defecto                                          | Descripción                                                                                                                                                                                 |
+| --------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                          | — (obligatoria)                                      | PostgreSQL de `renta-ia-database` (puerto **5433** en local)                                                                                                                                |
+| `JWT_SECRET`                            | — (obligatoria)                                      | Clave para firmar los access tokens (HS256)                                                                                                                                                 |
+| `MFA_ENCRYPTION_KEY`                    | — (**obligatoria en producción**; opcional en local) | Clave AES-256-GCM (32 bytes en base64) que cifra los secretos de MFA. Sin ella, fuera de producción, solo las rutas de MFA responden 503. Ver "Cómo generar `MFA_ENCRYPTION_KEY`"           |
+| `JWT_EXPIRES_IN`                        | `15m`                                                | Vida del access token (el navegador lo guarda solo en memoria)                                                                                                                              |
+| `REFRESH_TOKEN_TTL_DAYS`                | `7`                                                  | Vida del refresh token (cookie httpOnly rotativa)                                                                                                                                           |
+| `COOKIE_SECURE`                         | `true` en producción                                 | Cookie `Secure` (solo HTTPS)                                                                                                                                                                |
+| `PORT`                                  | `4000`                                               | Puerto de la API y del WebSocket                                                                                                                                                            |
+| `NODE_ENV`                              | `development`                                        | `production` activa `Secure`, exige `CORS_ORIGIN`, oculta `/docs` y prohíbe `AI_PROVIDER=mock` y `RATE_LIMIT_SCALE`                                                                         |
+| `LOG_LEVEL`                             | `info`                                               | Nivel de pino                                                                                                                                                                               |
+| `CORS_ORIGIN`                           | `http://localhost:5173`                              | Orígenes permitidos (coma). **Obligatorio en producción**                                                                                                                                   |
+| `TRUST_PROXY`                           | `0`                                                  | Proxies delante de la API (1 detrás de un balanceador)                                                                                                                                      |
+| `REDIS_URL`                             | `redis://localhost:6379`                             | Cola, rate limiting y eventos                                                                                                                                                               |
+| `WORKER_CONCURRENCY`                    | `2`                                                  | Documentos en paralelo por worker (ver informe de carga)                                                                                                                                    |
+| `METRICS_TOKEN`                         | vacío                                                | Token para `GET /metrics` (API) y `:WORKER_METRICS_PORT/metrics` (worker). Vacío = 404                                                                                                      |
+| `WORKER_METRICS_PORT`                   | `9464`                                               | Puerto de métricas del worker                                                                                                                                                               |
+| `SHUTDOWN_TIMEOUT_MS`                   | `10000`                                              | Tiempo máximo del apagado ordenado                                                                                                                                                          |
+| `SHUTDOWN_DRAIN_DELAY_MS`               | `0`                                                  | Espera entre `/ready = 503` y cerrar el servidor (en producción ≥ intervalo del health check)                                                                                               |
+| `AI_PROVIDER`                           | `anthropic`                                          | `mock` **solo para E2E y pruebas de carga** (rechazado con `NODE_ENV=production`)                                                                                                           |
+| `AI_MOCK_LATENCY_MS`                    | `0`                                                  | Latencia simulada por llamada con `AI_PROVIDER=mock`                                                                                                                                        |
+| `RATE_LIMIT_SCALE`                      | `1`                                                  | **Solo pruebas de carga**: multiplica todos los límites (rechazado en producción)                                                                                                           |
+| `ANTHROPIC_API_KEY` / `VOYAGE_API_KEY`  | vacías                                               | Claves de IA                                                                                                                                                                                |
+| `STORAGE_DRIVER` / `STORAGE_LOCAL_PATH` | `local` / `./uploads`                                | Almacenamiento de archivos                                                                                                                                                                  |
+| `EMAIL_PROVIDER`                        | `mock` (fuera de producción) / `ses` (producción)    | `mock` no envía nada: guarda cada correo completo en `email_outbox` (**prohibido en producción**). `ses`: Amazon SES v2 ([ADR 0010](docs/adr/0010-proveedores-externos-intercambiables.md)) |
+| `EMAIL_FROM` / `SES_REGION`             | remitente local / vacía                              | Obligatorias con `EMAIL_PROVIDER=ses`; las credenciales las toma el SDK de AWS (`AWS_*`, perfil o rol IAM)                                                                                  |
+| `APP_URL`                               | `http://localhost:5173`                              | URL pública del frontend: base de los enlaces de los correos (obligatoria en producción)                                                                                                    |
+| `TAX_CALENDAR_PATH` / `TAX_RULES_PATH`  | JSON en `src/config/`                                | Calendario (fechas **de ejemplo**) y parámetros tributarios                                                                                                                                 |
 
 ## Sesión y seguridad
 
@@ -116,12 +117,32 @@ curl http://localhost:4000/ready
 - `POST /api/auth/refresh` rota la cookie y entrega un access token nuevo;
   `POST /api/auth/logout` revoca la sesión. Ambos exigen `X-Requested-With: renta-ia`.
 - Bloqueo progresivo por cuenta tras 5 fallos (1, 2, 4… hasta 60 min) y 10 fallos / 15 min por IP.
+  Los códigos de MFA fallidos cuentan en el mismo bloqueo.
+- **Verificación en dos pasos (TOTP)** ([ADR 0011](docs/adr/0011-mfa-totp.md)): con MFA activo,
+  `POST /api/auth/login` responde `{ mfaRequired: true, challengeToken, expiresAt }` **sin sesión
+  ni cookie**, y `POST /api/auth/login/mfa` (código de la app o de recuperación) inicia la sesión.
+  El secreto se guarda cifrado (AES-256-GCM, `MFA_ENCRYPTION_KEY`); los 10 códigos de recuperación,
+  solo como hash. Activar MFA cierra las demás sesiones de la cuenta.
+- Cada petición autenticada comprueba que su sesión (`sid`) siga viva: cerrar sesión, restablecer
+  la contraseña o activar MFA invalida los access tokens al instante (costo medido en
+  `docs/load-test-report.md`).
 - Contraseñas: 10–72 caracteres, sin contraseñas comunes ni el correo o el nombre.
 - Roles: `admin`, `accountant`, `assistant` (clientes de su contador, sin crear ni
   borrar) y `client` (solo lectura de su expediente). Todos se crean por invitación; la
   relación del asistente con su contador y la del portal con su expediente se crean al invitar.
 - Auditoría en `audit_log` (sin datos sensibles), consultable en `GET /api/admin/audit`.
 - Detalles y riesgos residuales: [`docs/threat-model.md`](docs/threat-model.md) y [ADR 0007](docs/adr/0007-esquema-de-sesion.md).
+
+### Cómo generar `MFA_ENCRYPTION_KEY`
+
+```bat
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+Pega el resultado (44 caracteres) en `.env` como `MFA_ENCRYPTION_KEY=...`. **Guárdala como un
+secreto de producción y no la cambies:** con otra clave los secretos guardados no se pueden
+descifrar y cada cuenta con MFA tendría que restablecerse (`DELETE /api/admin/users/:id/mfa`).
+En local es opcional: sin ella la API arranca igual y solo MFA responde 503.
 
 Probar con curl (cmd.exe), guardando la cookie en un archivo:
 
@@ -146,12 +167,13 @@ test falla si quedó desactualizada).
 
 | Grupo        | Rutas                                                                                                                                                                                         |
 | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Auth         | `POST /api/auth/login` · `refresh` · `logout` · `invitations/lookup` · `invitations/accept` · `GET /api/users/me`                                                                             |
+| Auth         | `POST /api/auth/login` · `login/mfa` · `refresh` · `logout` · `invitations/lookup` · `invitations/accept` · `password-reset/request` · `lookup` · `confirm` · `GET /api/users/me`             |
+| MFA          | `GET /api/users/me/mfa` · `POST /api/users/me/mfa/setup` · `enable` · `disable` · `recovery-codes`                                                                                            |
 | Clientes     | `GET/POST /api/clients` · `GET/PATCH/DELETE /api/clients/:id` · `GET /api/clients/:id/tax-concepts` · `POST /api/clients/:id/summary`                                                         |
 | Documentos   | `POST /api/documents/upload` · `GET /api/documents/client/:clientId` · `GET /api/documents/client/:clientId/by-hash/:sha256` · `GET /api/documents/:id` · `POST /api/documents/:id/reprocess` |
 | Alertas      | `GET /api/alerts/client/:clientId` · `PATCH /api/alerts/:id` · `POST /api/alerts/deadlines/run` (admin)                                                                                       |
 | IA           | `POST /api/ai/chat`                                                                                                                                                                           |
-| Admin        | `GET/POST /api/admin/invitations` · `POST /api/admin/invitations/:userId/resend` · `DELETE /api/admin/invitations/:userId` · `GET /api/admin/audit`                                           |
+| Admin        | `GET/POST /api/admin/invitations` · `POST /api/admin/invitations/:userId/resend` · `DELETE /api/admin/invitations/:userId` · `DELETE /api/admin/users/:userId/mfa` · `GET /api/admin/audit`   |
 | Métricas web | `POST /api/metrics/web-vitals` · `GET /api/metrics/web-vitals/summary` (admin)                                                                                                                |
 | Operación    | `GET /health` · `GET /ready` · `GET /metrics` (token) · `GET /docs` (no producción)                                                                                                           |
 | Tiempo real  | `WS /ws` (token en el primer mensaje)                                                                                                                                                         |

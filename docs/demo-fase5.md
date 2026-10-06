@@ -339,3 +339,49 @@ frontend de **esta** carpeta (rama `feat/identidad-profesional`).
      `npx playwright test e2e/passwordReset.spec.js`.
 
 Capturas en `files/.capturas/B7/`.
+
+## B8: Verificación en dos pasos (MFA), backend
+
+Las pantallas llegan en B9; aquí todo se prueba en **Swagger** (`http://localhost:4000/docs`,
+botón **Authorize** con el `accessToken`). Necesitas la migración 019 y una app de
+autenticación en el teléfono (Google o Microsoft Authenticator, 1Password, Aegis…).
+
+1. **Clave de cifrado.** Genera una y ponla en `renta-ia-backend\.env`; luego reinicia la API:
+
+   ```bat
+   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+   ```
+
+   `MFA_ENCRYPTION_KEY=<lo que salió>`. Sin ella la API arranca igual, y las rutas de MFA
+   responden 503 diciendo qué falta (pruébalo antes de ponerla).
+
+2. **Configurar** (con sesión de `ana@example.com`): `POST /api/users/me/mfa/setup` con
+   `{"password":"Password123!"}`. Devuelve `secret` y `otpauthUri`. En la app, "agregar
+   cuenta" → "ingresar clave" → pega el `secret`. Con una contraseña incorrecta: 400.
+   En la base el secreto está **cifrado**:
+
+   ```bat
+   docker exec renta_ia_postgres psql -U postgres -d renta_ia -c "SELECT left(secret_ciphertext, 30) AS cifrado, enabled_at FROM user_mfa"
+   ```
+
+3. **Activar:** `POST /api/users/me/mfa/enable` con `{"code":"<6 dígitos de la app>"}`.
+   Devuelve **10 códigos de recuperación** (anótalos: no se vuelven a mostrar). Si tenías otra
+   sesión abierta (otra ventana con la app), se cierra: activó MFA y esa sesión era de un solo factor.
+4. **Login en dos pasos:** `POST /api/auth/login` con la contraseña de Ana. Ahora responde
+   `{"mfaRequired":true,"challengeToken":"…"}`, **sin** `accessToken` ni cookie. Luego
+   `POST /api/auth/login/mfa` con `{"challengeToken":"…","code":"<código actual>"}` → sesión.
+   - El mismo código otra vez (en el mismo medio minuto) → 401: un código sirve una sola vez.
+   - Un código de recuperación en lugar del de la app → entra, y ese código queda gastado.
+   - 5 códigos incorrectos en el mismo paso → el paso muere y la cuenta queda bloqueada
+     unos minutos (el mismo bloqueo de las contraseñas).
+5. **Desactivar o regenerar:** `POST /api/users/me/mfa/disable` pide contraseña **y** código.
+   `POST /api/users/me/mfa/recovery-codes` pide un código de la app y anula los anteriores.
+6. **Admin:** como `admin@example.com`, `DELETE /api/admin/users/{id de Ana}/mfa` le quita el
+   MFA y le cierra todas las sesiones (sobre tu propia cuenta responde 403).
+7. **Auditoría** (`GET /api/admin/audit`): `mfa.setup.started`, `mfa.enabled`,
+   `auth.login.mfa_challenge`, `auth.mfa.failure`, `auth.mfa.recovery_code_used`,
+   `admin.mfa.reset`, sin secretos ni códigos.
+8. **Pruebas automatizadas:** `npx vitest run tests/unit/totp.test.ts tests/integration/mfa.test.ts tests/integration/mfaRateLimit.test.ts`.
+   `totp.test.ts` compara con los vectores oficiales de los RFC 4226 y 6238.
+
+Huellas de la base antes y después de la 019 en `files/.huellas/B8-*.txt`.
