@@ -138,3 +138,67 @@ Detalle técnico: `renta-ia-frontend/docs/shell.md`. Usuarios del seed (contrase
 
 Evidencia del cierre de B3: capturas de antes y después (rebote, menú en escritorio y móvil,
 perfil, sidebar sin conexión, en ambos temas) en `files/.capturas/B3/`.
+
+## B4: Cuentas pendientes en la base, invitaciones y bandeja de correos
+
+Detalle: [ADR 0009](adr/0009-cuentas-pendientes-garantizadas-por-el-esquema.md),
+[ADR 0010](adr/0010-proveedores-externos-intercambiables.md) y el README de `renta-ia-database`.
+
+1. **Aplicar la migración** (desde `renta-ia-database`):
+
+   ```bat
+   scripts\migrate.bat
+   ```
+
+   Aplica `017_account_status_and_invitations.sql`. Corriéndolo otra vez, no aplica nada.
+
+2. **Comprobar que tus datos siguen igual:** tus usuarios quedan `active` con su contraseña.
+
+   ```bat
+   docker exec renta_ia_postgres psql -U postgres -d renta_ia -c "SELECT status, count(*), count(password_hash) FROM users GROUP BY status"
+   ```
+
+3. **Intentar romper las reglas tú mismo** (dentro de una transacción que se deshace: no
+   cambia nada). Abre `psql` con
+   `docker exec -it renta_ia_postgres psql -U postgres -d renta_ia` y pega:
+
+   ```sql
+   BEGIN;
+   INSERT INTO users (id, name, email, role, status)
+     VALUES ('00000000-0000-0000-0000-0000000000aa', 'Invitada demo', 'demo@example.com', 'assistant', 'invited');
+   SAVEPOINT s;
+   -- a) Sesión para una cuenta pendiente → ERROR fk_refresh_tokens_active_user
+   INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at)
+     VALUES ('00000000-0000-0000-0000-0000000000aa', gen_random_uuid(), repeat('a', 64), now() + interval '1 day');
+   ROLLBACK TO s;
+   -- b) Volver pendiente una cuenta CON sesiones → ERROR fk_refresh_tokens_active_user
+   UPDATE users SET status = 'invited', password_hash = NULL WHERE id = (SELECT user_id FROM refresh_tokens LIMIT 1);
+   ROLLBACK TO s;
+   -- c) Contraseña en una cuenta pendiente → ERROR chk_users_password_by_status
+   UPDATE users SET password_hash = 'x' WHERE id = '00000000-0000-0000-0000-0000000000aa';
+   ROLLBACK;
+   ```
+
+   (Para b) hace falta al menos una sesión en tu base: inicia sesión una vez en la app.)
+
+4. **Bandeja de correos simulada.** Con la configuración por defecto (`EMAIL_PROVIDER` sin
+   definir = `mock`) ningún correo sale del equipo: se guarda en `email_outbox`. A partir de B5
+   (invitaciones) podrás leerlos así:
+
+   ```bat
+   docker exec renta_ia_postgres psql -U postgres -d renta_ia -c "SELECT created_at, to_address, template, subject FROM email_outbox ORDER BY created_at DESC LIMIT 5"
+   ```
+
+5. **SES queda inerte.** Prueba a arrancar la API con `EMAIL_PROVIDER=ses` sin `SES_REGION`:
+   no arranca y lo explica. Las pruebas demuestran además que, con SES configurado pero sin
+   credenciales, el envío falla antes de llamar a AWS y no se guarda el cuerpo.
+
+6. **Pruebas automatizadas** (desde `renta-ia-backend`):
+
+   ```bash
+   npx vitest run tests/integration/accountStatus.test.ts tests/integration/email.test.ts
+   ```
+
+Huella de tu base: antes y después de la migración en `files/.huellas/B4-antes-migracion.txt`
+y `B4-despues-migracion.txt`. Cambian solo la migración nueva, dos tablas vacías y el hash del
+esquema; no cambia ninguna fila existente.
