@@ -43,6 +43,12 @@ node dist\workers\documentProcessing.worker.js > %TEMP%\lt-worker.log 2>&1
 npm run loadtest:setup
 ```
 
+No hay registro público (Fase 5): `setup` inicia sesión con el admin del seed
+(`admin@example.com`; otro con `LOADTEST_ADMIN_EMAIL` / `LOADTEST_ADMIN_PASSWORD`), invita
+cada cuenta sintética, lee el enlace en la tabla `email_outbox` de la base
+(`LOADTEST_DATABASE_URL`, por defecto `renta_ia_e2e`) y la activa. La API debe correr con
+el correo simulado (`EMAIL_PROVIDER` sin definir o `mock`) y la base debe tener el seed.
+
 Crea 20 usuarios para login, un contador con 250 clientes, un usuario de chat y
 uno de subidas, y guarda sus correos en `loadtests\.state.json` (ignorado por git).
 
