@@ -434,19 +434,23 @@ Solo necesitas el frontend de esta carpeta (la pantalla de login no llama a la A
 1. **Sigue el tema del sistema.** Abre `#/login` y cambia el tema de Windows (Configuración →
    Personalización → Colores) entre claro y oscuro: el login cambia en vivo, sin recargar. Antes
    era oscuro siempre.
-2. **Escritorio:** a la izquierda, el titular y el flujo del producto (documento → la IA extrae
-   → alerta), con los componentes reales de la app y datos ficticios, marcado **"Ejemplo"**
-   (contraste 15,72:1 en ambos temas, medido en `scripts/contrast.mjs`). A la derecha, el
-   formulario con el único encabezado principal, "Inicia sesión".
-3. **Móvil** (DevTools → modo dispositivo, 375 o 320 px): primero el formulario, después el
-   ejemplo; sin barra de desplazamiento horizontal.
+2. **Escritorio:** a la izquierda, una composición de marca "papel contable", **sin cifras**:
+   renglones finos y una línea de margen hechos solo con CSS, "Renta IA" en serif, el lema
+   "La IA lee. Tú decides." y tres líneas con puntos guía (lee tus soportes · te avisa · tú
+   decides). A la derecha, el formulario con el único encabezado principal, "Inicia sesión".
+   Nada en violeta: ese color queda para el contenido generado por IA. Los renglones son muy
+   suaves (1,15:1 claro, 1,19:1 oscuro respecto del fondo) y el texto sobre un renglón mide
+   11,6:1 o más (`scripts/contrast.mjs`).
+3. **Móvil** (DevTools → modo dispositivo, 375 o 320 px): primero el formulario, después la
+   composición; sin barra de desplazamiento horizontal.
 4. **"Mostrar":** muestra la contraseña; un lector de pantalla anuncia "Mostrar contraseña,
    presionado". Es la única micro-interacción (sin animaciones de entrada).
-5. **Lector de pantalla:** las tarjetas del ejemplo son decorativas; se lee la etiqueta "Ejemplo"
-   y el pie de la figura, que describe el ejemplo con palabras.
+5. **Lector de pantalla:** los puntos guía son decorativos; cada línea se lee como
+   "término: descripción".
 6. **El resto no cambia:** "¿Olvidaste tu contraseña?" (B7) y el segundo paso con MFA (B9) se ven
    en la misma tarjeta.
 7. **Pruebas automatizadas:** `npm test` en el frontend (`tests/login.test.js`) y, con el stack E2E,
    `npx playwright test e2e/login.spec.js e2e/theme.spec.js` (axe en ambos temas, escritorio y móvil).
 
-Capturas antes y después en `files/.capturas/B10/`.
+Capturas antes y después en `files/.capturas/B10/` (flujo de ejemplo) y `files/.capturas/B10b/`
+(cambio a la composición de marca).
