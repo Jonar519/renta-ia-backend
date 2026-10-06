@@ -1,9 +1,7 @@
 import { env } from "../../config/env";
 import type { EmailMessage } from "../../services/email";
 import { ROLE_NAMES } from "./roleNames";
-
-const escape = (value: string) =>
-  value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+import { escapeHtml as escape } from "../../utils/escapeHtml";
 
 /**
  * Correo de invitación. El enlace lleva el token en el FRAGMENTO (#): el

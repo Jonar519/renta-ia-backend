@@ -58,6 +58,15 @@ export async function invitationTokenFor(email: string): Promise<string> {
   return token;
 }
 
+/** Último enlace de recuperación de contraseña enviado a ese correo (email_outbox), o null si no hay. */
+export async function resetTokenFor(email: string): Promise<string | null> {
+  const mail = await prisma.emailOutbox.findFirst({
+    where: { toAddress: email, template: "password_reset" },
+    orderBy: { createdAt: "desc" },
+  });
+  return mail?.bodyText?.match(/#\/restablecer\/([\w.-]+)/)?.[1] ?? null;
+}
+
 /** El admin invita (POST /api/admin/invitations); devuelve la cuenta pendiente creada. */
 export async function invite(input: {
   role: Role;

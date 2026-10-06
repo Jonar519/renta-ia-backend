@@ -1,9 +1,19 @@
 import { Router } from "express";
 import { authController } from "./auth.controller";
-import { loginSchema } from "./auth.schema";
+import {
+  loginSchema,
+  passwordResetConfirmSchema,
+  passwordResetRequestSchema,
+  passwordResetTokenSchema,
+} from "./auth.schema";
 import { acceptInvitationSchema, invitationTokenSchema } from "../invitations/invitations.schema";
 import { validate } from "../../middlewares/validate.middleware";
-import { authLimiter, invitationLimiter } from "../../middlewares/rateLimit.middleware";
+import {
+  authLimiter,
+  invitationLimiter,
+  passwordResetLimiter,
+  passwordResetRequestLimiter,
+} from "../../middlewares/rateLimit.middleware";
 import { csrfProtection } from "../../middlewares/csrf.middleware";
 import { asyncHandler } from "../../utils/asyncHandler";
 
@@ -28,6 +38,26 @@ authRouter.post(
   invitationLimiter,
   validate({ body: acceptInvitationSchema }),
   asyncHandler(authController.acceptInvitation)
+);
+
+// Recuperación de contraseña (pública). Pedirla responde siempre igual (202).
+authRouter.post(
+  "/password-reset/request",
+  passwordResetRequestLimiter,
+  validate({ body: passwordResetRequestSchema }),
+  asyncHandler(authController.requestPasswordReset)
+);
+authRouter.post(
+  "/password-reset/lookup",
+  passwordResetLimiter,
+  validate({ body: passwordResetTokenSchema }),
+  asyncHandler(authController.lookupPasswordReset)
+);
+authRouter.post(
+  "/password-reset/confirm",
+  passwordResetLimiter,
+  validate({ body: passwordResetConfirmSchema }),
+  asyncHandler(authController.confirmPasswordReset)
 );
 
 // Estas dos se autentican con la cookie: requieren protección CSRF.

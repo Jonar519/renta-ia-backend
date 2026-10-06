@@ -34,6 +34,9 @@ export type AuditAction =
   | "admin.invitation.cancel"
   | "auth.invitation.accept"
   | "auth.invitation.invalid"
+  | "auth.password_reset.requested"
+  | "auth.password_reset.completed"
+  | "auth.password_reset.invalid"
   | "admin.audit.view";
 
 export interface AuditEntry {

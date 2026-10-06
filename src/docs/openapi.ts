@@ -1,7 +1,12 @@
 import { OpenApiGeneratorV3, OpenAPIRegistry, extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { z, ZodTypeAny } from "zod";
 import { DocumentStatus, DocumentType } from "@prisma/client";
-import { loginSchema } from "../modules/auth/auth.schema";
+import {
+  loginSchema,
+  passwordResetConfirmSchema,
+  passwordResetRequestSchema,
+  passwordResetTokenSchema,
+} from "../modules/auth/auth.schema";
 import {
   acceptInvitationSchema,
   invitationTokenSchema,
@@ -264,6 +269,43 @@ route({
     200: json(Session, "Cuenta activada y sesión iniciada"),
     400: errors[400],
     410: json(ErrorResponse, "Enlace inválido, vencido, reemplazado o ya usado"),
+    429: errors[429],
+  },
+});
+route({
+  method: "post",
+  path: "/api/auth/password-reset/request",
+  tag: "Auth",
+  summary:
+    "Pedir un enlace para restablecer la contraseña. Responde SIEMPRE lo mismo (y en el mismo tiempo), exista o no el correo",
+  secure: false,
+  body: passwordResetRequestSchema,
+  responses: { 202: json(z.object({ message: z.string() }), "Recibido"), 400: errors[400], 429: errors[429] },
+});
+route({
+  method: "post",
+  path: "/api/auth/password-reset/lookup",
+  tag: "Auth",
+  summary: "¿Sigue vigente un enlace de recuperación? (token en el cuerpo)",
+  secure: false,
+  body: passwordResetTokenSchema,
+  responses: {
+    200: json(z.object({ expiresAt: z.string().datetime() }), "Vigente"),
+    410: json(ErrorResponse, "Inválido, vencido, reemplazado o ya usado"),
+    429: errors[429],
+  },
+});
+route({
+  method: "post",
+  path: "/api/auth/password-reset/confirm",
+  tag: "Auth",
+  summary: "Define la contraseña nueva (un solo uso) y cierra TODAS las sesiones de la cuenta",
+  secure: false,
+  body: passwordResetConfirmSchema,
+  responses: {
+    204: { description: "Contraseña cambiada; hay que iniciar sesión de nuevo" },
+    400: errors[400],
+    410: json(ErrorResponse, "Inválido, vencido, reemplazado o ya usado"),
     429: errors[429],
   },
 });

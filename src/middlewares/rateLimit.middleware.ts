@@ -48,6 +48,29 @@ export const invitationLimiter = limiter(
   { skipSuccessfulRequests: true }
 );
 
+/**
+ * Pedir recuperación de contraseña, por IP: cuentan TODAS las peticiones
+ * (siempre responden 202). 20 y no menos: una firma entera puede salir a
+ * internet por la misma IP (la red de la oficina). Lo que protege a CADA
+ * cuenta de un bombardeo de correos es otra regla, del servicio: como máximo
+ * un correo por minuto a la misma cuenta.
+ */
+export const passwordResetRequestLimiter = limiter(
+  "password-reset-request",
+  15 * MINUTE,
+  20,
+  "Pediste demasiados enlaces de recuperación. Espera 15 minutos."
+);
+
+/** Usar el enlace de recuperación (consultar / confirmar): solo cuentan los fallidos. */
+export const passwordResetLimiter = limiter(
+  "password-reset",
+  15 * MINUTE,
+  20,
+  "Demasiados intentos con enlaces de recuperación. Espera 15 minutos.",
+  { skipSuccessfulRequests: true }
+);
+
 /** Límite general por IP para toda la API. */
 export const globalLimiter = limiter(
   "global",

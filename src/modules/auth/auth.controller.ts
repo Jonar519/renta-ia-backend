@@ -10,6 +10,7 @@ import {
 import { audit } from "../../services/audit/audit.service";
 import { ApiError } from "../../utils/apiError";
 import { InvalidInvitationError, invitationsService } from "../invitations/invitations.service";
+import { InvalidResetTokenError, passwordResetService } from "./passwordReset.service";
 
 /** Audita los enlaces de invitación rechazados (sin el token: solo IP y user agent). */
 async function auditingInvalid<T>(req: Request, work: () => Promise<T>): Promise<T> {
@@ -79,6 +80,32 @@ export const authController = {
       entityId: session.user.id,
     });
     sendSession(res, 200, session);
+  },
+
+  /** Siempre 202 con el mismo mensaje: no revela si el correo existe (ver passwordReset.service). */
+  async requestPasswordReset(req: Request, res: Response) {
+    res.status(202).json(passwordResetService.request(req.body.email));
+  },
+
+  async lookupPasswordReset(req: Request, res: Response) {
+    try {
+      res.json(await passwordResetService.lookup(req.body.token));
+    } catch (err) {
+      if (err instanceof InvalidResetTokenError) audit(req, { action: "auth.password_reset.invalid" });
+      throw err;
+    }
+  },
+
+  /** Cambia la contraseña y cierra todas las sesiones; hay que volver a iniciar sesión. */
+  async confirmPasswordReset(req: Request, res: Response) {
+    try {
+      const userId = await passwordResetService.confirm(req.body.token, req.body.password);
+      audit(req, { action: "auth.password_reset.completed", userId, entity: "user", entityId: userId });
+      res.status(204).end();
+    } catch (err) {
+      if (err instanceof InvalidResetTokenError) audit(req, { action: "auth.password_reset.invalid" });
+      throw err;
+    }
   },
 
   async refresh(req: Request, res: Response) {

@@ -6,6 +6,7 @@ import { redisConnection } from "./config/redis";
 import { attachRealtime } from "./realtime/wsServer";
 import { markShuttingDown } from "./observability/health";
 import { flushAudit } from "./services/audit/audit.service";
+import { flushPasswordResets } from "./modules/auth/passwordReset.service";
 import { documentQueue } from "./queues/documentQueue";
 import { closeHttpServer, createGracefulShutdown } from "./lifecycle/shutdown";
 
@@ -41,6 +42,7 @@ async function main() {
       },
       { name: "WebSocket", run: () => realtime.close() },
       { name: "servidor HTTP", run: () => closeHttpServer(server) },
+      { name: "recuperaciones de contraseña en curso", run: () => flushPasswordResets() },
       { name: "auditoría pendiente", run: () => flushAudit() },
       { name: "cola", run: () => documentQueue.close() },
       { name: "Redis", run: () => redisConnection.quit() },
