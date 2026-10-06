@@ -426,3 +426,27 @@ node -e "const s=process.argv.slice(1).join('').toUpperCase(),A='ABCDEFGHIJKLMNO
    comando de arriba).
 
 Capturas en `files/.capturas/B9/`.
+
+## B10: Rediseño del login
+
+Solo necesitas el frontend de esta carpeta (la pantalla de login no llama a la API hasta que entras).
+
+1. **Sigue el tema del sistema.** Abre `#/login` y cambia el tema de Windows (Configuración →
+   Personalización → Colores) entre claro y oscuro: el login cambia en vivo, sin recargar. Antes
+   era oscuro siempre.
+2. **Escritorio:** a la izquierda, el titular y el flujo del producto (documento → la IA extrae
+   → alerta), con los componentes reales de la app y datos ficticios, marcado **"Ejemplo"**
+   (contraste 15,72:1 en ambos temas, medido en `scripts/contrast.mjs`). A la derecha, el
+   formulario con el único encabezado principal, "Inicia sesión".
+3. **Móvil** (DevTools → modo dispositivo, 375 o 320 px): primero el formulario, después el
+   ejemplo; sin barra de desplazamiento horizontal.
+4. **"Mostrar":** muestra la contraseña; un lector de pantalla anuncia "Mostrar contraseña,
+   presionado". Es la única micro-interacción (sin animaciones de entrada).
+5. **Lector de pantalla:** las tarjetas del ejemplo son decorativas; se lee la etiqueta "Ejemplo"
+   y el pie de la figura, que describe el ejemplo con palabras.
+6. **El resto no cambia:** "¿Olvidaste tu contraseña?" (B7) y el segundo paso con MFA (B9) se ven
+   en la misma tarjeta.
+7. **Pruebas automatizadas:** `npm test` en el frontend (`tests/login.test.js`) y, con el stack E2E,
+   `npx playwright test e2e/login.spec.js e2e/theme.spec.js` (axe en ambos temas, escritorio y móvil).
+
+Capturas antes y después en `files/.capturas/B10/`.
