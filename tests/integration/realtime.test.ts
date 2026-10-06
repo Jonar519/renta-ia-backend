@@ -67,6 +67,22 @@ describe("WebSocket /ws", () => {
     expect(await closed).toBe(WS_CLOSE.authTimeout);
   });
 
+  it("cierra si la sesión del token ya se cerró (logout), aunque el token no haya vencido", async () => {
+    const email = `ws-cerrada-${unique()}@test.local`;
+    await prisma.user.create({
+      data: { name: "WS", email, role: "accountant", passwordHash: await bcrypt.hash(TEST_PASSWORD, 4) },
+    });
+    const login = await request(app).post("/api/auth/login").send({ email, password: TEST_PASSWORD });
+    const cookie = String(login.headers["set-cookie"]).split(";")[0]!;
+    await request(app)
+      .post("/api/auth/logout")
+      .set({ "X-Requested-With": "renta-ia", Origin: ALLOWED_ORIGIN })
+      .set("Cookie", cookie);
+    const { ws, closed } = connect();
+    ws.on("open", () => ws.send(JSON.stringify({ type: "auth", token: login.body.accessToken })));
+    expect(await closed).toBe(WS_CLOSE.unauthorized);
+  });
+
   it("cierra con un token inválido", async () => {
     const { ws, closed } = connect();
     ws.on("open", () => ws.send(JSON.stringify({ type: "auth", token: "no-es-un-jwt" })));

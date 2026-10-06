@@ -114,6 +114,27 @@ describe("Sesión: access token corto + refresh token rotativo", () => {
     expect(await prisma.refreshToken.count({ where: { userId, revokeReason: "logout" } })).toBe(1);
   });
 
+  it("cerrar sesión invalida el access token AL INSTANTE (no a los 15 minutos)", async () => {
+    const { cookie, res } = await registerWithCookie();
+    const access = res.body.accessToken as string;
+    expect((await request(app).get("/api/users/me").set(authHeader(access))).status).toBe(200);
+    await request(app).post("/api/auth/logout").set(CSRF).set("Cookie", cookie);
+    const after = await request(app).get("/api/users/me").set(authHeader(access));
+    expect(after.status).toBe(401);
+    expect(after.body.error).toBe("La sesión se cerró. Inicia sesión de nuevo.");
+  });
+
+  it("el access token lleva su sesión (sid); uno sin sid (formato anterior) se rechaza aunque la firma sea válida", async () => {
+    const { res, userId } = await registerWithCookie();
+    const payload = jwt.decode(res.body.accessToken) as { sid?: string; role: string };
+    expect(payload.sid).toEqual(expect.any(String));
+    const withoutSid = jwt.sign({ userId, role: payload.role }, "test-jwt-secret-solo-para-pruebas", {
+      algorithm: "HS256",
+      expiresIn: "15m",
+    });
+    expect((await request(app).get("/api/users/me").set(authHeader(withoutSid))).status).toBe(401);
+  });
+
   it("refresh y logout exigen el encabezado anti-CSRF y un Origin permitido", async () => {
     const { cookie } = await registerWithCookie();
     expect((await request(app).post("/api/auth/refresh").set("Cookie", cookie)).status).toBe(403);

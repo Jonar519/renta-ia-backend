@@ -33,8 +33,9 @@ export function publicUser(user: SessionUser) {
   return { id: user.id, name: user.name, email: user.email, role: user.role };
 }
 
-export function issueAccessToken(user: Pick<User, "id" | "role">) {
-  return jwt.sign({ userId: user.id, role: user.role }, env.jwtSecret, {
+/** sid = familia de refresh tokens de la sesión (ver tokens.ts). */
+export function issueAccessToken(user: Pick<User, "id" | "role">, sid: string) {
+  return jwt.sign({ userId: user.id, role: user.role, sid }, env.jwtSecret, {
     algorithm: "HS256",
     expiresIn: env.jwtExpiresIn as SignOptions["expiresIn"],
   });
@@ -78,8 +79,9 @@ export class RefreshReuseError extends ApiError {
 export const sessionsService = {
   /** Inicio de sesión: nueva familia de refresh tokens. */
   async start(user: SessionUser): Promise<RotationResult> {
-    const { raw } = await storeRefreshToken(user.id, randomUUID());
-    return { accessToken: issueAccessToken(user), refreshToken: raw, user: publicUser(user) };
+    const familyId = randomUUID();
+    const { raw } = await storeRefreshToken(user.id, familyId);
+    return { accessToken: issueAccessToken(user, familyId), refreshToken: raw, user: publicUser(user) };
   },
 
   async rotate(rawToken: string | undefined): Promise<RotationResult> {
@@ -128,7 +130,24 @@ export const sessionsService = {
       return raw;
     });
 
-    return { accessToken: issueAccessToken(current.user), refreshToken: next, user: publicUser(current.user) };
+    return {
+      accessToken: issueAccessToken(current.user, current.familyId),
+      refreshToken: next,
+      user: publicUser(current.user),
+    };
+  },
+
+  /**
+   * ¿Sigue activa la sesión (familia) de un access token? Activa = tiene un
+   * refresh token sin revocar y sin vencer. Una consulta por el índice de
+   * family_id en cada petición autenticada.
+   */
+  async isActive(sid: string): Promise<boolean> {
+    const live = await prisma.refreshToken.findFirst({
+      where: { familyId: sid, revokedAt: null, expiresAt: { gt: new Date() } },
+      select: { id: true },
+    });
+    return live !== null;
   },
 
   /** Cierre de sesión: revoca la familia del token presentado (todas sus rotaciones). */

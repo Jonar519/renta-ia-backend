@@ -4,6 +4,7 @@ import { WebSocket, WebSocketServer } from "ws";
 import { env } from "../config/env";
 import { logger } from "../config/logger";
 import { verifyAccessToken } from "../modules/auth/tokens";
+import { sessionsService } from "../modules/auth/sessions.service";
 import type { AuthPayload } from "../middlewares/auth.middleware";
 import { DocumentEvent, documentEventBus } from "../services/events/documentEvents";
 
@@ -89,12 +90,25 @@ export async function attachRealtime(
         return;
       }
       clearTimeout(authTimer);
+      // Mientras se verifica la sesión, otros mensajes no deben reautenticar.
       state.user = { userId: payload.userId, role: payload.role };
-      if (payload.exp) {
-        const msLeft = payload.exp * 1000 - Date.now();
-        state.expiryTimer = setTimeout(() => ws.close(WS_CLOSE.tokenExpired, "Token expirado"), Math.max(msLeft, 0));
-      }
-      ws.send(JSON.stringify({ type: "ready" }));
+      sessionsService
+        .isActive(payload.sid)
+        .then((active) => {
+          if (!active) {
+            ws.close(WS_CLOSE.unauthorized, "Sesión cerrada");
+            return;
+          }
+          if (payload.exp) {
+            const msLeft = payload.exp * 1000 - Date.now();
+            state.expiryTimer = setTimeout(
+              () => ws.close(WS_CLOSE.tokenExpired, "Token expirado"),
+              Math.max(msLeft, 0)
+            );
+          }
+          ws.send(JSON.stringify({ type: "ready" }));
+        })
+        .catch(() => ws.close(WS_CLOSE.unauthorized, "No se pudo verificar la sesión"));
     });
 
     ws.on("close", () => {

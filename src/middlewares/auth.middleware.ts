@@ -1,6 +1,9 @@
 import { NextFunction, Request, Response } from "express";
 import { ApiError } from "../utils/apiError";
 import { verifyAccessToken } from "../modules/auth/tokens";
+import { sessionsService } from "../modules/auth/sessions.service";
+
+export const SESSION_CLOSED = "La sesión se cerró. Inicia sesión de nuevo.";
 
 export type AppRole = "admin" | "accountant" | "assistant" | "client";
 
@@ -26,6 +29,14 @@ export function authMiddleware(req: Request, _res: Response, next: NextFunction)
   if (!payload) {
     throw new ApiError(401, "Token inválido o expirado");
   }
-  req.user = { userId: payload.userId, role: payload.role };
-  next();
+  // La firma no basta: la sesión debe seguir activa (cerrar sesión o
+  // restablecer la contraseña invalida el access token al instante).
+  sessionsService
+    .isActive(payload.sid)
+    .then((active) => {
+      if (!active) return next(new ApiError(401, SESSION_CLOSED));
+      req.user = { userId: payload.userId, role: payload.role };
+      next();
+    })
+    .catch(next);
 }
