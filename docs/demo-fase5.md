@@ -253,3 +253,34 @@ defecto) y la migración 017 aplicada.
    `invitations.test.ts` incluye la prueba que recorre todo lo que hace el admin (invitar,
    listar, reenviar, ver la auditoría, cancelar) y verifica que el token, ninguna de sus partes
    ni su hash aparecen en ninguna respuesta, cabecera ni fila de `audit_log`.
+
+## B6: Pantallas de invitación
+
+Necesitas la API, el frontend (`npm run dev` en cada uno) y la migración 017.
+
+1. **Invitar desde la pantalla.** Inicia sesión como `admin@example.com`. En el sidebar aparece
+   **Usuarios**. Invita a alguien (por ejemplo, rol Asistente, eligiendo a Ana en "Contador al
+   que asistirá"). Aparece en "Invitaciones pendientes" como **Pendiente**, con fecha y
+   "vence dentro de 3 días". **En ninguna parte de la pantalla aparece el enlace.**
+   - Rol Contribuyente: busca un expediente por nombre (por ejemplo "María") y elígelo.
+2. **Leer el correo** (bandeja simulada) y copiar el enlace completo:
+
+   ```bat
+   docker exec renta_ia_postgres psql -U postgres -d renta_ia -c "SELECT body_text FROM email_outbox ORDER BY created_at DESC LIMIT 1"
+   ```
+
+3. **Completar la cuenta.** Abre el enlace en **otra ventana privada** (otra persona).
+   - La barra de direcciones pasa a `#/invitacion`: el token desaparece apenas se lee.
+   - Escribe la contraseña dos veces (prueba antes a poner dos distintas: lo avisa). El botón
+     **Mostrar** la deja ver; un lector de pantalla anuncia "Mostrar contraseña, presionado".
+   - "Activar mi cuenta": entras a Clientes con el aviso "Tu cuenta está activa".
+   - Abre el mismo enlace otra vez: "Este enlace de invitación no es válido o ya venció".
+4. **Reenviar y cancelar.** Invita a otra persona y pulsa **Reenviar**: el enlace del primer
+   correo deja de servir y el nuevo sí. **Cancelar** abre una confirmación; con Escape o
+   "Volver" no pasa nada y el foco vuelve al botón; "Cancelar invitación" la elimina.
+5. **Solo el admin.** Como `luis@example.com`, escribe `#/admin/users`: vuelves a Clientes con
+   el aviso de que no tienes permiso.
+6. **Pruebas automatizadas:** `npm test` en el frontend (incluye `tests/invitations.test.js`) y,
+   con el stack E2E, `npx playwright test e2e/invitations.spec.js`.
+
+Capturas en `files/.capturas/B6/`.
