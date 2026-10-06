@@ -4,12 +4,6 @@ import { ApiError } from "../../utils/apiError";
 import { lockoutService } from "./lockout.service";
 import { sessionsService } from "./sessions.service";
 
-interface RegisterInput {
-  name: string;
-  email: string;
-  password: string;
-}
-
 interface LoginInput {
   email: string;
   password: string;
@@ -41,29 +35,6 @@ export class AccountLockedError extends ApiError {
 }
 
 export const authService = {
-  async register(input: RegisterInput) {
-    const email = normalizeEmail(input.email);
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) {
-      throw new ApiError(409, "Ya existe un usuario con ese correo");
-    }
-
-    const passwordHash = await bcrypt.hash(input.password, 10);
-
-    const user = await prisma.user.create({
-      data: {
-        name: input.name,
-        email,
-        passwordHash,
-        // El registro público SIEMPRE crea contadores. Otros roles (admin,
-        // assistant, client) los crea un admin (POST /api/admin/users).
-        role: "accountant",
-      },
-    });
-
-    return sessionsService.start(user);
-  },
-
   async login(input: LoginInput) {
     const email = normalizeEmail(input.email);
 

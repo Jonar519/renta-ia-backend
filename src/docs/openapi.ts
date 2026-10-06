@@ -1,7 +1,13 @@
 import { OpenApiGeneratorV3, OpenAPIRegistry, extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { z, ZodTypeAny } from "zod";
 import { DocumentStatus, DocumentType } from "@prisma/client";
-import { loginSchema, registerSchema } from "../modules/auth/auth.schema";
+import { loginSchema } from "../modules/auth/auth.schema";
+import {
+  acceptInvitationSchema,
+  invitationTokenSchema,
+  invitedUserParams,
+  inviteSchema,
+} from "../modules/invitations/invitations.schema";
 import {
   clientIdParams,
   createClientSchema,
@@ -18,7 +24,7 @@ import {
 import { alertClientParams, alertIdParams, updateAlertStatusSchema } from "../modules/alerts/alerts.schema";
 import { chatSchema } from "../modules/ai/ai.schema";
 import { summaryQuerySchema, webVitalsPayloadSchema } from "../modules/metrics/metrics.schema";
-import { auditQuerySchema, createUserSchema } from "../modules/admin/admin.schema";
+import { auditQuerySchema } from "../modules/admin/admin.schema";
 import { paginationQuerySchema } from "../utils/pagination";
 
 /**
@@ -60,6 +66,22 @@ const Role = z.enum(["admin", "accountant", "assistant", "client"]);
 const User = registry.register(
   "User",
   z.object({ id: z.string().uuid(), name: z.string(), email: z.string().email(), role: Role })
+);
+const Invitation = registry.register(
+  "Invitation",
+  z
+    .object({
+      userId: z.string().uuid(),
+      name: z.string(),
+      email: z.string().email(),
+      role: Role,
+      status: z.enum(["pending", "expired"]),
+      invitedAt: z.string().datetime(),
+      expiresAt: z.string().datetime().nullable(),
+      accountant: z.object({ id: z.string().uuid(), name: z.string() }).nullable(),
+      client: z.object({ id: z.string().uuid(), fullName: z.string() }).nullable(),
+    })
+    .describe("Cuenta pendiente y su invitación. NUNCA incluye el token ni el enlace: solo viajan por correo.")
 );
 const Session = registry.register(
   "Session",
@@ -172,20 +194,6 @@ function route(spec: PathSpec) {
 // ---------- Auth ----------
 route({
   method: "post",
-  path: "/api/auth/register",
-  tag: "Auth",
-  summary: "Registro público (siempre crea un contador). Deja la cookie de refresh.",
-  secure: false,
-  body: registerSchema,
-  responses: {
-    201: json(Session, "Sesión iniciada"),
-    400: errors[400],
-    409: json(ErrorResponse, "Correo ya registrado"),
-    429: errors[429],
-  },
-});
-route({
-  method: "post",
   path: "/api/auth/login",
   tag: "Auth",
   summary: "Login. Bloqueo progresivo por cuenta y límite por IP. Deja la cookie de refresh.",
@@ -220,6 +228,45 @@ for (const [path, summary, ok] of [
     },
   });
 }
+route({
+  method: "post",
+  path: "/api/auth/invitations/lookup",
+  tag: "Auth",
+  summary:
+    "Completa tu cuenta: a quién corresponde un enlace de invitación vigente (token en el cuerpo, nunca en la URL)",
+  secure: false,
+  body: invitationTokenSchema,
+  responses: {
+    200: json(
+      z.object({
+        name: z.string(),
+        email: z.string().email(),
+        role: Role,
+        expiresAt: z.string().datetime(),
+        mfaRequired: z.boolean(),
+      }),
+      "Invitación vigente"
+    ),
+    400: errors[400],
+    410: json(ErrorResponse, "Enlace inválido, vencido, reemplazado o ya usado (no se revela cuál)"),
+    429: errors[429],
+  },
+});
+route({
+  method: "post",
+  path: "/api/auth/invitations/accept",
+  tag: "Auth",
+  summary:
+    "Activa la cuenta invitada con la contraseña elegida por la persona (un solo uso). Deja la cookie de refresh.",
+  secure: false,
+  body: acceptInvitationSchema,
+  responses: {
+    200: json(Session, "Cuenta activada y sesión iniciada"),
+    400: errors[400],
+    410: json(ErrorResponse, "Enlace inválido, vencido, reemplazado o ya usado"),
+    429: errors[429],
+  },
+});
 route({
   method: "get",
   path: "/api/users/me",
@@ -427,16 +474,45 @@ route({
 // ---------- Admin ----------
 route({
   method: "post",
-  path: "/api/admin/users",
+  path: "/api/admin/invitations",
   tag: "Admin",
-  summary: "Crear usuario assistant (ligado a un contador) o client (ligado a un expediente)",
-  body: createUserSchema,
+  summary: "Invitar (nombre, correo, rol). Crea la cuenta pendiente y envía el enlace por correo; sin contraseña",
+  body: inviteSchema,
   responses: {
-    201: json(User, "Creado"),
+    201: json(Invitation, "Invitación creada y enviada"),
     400: errors[400],
     403: errors[403],
-    409: json(ErrorResponse, "Correo o expediente ya en uso"),
+    409: json(ErrorResponse, "Correo con cuenta activa o invitación pendiente; expediente con portal"),
+    502: json(ErrorResponse, "Invitación creada pero el correo no se pudo enviar (usar Reenviar)"),
   },
+});
+route({
+  method: "get",
+  path: "/api/admin/invitations",
+  tag: "Admin",
+  summary: "Cuentas pendientes con el estado y el vencimiento de su invitación",
+  responses: { 200: json(z.object({ items: z.array(Invitation) }), "Invitaciones"), 403: errors[403] },
+});
+route({
+  method: "post",
+  path: "/api/admin/invitations/{userId}/resend",
+  tag: "Admin",
+  summary: "Reenviar: invalida el enlace anterior y envía uno nuevo de 72 h",
+  params: invitedUserParams,
+  responses: {
+    200: json(Invitation, "Reenviada"),
+    403: errors[403],
+    404: errors[404],
+    502: json(ErrorResponse, "El correo no se pudo enviar"),
+  },
+});
+route({
+  method: "delete",
+  path: "/api/admin/invitations/{userId}",
+  tag: "Admin",
+  summary: "Cancelar: elimina la cuenta pendiente (nunca una activa) y su enlace",
+  params: invitedUserParams,
+  responses: { 204: { description: "Cancelada" }, 403: errors[403], 404: errors[404] },
 });
 route({
   method: "get",

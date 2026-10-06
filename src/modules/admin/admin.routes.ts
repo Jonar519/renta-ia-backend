@@ -6,20 +6,53 @@ import { validate } from "../../middlewares/validate.middleware";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { audit } from "../../services/audit/audit.service";
 import { adminService } from "./admin.service";
-import { auditQuerySchema, createUserSchema } from "./admin.schema";
+import { auditQuerySchema } from "./admin.schema";
+import { invitationsService } from "../invitations/invitations.service";
+import { invitedUserParams, inviteSchema } from "../invitations/invitations.schema";
 
 export const adminRouter = Router();
 
 adminRouter.use(authMiddleware, requireRole("admin"));
 
-/** Crea usuarios assistant (ligado a un contador) o client (ligado a un expediente). */
+/**
+ * Alta de cuentas: SOLO por invitación (Fase 5). No existe ninguna ruta que
+ * cree una cuenta con contraseña: la define la persona invitada al activarla.
+ * Las respuestas nunca incluyen el token ni el enlace (solo viajan por correo).
+ */
 adminRouter.post(
-  "/users",
-  validate({ body: createUserSchema }),
+  "/invitations",
+  validate({ body: inviteSchema }),
   asyncHandler(async (req, res) => {
-    const user = await adminService.createUser(req.body);
-    audit(req, { action: "admin.user.create", entity: "user", entityId: user.id });
-    res.status(201).json(user);
+    const view = await invitationsService.invite(req.body, req.user!);
+    audit(req, { action: "admin.invitation.create", entity: "user", entityId: view.userId });
+    res.status(201).json(view);
+  })
+);
+
+adminRouter.get(
+  "/invitations",
+  asyncHandler(async (_req, res) => {
+    res.json({ items: await invitationsService.list() });
+  })
+);
+
+adminRouter.post(
+  "/invitations/:userId/resend",
+  validate({ params: invitedUserParams }),
+  asyncHandler(async (req, res) => {
+    const view = await invitationsService.resend(req.params.userId as string, req.user!);
+    audit(req, { action: "admin.invitation.resend", entity: "user", entityId: view.userId });
+    res.json(view);
+  })
+);
+
+adminRouter.delete(
+  "/invitations/:userId",
+  validate({ params: invitedUserParams }),
+  asyncHandler(async (req, res) => {
+    await invitationsService.cancel(req.params.userId as string);
+    audit(req, { action: "admin.invitation.cancel", entity: "user", entityId: req.params.userId as string });
+    res.status(204).end();
   })
 );
 

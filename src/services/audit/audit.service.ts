@@ -14,7 +14,6 @@ import { logger } from "../../config/logger";
  */
 
 export type AuditAction =
-  | "auth.register"
   | "auth.login.success"
   | "auth.login.failure"
   | "auth.login.locked"
@@ -30,7 +29,11 @@ export type AuditAction =
   | "document.reprocess"
   | "ai.chat"
   | "ai.summary"
-  | "admin.user.create"
+  | "admin.invitation.create"
+  | "admin.invitation.resend"
+  | "admin.invitation.cancel"
+  | "auth.invitation.accept"
+  | "auth.invitation.invalid"
   | "admin.audit.view";
 
 export interface AuditEntry {

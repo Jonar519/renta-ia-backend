@@ -9,6 +9,17 @@ import {
 } from "./sessions.service";
 import { audit } from "../../services/audit/audit.service";
 import { ApiError } from "../../utils/apiError";
+import { InvalidInvitationError, invitationsService } from "../invitations/invitations.service";
+
+/** Audita los enlaces de invitación rechazados (sin el token: solo IP y user agent). */
+async function auditingInvalid<T>(req: Request, work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (err) {
+    if (err instanceof InvalidInvitationError) audit(req, { action: "auth.invitation.invalid" });
+    throw err;
+  }
+}
 
 function readRefreshCookie(req: Request): string | undefined {
   const header = req.headers.cookie;
@@ -40,12 +51,6 @@ function sendSession(res: Response, status: number, session: Awaited<ReturnType<
 }
 
 export const authController = {
-  async register(req: Request, res: Response) {
-    const session = await authService.register(req.body);
-    audit(req, { action: "auth.register", userId: session.user.id, entity: "user", entityId: session.user.id });
-    sendSession(res, 201, session);
-  },
-
   async login(req: Request, res: Response) {
     try {
       const session = await authService.login(req.body);
@@ -57,6 +62,23 @@ export const authController = {
       else if (err instanceof ApiError && err.statusCode === 401) audit(req, { action: "auth.login.failure" });
       throw err;
     }
+  },
+
+  /** "Completa tu cuenta": datos de la invitación para un enlace válido. */
+  async lookupInvitation(req: Request, res: Response) {
+    res.json(await auditingInvalid(req, () => invitationsService.lookup(req.body.token)));
+  },
+
+  /** Activa la cuenta invitada con la contraseña elegida por la persona e inicia sesión. */
+  async acceptInvitation(req: Request, res: Response) {
+    const session = await auditingInvalid(req, () => invitationsService.accept(req.body.token, req.body.password));
+    audit(req, {
+      action: "auth.invitation.accept",
+      userId: session.user.id,
+      entity: "user",
+      entityId: session.user.id,
+    });
+    sendSession(res, 200, session);
   },
 
   async refresh(req: Request, res: Response) {

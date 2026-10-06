@@ -87,6 +87,93 @@
           "role"
         ]
       },
+      "Invitation": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "accountant",
+              "assistant",
+              "client"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "expired"
+            ]
+          },
+          "invitedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "accountant": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ]
+          },
+          "client": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "fullName": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "fullName"
+            ]
+          }
+        },
+        "required": [
+          "userId",
+          "name",
+          "email",
+          "role",
+          "status",
+          "invitedAt",
+          "expiresAt",
+          "accountant",
+          "client"
+        ],
+        "description": "Cuenta pendiente y su invitación. NUNCA incluye el token ni el enlace: solo viajan por correo."
+      },
       "Session": {
         "type": "object",
         "properties": {
@@ -350,89 +437,6 @@
     "parameters": {}
   },
   "paths": {
-    "/api/auth/register": {
-      "post": {
-        "tags": [
-          "Auth"
-        ],
-        "summary": "Registro público (siempre crea un contador). Deja la cookie de refresh.",
-        "security": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "minLength": 2,
-                    "maxLength": 150
-                  },
-                  "email": {
-                    "type": "string",
-                    "maxLength": 150,
-                    "format": "email"
-                  },
-                  "password": {
-                    "type": "string",
-                    "maxLength": 72,
-                    "description": "10 a 72 caracteres; no puede ser una contraseña común ni contener el correo o el nombre"
-                  }
-                },
-                "required": [
-                  "name",
-                  "email",
-                  "password"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Sesión iniciada",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Session"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Datos inválidos",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Correo ya registrado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Límite de solicitudes",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/auth/login": {
       "post": {
         "tags": [
@@ -608,6 +612,186 @@
           },
           "403": {
             "description": "Falta X-Requested-With o el Origin no está permitido (CSRF)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/invitations/lookup": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Completa tu cuenta: a quién corresponde un enlace de invitación vigente (token en el cuerpo, nunca en la URL)",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "token"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Invitación vigente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string",
+                      "format": "email"
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "admin",
+                        "accountant",
+                        "assistant",
+                        "client"
+                      ]
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "mfaRequired": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "email",
+                    "role",
+                    "expiresAt",
+                    "mfaRequired"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Enlace inválido, vencido, reemplazado o ya usado (no se revela cuál)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/invitations/accept": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Activa la cuenta invitada con la contraseña elegida por la persona (un solo uso). Deja la cookie de refresh.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "password": {
+                    "type": "string",
+                    "maxLength": 72,
+                    "description": "10 a 72 caracteres; no puede ser una contraseña común ni contener el correo o el nombre"
+                  }
+                },
+                "required": [
+                  "token",
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cuenta activada y sesión iniciada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Enlace inválido, vencido, reemplazado o ya usado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes",
             "content": {
               "application/json": {
                 "schema": {
@@ -2062,12 +2246,12 @@
         }
       }
     },
-    "/api/admin/users": {
+    "/api/admin/invitations": {
       "post": {
         "tags": [
           "Admin"
         ],
-        "summary": "Crear usuario assistant (ligado a un contador) o client (ligado a un expediente)",
+        "summary": "Invitar (nombre, correo, rol). Crea la cuenta pendiente y envía el enlace por correo; sin contraseña",
         "security": [
           {
             "bearerAuth": []
@@ -2090,14 +2274,11 @@
                     "maxLength": 150,
                     "format": "email"
                   },
-                  "password": {
-                    "type": "string",
-                    "maxLength": 72,
-                    "description": "10 a 72 caracteres; no puede ser una contraseña común ni contener el correo o el nombre"
-                  },
                   "role": {
                     "type": "string",
                     "enum": [
+                      "admin",
+                      "accountant",
                       "assistant",
                       "client"
                     ]
@@ -2114,7 +2295,6 @@
                 "required": [
                   "name",
                   "email",
-                  "password",
                   "role"
                 ]
               }
@@ -2123,11 +2303,11 @@
         },
         "responses": {
           "201": {
-            "description": "Creado",
+            "description": "Invitación creada y enviada",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/User"
+                  "$ref": "#/components/schemas/Invitation"
                 }
               }
             }
@@ -2153,7 +2333,176 @@
             }
           },
           "409": {
-            "description": "Correo o expediente ya en uso",
+            "description": "Correo con cuenta activa o invitación pendiente; expediente con portal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invitación creada pero el correo no se pudo enviar (usar Reenviar)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Cuentas pendientes con el estado y el vencimiento de su invitación",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invitaciones",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Invitation"
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El rol no permite esta acción",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/invitations/{userId}/resend": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Reenviar: invalida el enlace anterior y envía uno nuevo de 72 h",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "userId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reenviada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Invitation"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El rol no permite esta acción",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No existe o no es accesible (no se revela cuál)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "El correo no se pudo enviar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/invitations/{userId}": {
+      "delete": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Cancelar: elimina la cuenta pendiente (nunca una activa) y su enlace",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "userId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Cancelada"
+          },
+          "403": {
+            "description": "El rol no permite esta acción",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No existe o no es accesible (no se revela cuál)",
             "content": {
               "application/json": {
                 "schema": {
