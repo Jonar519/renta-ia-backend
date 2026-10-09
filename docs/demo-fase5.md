@@ -665,3 +665,47 @@ borra, qué se conserva y por qué) está en `docs/data-retention.md`.
 
 Capturas en `files/.capturas/B14/` y huellas de la base antes y después de 023-024 en
 `files/.huellas/B14-*.txt`.
+
+## B15: Densidad de las tablas y tablas en móvil
+
+**Densidad.** Encima de **Clientes**, **Documentos** (detalle de un cliente) y **Usuarios** hay un
+selector **"Densidad de la tabla": Cómoda / Compacta**.
+- La preferencia es de la **cuenta**: se guarda en el backend y vale para todas las tablas,
+  también Rendimiento (que no tiene selector propio).
+- El tema (claro/oscuro) sigue siendo del sistema operativo. La densidad, en cambio, es una
+  forma de trabajar.
+
+1. **Se ve al instante.** En Clientes, elige "Compacta": las filas se juntan. Abre un cliente →
+   Documentos: también está compacta.
+2. **Viaja con la cuenta.** Con la misma cuenta, abre otro navegador o una ventana de incógnito
+   e inicia sesión: llega ya en "Compacta". Vuelve a "Cómoda" desde ahí y recarga el primero.
+3. **En la base:**
+
+   ```bat
+   docker exec renta_ia_postgres psql -U postgres -d renta_ia -c "SELECT email, table_density FROM users WHERE status = 'active'"
+   ```
+
+   Solo admite `comfortable` o `compact` (`chk_users_table_density`, migración 025). También va
+   en "Descargar mis datos" (`account.preferences`).
+4. **Si no se puede guardar** (sin conexión), vuelve a la anterior y lo avisa.
+
+**Móvil (menos de 640 px).** Prueba con el modo de dispositivo de las herramientas del navegador,
+a 375 px de ancho:
+- **Ninguna pantalla** se sale del ancho: Clientes, Detalle (todas las pestañas), Usuarios y
+  Rendimiento. Antes desbordaban: Clientes 265 px, Usuarios 500 px, Rendimiento 215 px.
+- **Clientes, Documentos, Conceptos y Usuarios** pasan a **tarjetas**: cada valor con su
+  encabezado al lado. Las fechas largas se parten en vez de cortarse.
+- Las tablas de **cifras** (totales por año, Rendimiento) se desplazan dentro de su propia región,
+  que se alcanza con Tab. Apilarlas impediría comparar columnas.
+- La barra superior del admin pasa sus enlaces a una segunda fila.
+
+**Pruebas automatizadas:**
+- backend: `npx vitest run tests/integration/tableDensity.test.ts`;
+- frontend: `npx vitest run tests/densityToggle.test.js` y `npx playwright test e2e/density.spec.js`.
+
+La prueba E2E inicia sesión desde un segundo contexto del navegador para comprobar que la
+preferencia viaja con la cuenta. Además mide a 375 px que ninguna pantalla desborde y que ninguna
+celda corte su contenido.
+
+Capturas en `files/.capturas/B15/` y huellas de la base antes y después de la 025 en
+`files/.huellas/B15-*.txt`.
