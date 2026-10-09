@@ -7,6 +7,9 @@ import { reconfirmPassword } from "../auth/reauth";
 import { lockoutService } from "../auth/lockout.service";
 import { sessionsService } from "../auth/sessions.service";
 import { mfaService } from "../mfa/mfa.service";
+import { flushAudit } from "../../services/audit/audit.service";
+import { ipPrefix } from "../../utils/ip";
+import { deviceLabel } from "../../utils/userAgent";
 
 /**
  * Exportar y eliminar la propia cuenta (Fase 5, B14; migraciones 023-024).
@@ -170,7 +173,16 @@ export const accountService = {
     return { canDelete: blocker === null, reason: blocker };
   },
 
-  async deleteAccount(userId: string, password: string, code: string | undefined) {
+  /**
+   * `client`: IP y User-Agent de la petición, solo para el registro de la
+   * eliminación, que se guarda ya recortado (como el resto de su auditoría).
+   */
+  async deleteAccount(
+    userId: string,
+    password: string,
+    code: string | undefined,
+    client: { ip?: string; userAgent?: string }
+  ) {
     const user = await loadActiveUser(userId);
     await reconfirmPassword(user, password);
     await mfaService.confirmSecondFactor(user, code);
@@ -179,6 +191,9 @@ export const accountService = {
 
     const pending = await prisma.emailChangeToken.findMany({ where: { userId }, select: { newEmail: true } });
     const addresses = [user.email, ...pending.map((p) => p.newEmail)].map((a) => a.toLowerCase());
+    // Que no quede ningún registro de auditoría de esta cuenta en vuelo: se
+    // escribiría después del recorte, con la IP y el navegador completos.
+    await flushAudit();
     await prisma.$transaction(async (tx) => {
       // Primero lo que exige una cuenta activa (FK compuestas de 017-022): sin
       // esto, la base no deja pasar la cuenta a "deleted".
@@ -194,6 +209,31 @@ export const accountService = {
       await tx.aiConversation.deleteMany({ where: { userId } }); // en cascada: mensajes
       // Correos guardados por el proveedor simulado (y el registro de envíos de SES).
       await tx.emailOutbox.deleteMany({ where: { toAddress: { in: addresses, mode: "insensitive" } } });
+      // Su auditoría se conserva (12 meses), pero sin datos personales: IP
+      // recortada (/24 en IPv4, /48 en IPv6) y "navegador en sistema" en vez
+      // del User-Agent completo. Solo sus filas: lo que otras cuentas hicieron
+      // sobre la suya es dato de esas otras personas.
+      const seen = await tx.auditLog.findMany({
+        where: { userId },
+        select: { ip: true, userAgent: true },
+        distinct: ["ip", "userAgent"],
+      });
+      for (const ip of new Set(seen.map((r) => r.ip).filter((v): v is string => v !== null))) {
+        await tx.auditLog.updateMany({ where: { userId, ip }, data: { ip: ipPrefix(ip) } });
+      }
+      for (const ua of new Set(seen.map((r) => r.userAgent).filter((v): v is string => v !== null))) {
+        await tx.auditLog.updateMany({ where: { userId, userAgent: ua }, data: { userAgent: deviceLabel(ua) } });
+      }
+      await tx.auditLog.create({
+        data: {
+          action: "user.account.delete",
+          userId,
+          entity: "user",
+          entityId: userId,
+          ip: ipPrefix(client.ip),
+          userAgent: deviceLabel(client.userAgent),
+        },
+      });
       // La lápida (024 exige que no quede nada personal).
       await tx.user.update({
         where: { id: userId },

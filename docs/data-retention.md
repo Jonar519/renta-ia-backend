@@ -69,14 +69,18 @@ Qué pasa, en una sola transacción:
 | Correos guardados para esa dirección (`email_outbox`)        | se borran (incluido un cambio de correo pendiente)  | contienen su dirección y, en el proveedor simulado, el cuerpo |
 | Contador de intentos fallidos (`login_attempts`)             | se borra                                            | ya no hay cuenta que proteger                                 |
 | **Documentos que subió**                                     | **se conservan**, con autor "Cuenta eliminada"      | son del expediente del cliente (`RESTRICT`)                   |
-| **Registros de auditoría** (`audit_log`)                     | **se conservan**, con su IP y navegador             | seguridad: "yo no hice eso"; ver decisiones pendientes        |
+| **Registros de auditoría** (`audit_log`)                     | **se conservan** 12 meses, con la IP **recortada** (/24 en IPv4, /48 en IPv6) y el navegador como "Chrome en Windows" | seguridad: "yo no hice eso", sin que la lápida guarde un dato personal |
 | Clientes, alertas y conceptos                                | no se tocan                                         | son del contador                                              |
 
 Además:
 
 - **No se envía un correo de aviso.** Enviarlo exigiría guardar la dirección en `email_outbox`
   justo después de borrarla. La confirmación se muestra en pantalla.
-- Se registra `user.account.delete` en la auditoría.
+- Se registra `user.account.delete` en la auditoría, ya recortado como el resto de sus filas.
+- Solo se recortan **sus** filas (las que hizo la cuenta). Lo que otra cuenta hizo sobre la suya
+  (por ejemplo, un admin que restableció su MFA) es dato de esa otra persona y no se toca.
+- Antes de recortar se esperan los registros de auditoría que estuvieran en vuelo: si no, uno
+  podría escribirse después, con la IP completa.
 - La respuesta borra la cookie de sesión del navegador.
 
 ## Exportar mis datos
@@ -104,21 +108,30 @@ descargable, `renta-ia-mis-datos-AAAA-MM-DD.json`, con formato `renta-ia-export-
 Nada secreto sale en el export: ni hashes de contraseña o de tokens ni el secreto del MFA. Las
 pruebas lo verifican. Se registra `user.data.export`.
 
-## Retención de lo demás (estado actual)
+## Purga programada
 
-| Dato                                            | Cuánto se guarda hoy                                                        |
-| ----------------------------------------------- | --------------------------------------------------------------------------- |
-| Web Vitals (`web_vitals`, sin datos personales) | 90 días (tarea diaria `web-vitals-retention`)                               |
-| Sesiones y refresh tokens vencidos o cerrados   | sin purga automática; no se muestran (solo cuentan los vigentes)            |
-| Enlaces firmados usados o vencidos              | sin purga automática; solo su hash, inservibles después de vencer (ADR 0012) |
-| `email_outbox`                                  | sin purga automática                                                        |
-| `audit_log`                                     | sin purga automática (el modelo de amenazas ya lo anotaba)                   |
+Una tarea diaria del worker (`data-retention`, 03:45 hora de Colombia, junto a la de Web Vitals;
+`src/services/retention/retention.service.ts`) borra lo vencido. Cada plazo protege algo:
+
+| Dato                                                | Se borra                                                    | Por qué ese plazo                                                                                          |
+| --------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `audit_log`                                         | a los **12 meses**                                          | decisión del usuario: suficiente para investigar un "yo no hice eso"                                       |
+| Sesiones (`user_sessions`, con sus tokens)          | sin ningún token vigente y **30 días** sin actividad        | una sesión cerrada sigue visible un tiempo para quien revisa qué pasó                                      |
+| Refresh tokens                                      | **7 días** después de vencer                                | los rotados de una sesión ACTIVA se quedan mientras sirven: detectan el robo por reutilización (ADR 0007) |
+| Enlaces de recuperación y de cambio de correo       | **7 días** después de vencer, usados o no                   | ya no sirven (ADR 0012); solo se guardaba su hash                                                          |
+| Pasos del login con MFA (`mfa_challenges`)          | **1 día** después de vencer                                 | duran 5 minutos                                                                                            |
+| `email_outbox`                                      | a los **30 días**                                           | guarda direcciones y, con el proveedor simulado, el cuerpo del correo                                      |
+| Intentos fallidos (`login_attempts`)                | **30 días** sin fallos, si la cuenta no está bloqueada      | el bloqueo progresivo solo mira fallos recientes                                                           |
+| Web Vitals (`web_vitals`, sin datos personales)     | a los **90 días** (tarea `web-vitals-retention`)            | métricas de rendimiento                                                                                    |
+
+**No se purgan las invitaciones.** Una invitación vencida es lo que "Usuarios" muestra como
+"vencida" (para reenviarla o cancelarla) y mantiene ligada la cuenta pendiente.
+
+Las pruebas (`tests/integration/retention.test.ts`) crean, para cada categoría, un dato viejo
+(se borra) y uno vigente (se queda), y comprueban que la tarea queda registrada.
 
 ## Decisiones pendientes
 
-1. **Plazo de retención de `audit_log`.** Hoy se guarda sin límite, con IP y navegador, también
-   de cuentas eliminadas. Hace falta un plazo, por ejemplo 12 meses, y una tarea diaria como la
-   de Web Vitals.
-2. **Purga de lo vencido:** sesiones, tokens y `email_outbox`.
-3. **Reasignar clientes** de un contador a otro. Hoy, para eliminar su cuenta, un contador tiene
-   que eliminar sus clientes.
+1. **Reasignar clientes** de un contador a otro. Hoy, para eliminar su cuenta, un contador tiene
+   que eliminar sus clientes. La pantalla (en Usuarios, para admin) espera la confirmación del
+   presupuesto.

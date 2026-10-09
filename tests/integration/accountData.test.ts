@@ -259,6 +259,58 @@ describe("eliminar mi cuenta", () => {
   });
 });
 
+describe("auditoría de una cuenta eliminada", () => {
+  const CHROME =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
+
+  it("sus filas quedan con la IP recortada y el navegador en etiqueta corta; las de otra cuenta, intactas", async () => {
+    const account = await createAccount("Auditoría Recortada");
+    const id = account.user.id;
+    // Actividad con IP y navegador completos (IPv4, IPv6 e IPv4 dentro de IPv6).
+    for (const ip of ["181.49.12.77", "2800:e2:1234:5678::9", "::ffff:190.0.3.4"]) {
+      await prisma.auditLog.create({ data: { action: "auth.login.success", userId: id, ip, userAgent: CHROME } });
+    }
+    // Lo que OTRA cuenta (un admin) hizo sobre esta: dato de esa otra persona.
+    const admin = await testAdmin();
+    const byAdmin = await prisma.auditLog.create({
+      data: {
+        action: "admin.mfa.reset",
+        userId: admin.user.id,
+        entity: "user",
+        entityId: id,
+        ip: "200.1.1.9",
+        userAgent: CHROME,
+      },
+    });
+    await flushAudit();
+
+    const res = await request(app)
+      .post("/api/users/me/deletion")
+      .set(authHeader(account.token))
+      .set("User-Agent", CHROME)
+      .send({ password: TEST_PASSWORD });
+    expect(res.status).toBe(204);
+
+    const rows = await prisma.auditLog.findMany({ where: { userId: id }, orderBy: { id: "asc" } });
+    expect(rows.length).toBeGreaterThanOrEqual(4);
+    for (const row of rows) {
+      // Nunca una IP completa: IPv4 terminada en .0 o un prefijo IPv6 /48 ("…::").
+      if (row.ip !== null)
+        expect(row.ip, row.action).toMatch(/^(\d{1,3}\.){3}0$|^([0-9a-f]{1,4}(:[0-9a-f]{1,4}){0,2})?::$/);
+      if (row.userAgent !== null) expect(row.userAgent, row.action).toBe("Chrome en Windows");
+    }
+    expect(rows.map((r) => r.ip)).toEqual(expect.arrayContaining(["181.49.12.0", "2800:e2:1234::", "190.0.3.0"]));
+    // El registro de la eliminación ya nace recortado.
+    const deletion = rows.find((r) => r.action === "user.account.delete");
+    expect(deletion).toMatchObject({ entityId: id, ip: "127.0.0.0", userAgent: "Chrome en Windows" });
+    // La fila del admin no se toca.
+    expect(await prisma.auditLog.findUniqueOrThrow({ where: { id: byAdmin.id } })).toMatchObject({
+      ip: "200.1.1.9",
+      userAgent: CHROME,
+    });
+  });
+});
+
 describe("024: garantías de la base", () => {
   const sql = (query: string, ...params: unknown[]) => prisma.$executeRawUnsafe(query, ...params);
   /** Pasa la cuenta a eliminada; `overrides` reemplaza el valor SQL de alguna columna de la lápida. */

@@ -4,7 +4,9 @@ import { logger } from "../config/logger";
 import { taxCalendar } from "../config/taxConfig";
 import { runDeadlineCheck } from "../modules/alerts/deadlines.service";
 import { metricsService } from "../modules/metrics/metrics.service";
+import { retentionService } from "../services/retention/retention.service";
 import {
+  DATA_RETENTION_CRON,
   DEADLINE_ALERTS_CRON,
   SCHEDULED_QUEUE_NAME,
   ScheduledJobName,
@@ -18,6 +20,8 @@ async function processScheduledJob(job: Job<unknown, unknown, ScheduledJobName>)
       return runDeadlineCheck();
     case "web-vitals-retention":
       return { deleted: await metricsService.purgeOld() };
+    case "data-retention":
+      return retentionService.purge();
     default:
       throw new Error(`Tarea programada desconocida: ${job.name}`);
   }
@@ -37,6 +41,11 @@ export async function startScheduledTasks(): Promise<Worker<unknown, unknown, Sc
     "web-vitals-retention-daily",
     { pattern: WEB_VITALS_RETENTION_CRON, tz: taxCalendar.zonaHoraria },
     { name: "web-vitals-retention" }
+  );
+  await scheduledQueue.upsertJobScheduler(
+    "data-retention-daily",
+    { pattern: DATA_RETENTION_CRON, tz: taxCalendar.zonaHoraria },
+    { name: "data-retention" }
   );
 
   const worker = new Worker(SCHEDULED_QUEUE_NAME, processScheduledJob, { connection: redisConnection, concurrency: 1 });

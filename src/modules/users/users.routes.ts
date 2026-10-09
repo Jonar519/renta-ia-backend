@@ -203,8 +203,11 @@ usersRouter.post(
   validate({ body: deleteAccountSchema }),
   asyncHandler(async (req, res) => {
     const userId = req.user!.userId;
-    await accountService.deleteAccount(userId, req.body.password, req.body.code);
-    audit(req, { action: "user.account.delete", userId, entity: "user", entityId: userId });
+    // El registro de la eliminación lo escribe el servicio, ya recortado (data-retention.md).
+    await accountService.deleteAccount(userId, req.body.password, req.body.code, {
+      ip: req.ip,
+      userAgent: req.get("user-agent"),
+    });
     const { maxAge: _maxAge, ...cookie } = refreshCookieOptions();
     res.clearCookie(REFRESH_COOKIE, cookie);
     res.status(204).end();
