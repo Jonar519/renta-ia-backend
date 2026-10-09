@@ -34,7 +34,7 @@ export const REUSE_GRACE_MS = 10_000;
 
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 
-type SessionUser = Pick<User, "id" | "name" | "email" | "role" | "avatarUpdatedAt">;
+type SessionUser = Pick<User, "id" | "name" | "email" | "role" | "avatarUpdatedAt" | "tableDensity">;
 
 /** mfaEnabled: el cliente lo usa para llevar a "Seguridad" a quien debe activarlo (mfa/policy.ts). */
 export function publicUser(user: SessionUser, mfaEnabled: boolean) {
@@ -46,6 +46,8 @@ export function publicUser(user: SessionUser, mfaEnabled: boolean) {
     role: user.role,
     mfaEnabled,
     avatarUpdatedAt: user.avatarUpdatedAt,
+    // B15: la densidad de las tablas llega con la sesión (no hace falta otra petición).
+    tableDensity: user.tableDensity,
   };
 }
 

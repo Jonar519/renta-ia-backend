@@ -145,6 +145,7 @@ export const accountService = {
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
         pendingEmailChange: pendingEmail,
+        preferences: { tableDensity: user.tableDensity },
         photo: user.avatarKey ? { updatedAt: user.avatarUpdatedAt, dataUri: await avatarDataUri(user) } : null,
       },
       twoStepVerification: {

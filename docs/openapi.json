@@ -92,6 +92,14 @@
             "nullable": true,
             "format": "date-time",
             "description": "null = sin foto de perfil"
+          },
+          "tableDensity": {
+            "type": "string",
+            "enum": [
+              "comfortable",
+              "compact"
+            ],
+            "description": "Densidad de las tablas (B15): preferencia de trabajo de la cuenta"
           }
         },
         "required": [
@@ -100,7 +108,8 @@
           "email",
           "role",
           "mfaEnabled",
-          "avatarUpdatedAt"
+          "avatarUpdatedAt",
+          "tableDensity"
         ]
       },
       "Invitation": {
@@ -226,6 +235,14 @@
             "format": "date-time",
             "description": "null = sin foto"
           },
+          "tableDensity": {
+            "type": "string",
+            "enum": [
+              "comfortable",
+              "compact"
+            ],
+            "description": "Densidad de las tablas (B15): preferencia de trabajo de la cuenta"
+          },
           "pendingEmail": {
             "type": "object",
             "nullable": true,
@@ -254,6 +271,7 @@
           "phone",
           "mfaEnabled",
           "avatarUpdatedAt",
+          "tableDensity",
           "pendingEmail"
         ]
       },
@@ -1287,6 +1305,13 @@
                       {
                         "nullable": true
                       }
+                    ]
+                  },
+                  "tableDensity": {
+                    "type": "string",
+                    "enum": [
+                      "comfortable",
+                      "compact"
                     ]
                   }
                 }

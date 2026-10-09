@@ -68,17 +68,19 @@ export const profileService = {
       phone: user.phone,
       mfaEnabled: Boolean(mfa?.enabledAt),
       avatarUpdatedAt: user.avatarUpdatedAt,
+      tableDensity: user.tableDensity,
       pendingEmail: await pendingEmailChange(userId),
     };
   },
 
-  async update(userId: string, input: { name?: string; phone?: string | null }) {
+  async update(userId: string, input: { name?: string; phone?: string | null; tableDensity?: string }) {
     await loadUser(userId);
     await prisma.user.update({
       where: { id: userId },
       data: {
         ...(input.name !== undefined && { name: input.name }),
         ...(input.phone !== undefined && { phone: input.phone }),
+        ...(input.tableDensity !== undefined && { tableDensity: input.tableDensity }),
       },
     });
     return this.me(userId);

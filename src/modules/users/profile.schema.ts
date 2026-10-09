@@ -1,5 +1,8 @@
 import { z } from "zod";
 import { uuidParams } from "../../utils/schemas";
+
+/** Densidad de las tablas (B15, migración 025). */
+export const TABLE_DENSITIES = ["comfortable", "compact"] as const;
 import { PASSWORD_MAX_LENGTH } from "../auth/passwordPolicy";
 
 /** Mismo formato que impone la base (chk_users_phone_format). */
@@ -20,9 +23,11 @@ export const updateProfileSchema = z
       .union([z.literal(""), z.null(), phone])
       .optional()
       .transform((value) => (value === "" ? null : value)),
+    // B15: preferencia de trabajo (la base solo admite estos dos valores).
+    tableDensity: z.enum(TABLE_DENSITIES).optional(),
   })
-  .refine((data) => data.name !== undefined || data.phone !== undefined, {
-    message: "Indica el nombre o el teléfono",
+  .refine((data) => data.name !== undefined || data.phone !== undefined || data.tableDensity !== undefined, {
+    message: "Indica el nombre, el teléfono o la densidad de las tablas",
   });
 
 const currentPassword = z.string().min(1).max(200).describe("Contraseña actual (se vuelve a pedir)");

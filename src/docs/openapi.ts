@@ -45,6 +45,7 @@ import {
   deleteAccountSchema,
   exportDataSchema,
   sessionParams,
+  TABLE_DENSITIES,
   updateProfileSchema,
 } from "../modules/users/profile.schema";
 import { paginationQuerySchema } from "../utils/pagination";
@@ -95,6 +96,7 @@ const User = registry.register(
     role: Role,
     mfaEnabled: z.boolean().describe("Si es false y el rol lo exige (admin), solo puede activarlo"),
     avatarUpdatedAt: z.string().datetime().nullable().describe("null = sin foto de perfil"),
+    tableDensity: z.enum(TABLE_DENSITIES).describe("Densidad de las tablas (B15): preferencia de trabajo de la cuenta"),
   })
 );
 const Invitation = registry.register(
@@ -124,6 +126,7 @@ const Profile = registry.register(
     phone: z.string().nullable(),
     mfaEnabled: z.boolean(),
     avatarUpdatedAt: z.string().datetime().nullable().describe("null = sin foto"),
+    tableDensity: z.enum(TABLE_DENSITIES).describe("Densidad de las tablas (B15): preferencia de trabajo de la cuenta"),
     pendingEmail: PendingEmail.nullable().describe("Cambio de correo esperando confirmación"),
   })
 );
