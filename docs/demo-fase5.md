@@ -599,9 +599,11 @@ de esta versión no guardaron IP ni equipo.
    - en el `.env`, pon `GEOIP_PROVIDER=dbip` y `GEOIP_DBIP_CSV=<ruta del .csv>`;
    - reinicia la API. Carga en segundo plano (el log dice "GeoIP: DB-IP Lite cargada"). La IP
      nunca sale del servidor.
-3. **Cerrar una.** "Cerrar sesión" en la otra fila. En el otro navegador, la siguiente acción (o
-   recargar) lleva al login: el cierre es inmediato. Si tenía abierta la vista de un cliente, su
-   conexión en tiempo real se corta en menos de 30 s.
+3. **Cerrar una.** "Cerrar sesión" en la otra fila. Por HTTP, el cierre es **inmediato**: en el
+   otro navegador, la siguiente acción (o recargar) lleva al login. El **WebSocket** puede tardar
+   **hasta 30 s**: si ese navegador tenía abierta la vista de un cliente, su conexión en tiempo real
+   se corta en el siguiente latido, y mientras tanto solo podría recibir avisos de estado de
+   documentos, no pedir datos.
 4. **Cerrar todas las demás.** El botón pide confirmación y dice cuántas cerrará. "Volver" no
    cierra nada y devuelve el foco al botón. La sesión actual sigue abierta. La actual no se puede
    cerrar desde aquí: para eso está "Salir".
@@ -620,5 +622,5 @@ de esta versión no guardaron IP ni equipo.
    - backend: `npx vitest run tests/integration/userSessions.test.ts tests/integration/realtime.test.ts tests/unit/geoip.test.ts tests/unit/sessionClient.test.ts`;
    - frontend: `npx vitest run tests/activeSessions.test.js` y `npx playwright test e2e/sessions.spec.js`.
 
-Decisiones en ADR 0013. Capturas en `files/.capturas/B13/` y huellas de la base antes y después
+Decisiones en ADR 0013 (aceptada). Capturas en `files/.capturas/B13/` y huellas de la base antes y después
 de la 022 en `files/.huellas/B13-*.txt`.

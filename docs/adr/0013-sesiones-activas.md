@@ -1,6 +1,6 @@
 # 0013 — Sesiones activas: qué se guarda y cómo se cierra
 
-**Estado:** propuesta (Fase 5, B13; pendiente de la revisión del checkpoint).
+**Estado:** aceptada (Fase 5, B13; confirmada por el usuario en el checkpoint de B13).
 
 ## Contexto
 
@@ -36,11 +36,13 @@ sigue creando refresh tokens sin saber nada de esta tabla.
    - `dbip` usa DB-IP Lite en CSV, en memoria, sin llamadas externas: la IP nunca sale del
      servidor.
    - Si el archivo está dañado, la ubicación queda desconocida y la API no se cae.
-5. **Cierre inmediato.**
+5. **Cierre: inmediato por HTTP; hasta 30 s en el WebSocket.**
    - Cerrar revoca los tokens de la familia (`session_closed`). Como cada petición verifica el
      `sid` (B7), el access token deja de servir en la siguiente petición.
    - El WebSocket revisa en cada latido (30 s), con **una** consulta, si siguen activas las
-     sesiones de todos sus sockets. Esto cubre también Salir y el cambio de contraseña, y
+     sesiones de todos sus sockets. Un socket ya abierto de la sesión cerrada **puede seguir
+     recibiendo avisos de estado de documentos hasta 30 s** (nunca más: antes de B13 eran hasta
+     15 min, lo que quedaba de su token). No puede pedir datos: todo lo demás va por HTTP. Esto cubre también Salir y el cambio de contraseña, y
      funciona con varias instancias sin pub/sub.
 6. **Sin reautenticación para cerrar.** Cerrar sesiones solo quita acceso. Alguien que use una
    sesión robada podría cerrar la de la dueña, pero ella vuelve a entrar y, al cambiar la
@@ -48,6 +50,9 @@ sigue creando refresh tokens sin saber nada de esta tabla.
    está "Salir".
 
 ## Consecuencias
+
+- Ventana de hasta 30 s en el WebSocket tras cerrar una sesión (punto 5). Acortarla exigiría
+  avisar a cada instancia de la API por Redis pub/sub; no se justifica para avisos de estado.
 
 - La última actividad tiene la granularidad de la renovación del token (unos 15 minutos
   mientras se usa), y la pantalla lo dice así.
