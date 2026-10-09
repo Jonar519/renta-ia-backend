@@ -4,6 +4,7 @@ import { prisma } from "../../config/prisma";
 import { ApiError } from "../../utils/apiError";
 import { isUuid } from "../../utils/uuid";
 import { storageService } from "../../services/storage";
+import { storageKeys } from "../../services/storage/keys";
 import { documentQueue } from "../../queues/documentQueue";
 import { publishDocumentEvent } from "../../services/events/documentEvents";
 import { clientAudience } from "../../services/access/clientAudience";
@@ -74,9 +75,8 @@ export const documentsService = {
     if (existing) throw duplicateError(existing);
 
     const storageKey = await storageService.save({
+      key: storageKeys.document(input.clientId, input.originalName),
       buffer: input.buffer,
-      clientId: input.clientId,
-      fileName: input.originalName,
     });
 
     let document;

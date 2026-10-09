@@ -27,11 +27,19 @@ export const REUSE_GRACE_MS = 10_000;
 
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 
-type SessionUser = Pick<User, "id" | "name" | "email" | "role">;
+type SessionUser = Pick<User, "id" | "name" | "email" | "role" | "avatarUpdatedAt">;
 
 /** mfaEnabled: el cliente lo usa para llevar a "Seguridad" a quien debe activarlo (mfa/policy.ts). */
 export function publicUser(user: SessionUser, mfaEnabled: boolean) {
-  return { id: user.id, name: user.name, email: user.email, role: user.role, mfaEnabled };
+  // avatarUpdatedAt: si hay foto y cuándo cambió (el cliente no muestra una vieja).
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    mfaEnabled,
+    avatarUpdatedAt: user.avatarUpdatedAt,
+  };
 }
 
 async function mfaEnabledFor(userId: string): Promise<boolean> {

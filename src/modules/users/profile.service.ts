@@ -67,6 +67,7 @@ export const profileService = {
       role: user.role,
       phone: user.phone,
       mfaEnabled: Boolean(mfa?.enabledAt),
+      avatarUpdatedAt: user.avatarUpdatedAt,
       pendingEmail: await pendingEmailChange(userId),
     };
   },

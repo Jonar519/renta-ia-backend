@@ -17,6 +17,9 @@ model User {
   passwordHash       String?               @map("password_hash") @db.VarChar(255)
   /// Opcional; formato verificado por chk_users_phone_format (migración 020).
   phone              String?               @db.VarChar(30)
+  /// Foto de perfil (migración 021): clave en el almacenamiento, bajo users/<este id>/avatar/.
+  avatarKey          String?               @map("avatar_key") @db.VarChar(200)
+  avatarUpdatedAt    DateTime?             @map("avatar_updated_at") @db.Timestamptz(6)
   role               UserRole              @default(accountant)
   status             AccountStatus         @default(active)
   createdAt          DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)

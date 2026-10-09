@@ -91,6 +91,7 @@ const User = registry.register(
     email: z.string().email(),
     role: Role,
     mfaEnabled: z.boolean().describe("Si es false y el rol lo exige (admin), solo puede activarlo"),
+    avatarUpdatedAt: z.string().datetime().nullable().describe("null = sin foto de perfil"),
   })
 );
 const Invitation = registry.register(
@@ -119,6 +120,7 @@ const Profile = registry.register(
     role: Role,
     phone: z.string().nullable(),
     mfaEnabled: z.boolean(),
+    avatarUpdatedAt: z.string().datetime().nullable().describe("null = sin foto"),
     pendingEmail: PendingEmail.nullable().describe("Cambio de correo esperando confirmación"),
   })
 );
@@ -432,6 +434,41 @@ route({
     401: errors[401],
     429: json(ErrorResponse, "Límite de intentos o cuenta bloqueada por intentos fallidos"),
   },
+});
+route({
+  method: "post",
+  path: "/api/users/me/avatar",
+  tag: "Perfil",
+  summary:
+    "Subir o cambiar la foto (multipart, campo avatar): PNG o JPG verificados por su firma real, máx. 512 KB. Borra la anterior.",
+  body: z.object({ avatar: z.string().openapi({ format: "binary" }) }),
+  bodyType: "multipart/form-data",
+  responses: {
+    201: json(z.object({ avatarUpdatedAt: z.string().datetime() }), "Foto guardada"),
+    400: json(ErrorResponse, "Falta el archivo"),
+    401: errors[401],
+    413: json(ErrorResponse, "Supera 512 KB"),
+    415: json(ErrorResponse, "No es una imagen PNG o JPG (por su contenido)"),
+    429: errors[429],
+  },
+});
+route({
+  method: "get",
+  path: "/api/users/me/avatar",
+  tag: "Perfil",
+  summary: "La foto de la propia cuenta (image/png o image/jpeg; CSP default-src 'none'; sandbox)",
+  responses: {
+    200: { description: "La imagen (image/png o image/jpeg, según su firma)" },
+    401: errors[401],
+    404: json(ErrorResponse, "Sin foto"),
+  },
+});
+route({
+  method: "delete",
+  path: "/api/users/me/avatar",
+  tag: "Perfil",
+  summary: "Quitar la foto (borra el archivo)",
+  responses: { 204: { description: "Quitada" }, 401: errors[401], 404: json(ErrorResponse, "Sin foto") },
 });
 route({
   method: "post",

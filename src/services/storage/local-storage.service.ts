@@ -2,7 +2,6 @@ import fs from "fs";
 import path from "path";
 import { env } from "../../config/env";
 import { ApiError } from "../../utils/apiError";
-import { isUuid } from "../../utils/uuid";
 import { SaveFileInput, StorageService } from "./storage.interface";
 
 /**
@@ -20,20 +19,12 @@ function resolveInsideBase(relativeKey: string): string {
 }
 
 export const localStorageService: StorageService = {
-  async save({ buffer, clientId, fileName }: SaveFileInput) {
-    if (!isUuid(clientId)) {
-      throw new ApiError(400, "clientId inválido: debe ser un UUID");
-    }
-
-    const safeName = `${Date.now()}-${path.basename(fileName).replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-    // El storageKey es una ruta relativa, portable entre entornos.
-    const storageKey = ["clients", clientId, "documents", safeName].join("/");
-
-    const fullPath = resolveInsideBase(storageKey);
+  async save({ key, buffer }: SaveFileInput) {
+    // La clave (ruta relativa, portable entre entornos) la arma storageKeys.
+    const fullPath = resolveInsideBase(key);
     fs.mkdirSync(path.dirname(fullPath), { recursive: true });
     fs.writeFileSync(fullPath, buffer);
-
-    return storageKey;
+    return key;
   },
 
   async readAsBuffer(storageKey: string) {

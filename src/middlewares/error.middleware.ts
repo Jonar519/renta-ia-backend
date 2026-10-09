@@ -36,8 +36,12 @@ function toApiError(err: unknown): ApiError | null {
   }
 
   if (err instanceof MulterError) {
-    if (err.code === "LIMIT_FILE_SIZE")
-      return new ApiError(413, "El archivo supera el tamaño máximo permitido (15 MB)");
+    if (err.code === "LIMIT_FILE_SIZE") {
+      // Cada subida tiene su límite: la foto de perfil (campo "avatar") y los documentos.
+      return err.field === "avatar"
+        ? new ApiError(413, "La foto supera el tamaño máximo (512 KB).")
+        : new ApiError(413, "El archivo supera el tamaño máximo permitido (15 MB)");
+    }
     return new ApiError(400, `Error en la subida del archivo (${err.code})`);
   }
 

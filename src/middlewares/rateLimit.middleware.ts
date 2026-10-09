@@ -108,6 +108,11 @@ export const emailChangeConfirmLimiter = limiter(
   { skipSuccessfulRequests: true }
 );
 
+/** Cambiar la foto de perfil, por usuario: 20 subidas por hora (cuentan todas). */
+export const avatarLimiter = limiter("avatar", 60 * MINUTE, 20, "Demasiados cambios de foto. Espera un rato.", {
+  keyGenerator: byUser,
+});
+
 /** Límite general por IP para toda la API. */
 export const globalLimiter = limiter(
   "global",

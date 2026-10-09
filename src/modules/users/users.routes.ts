@@ -1,7 +1,11 @@
 import { Router } from "express";
+import multer from "multer";
 import { authMiddleware } from "../../middlewares/auth.middleware";
 import { validate } from "../../middlewares/validate.middleware";
-import { profileLimiter } from "../../middlewares/rateLimit.middleware";
+import { avatarLimiter, profileLimiter } from "../../middlewares/rateLimit.middleware";
+import { ApiError } from "../../utils/apiError";
+import { AVATAR_MIME_TYPES, MAX_AVATAR_BYTES } from "../../utils/fileType";
+import { avatarService } from "./avatar.service";
 import { audit } from "../../services/audit/audit.service";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { mfaRouter } from "../mfa/mfa.routes";
@@ -66,6 +70,58 @@ usersRouter.post(
     );
     audit(req, { action: "user.password.change", entity: "user", entityId: req.user!.userId });
     res.json(result);
+  })
+);
+
+// Foto de perfil (B12). La firma real del archivo la verifica avatarService
+// con la misma tabla de "magic bytes" que los documentos.
+const avatarUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_AVATAR_BYTES, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    if (!(AVATAR_MIME_TYPES as readonly string[]).includes(file.mimetype)) {
+      cb(new ApiError(415, "La foto debe ser una imagen PNG o JPG."));
+      return;
+    }
+    cb(null, true);
+  },
+});
+
+usersRouter.post(
+  "/me/avatar",
+  avatarLimiter,
+  avatarUpload.single("avatar"),
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw new ApiError(400, "Falta la foto (campo avatar).");
+    const result = await avatarService.set(req.user!.userId, req.file);
+    audit(req, { action: "user.avatar.update", entity: "user", entityId: req.user!.userId });
+    res.status(201).json(result);
+  })
+);
+
+usersRouter.delete(
+  "/me/avatar",
+  asyncHandler(async (req, res) => {
+    await avatarService.remove(req.user!.userId);
+    audit(req, { action: "user.avatar.remove", entity: "user", entityId: req.user!.userId });
+    res.status(204).end();
+  })
+);
+
+/**
+ * La imagen, solo para la propia cuenta. El navegador la pide con fetch (lleva
+ * el token) y la muestra como blob:. Encabezados: el tipo real (el que validó
+ * la firma), nosniff (helmet) y una CSP que no permite nada por si alguien
+ * abriera la URL directamente con un archivo "políglota".
+ */
+usersRouter.get(
+  "/me/avatar",
+  asyncHandler(async (req, res) => {
+    const { buffer, contentType } = await avatarService.read(req.user!.userId);
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
+    res.setHeader("Content-Disposition", "inline");
+    res.send(buffer);
   })
 );
 

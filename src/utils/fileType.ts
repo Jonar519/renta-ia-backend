@@ -25,3 +25,15 @@ export function hasValidSignature(mimetype: string, buffer: Buffer): boolean {
   if (!type) return false;
   return type.signature.every((byte, i) => buffer[i] === byte);
 }
+
+/**
+ * Foto de perfil (B12): solo PNG o JPG, validados con la MISMA tabla de firmas
+ * de arriba. El navegador ya la recorta y la reduce a 256×256 (pesa unos KB);
+ * 512 KB deja margen sin aceptar archivos grandes.
+ */
+export const AVATAR_MIME_TYPES = ["image/png", "image/jpeg"] as const;
+export const MAX_AVATAR_BYTES = 512 * 1024;
+
+export function isAllowedAvatar(mimetype: string, buffer: Buffer): boolean {
+  return (AVATAR_MIME_TYPES as readonly string[]).includes(mimetype) && hasValidSignature(mimetype, buffer);
+}

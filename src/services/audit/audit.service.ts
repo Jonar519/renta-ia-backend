@@ -51,6 +51,8 @@ export type AuditAction =
   | "user.email_change.completed"
   | "user.email_change.invalid"
   | "user.password.change"
+  | "user.avatar.update"
+  | "user.avatar.remove"
   | "admin.audit.view";
 
 export interface AuditEntry {
