@@ -1,14 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { stripImageMetadata, UnreadableImageError } from "../../src/utils/imageMetadata";
-import {
-  GPS_LATITUDE,
-  jpegWithGps,
-  pngChunk,
-  pngWith,
-  pngWithMetadata,
-  REAL_JPEG,
-  REAL_PNG,
-} from "../fixtures/images";
+import { GPS_LATITUDE, jpegWithGps, pngChunk, pngWith, pngWithMetadata, REAL_JPEG, REAL_PNG } from "../fixtures/images";
 
 /**
  * Quitar metadatos de las fotos (utils/imageMetadata): lista de permitidos,
@@ -99,11 +91,13 @@ describe("JPEG", () => {
     const signatureOnly = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(200, 1)]);
     expect(unreadable("image/jpeg", signatureOnly)).toThrow(UnreadableImageError);
     // Basura donde debería ir un marcador.
-    expect(unreadable("image/jpeg", Buffer.from([0xff, 0xd8, 0x41, 0x41, 0x41, 0x41]))).toThrow(
-      UnreadableImageError
-    );
+    expect(unreadable("image/jpeg", Buffer.from([0xff, 0xd8, 0x41, 0x41, 0x41, 0x41]))).toThrow(UnreadableImageError);
     // Bytes sueltos entre dos segmentos que, leídos sin exigir el 0xFF, parecerían un comentario.
-    const stray = Buffer.concat([REAL_JPEG.subarray(0, 20), Buffer.from([0xfe, 0x00, 0x04, 0x41, 0x41]), REAL_JPEG.subarray(20)]);
+    const stray = Buffer.concat([
+      REAL_JPEG.subarray(0, 20),
+      Buffer.from([0xfe, 0x00, 0x04, 0x41, 0x41]),
+      REAL_JPEG.subarray(20),
+    ]);
     expect(unreadable("image/jpeg", stray)).toThrow(/se esperaba un marcador/);
     // EOI sin datos de imagen.
     expect(unreadable("image/jpeg", Buffer.from([0xff, 0xd8, 0xff, 0xd9]))).toThrow(UnreadableImageError);
