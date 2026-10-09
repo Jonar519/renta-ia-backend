@@ -440,7 +440,7 @@ route({
   path: "/api/users/me/avatar",
   tag: "Perfil",
   summary:
-    "Subir o cambiar la foto (multipart, campo avatar): PNG o JPG verificados por su firma real, máx. 512 KB. Borra la anterior.",
+    "Subir o cambiar la foto (multipart, campo avatar): PNG o JPG verificados por su firma real, máx. 512 KB. Se guarda sin metadatos (EXIF, GPS, ICC, textos). Borra la anterior.",
   body: z.object({ avatar: z.string().openapi({ format: "binary" }) }),
   bodyType: "multipart/form-data",
   responses: {
@@ -449,6 +449,7 @@ route({
     401: errors[401],
     413: json(ErrorResponse, "Supera 512 KB"),
     415: json(ErrorResponse, "No es una imagen PNG o JPG (por su contenido)"),
+    422: json(ErrorResponse, "La imagen no se puede analizar (truncada o malformada): no se guarda"),
     429: errors[429],
   },
 });

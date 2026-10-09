@@ -524,3 +524,54 @@ Necesitas la migración 021 (`scripts\migrate.bat`), la API y el frontend de est
    frontend `npm test` (`tests/avatar.test.js`, `tests/csp.test.js`) y `npx playwright test e2e/avatar.spec.js`.
 
 Capturas en `files/.capturas/B12/` y huellas de la base antes y después de la 021 en `files/.huellas/B12-*.txt`.
+
+## Entre B12 y B13: metadatos de las fotos y vigilancia de la CSP
+
+**Metadatos fuera, también si la foto llega directo a la API.** El navegador ya reencodifica la
+foto, pero alguien podría subirla sin pasar por él. Por eso la API quita los metadatos antes de
+guardar (`src/utils/imageMetadata.ts`, sin dependencias nuevas). Funciona con una **lista de
+permitidos**: conserva solo lo que la imagen necesita para verse y descarta todo lo demás. Eso
+incluye EXIF (ubicación GPS, modelo del teléfono, fecha), XMP, IPTC, perfiles ICC, comentarios,
+textos PNG y lo que venga después del final del archivo. Si el archivo no se puede analizar
+(truncado, longitudes fuera de rango, CRC incorrecto), responde **422 "No pudimos leer la foto…"**
+y no guarda nada, tampoco el original.
+
+1. Genera una foto real con ubicación GPS (desde `renta-ia-backend`):
+
+   ```bat
+   npx ts-node --transpile-only -e "require('fs').writeFileSync('foto-gps.jpg', require('./tests/fixtures/images').jpegWithGps())"
+   ```
+
+2. Súbela directo a la API con tu sesión (copia el token de acceso desde las herramientas del
+   navegador: Application → Local Storage, o la petición a `/api/users/me` → encabezado
+   `Authorization`):
+
+   ```bat
+   curl -s -X POST http://localhost:4000/api/users/me/avatar -H "Authorization: Bearer <token>" -F "avatar=@foto-gps.jpg;type=image/jpeg"
+   ```
+
+3. Compara: `foto-gps.jpg` contiene `Exif` y el fabricante "TelefonoX". El archivo guardado no
+   contiene ninguno de los dos:
+
+   ```bat
+   findstr /m "Exif TelefonoX" foto-gps.jpg
+   docker exec renta_ia_postgres psql -U postgres -d renta_ia -tAc "SELECT avatar_key FROM users WHERE avatar_key IS NOT NULL ORDER BY avatar_updated_at DESC LIMIT 1"
+   findstr /m "Exif TelefonoX" uploads\<clave que devolvió la consulta>
+   ```
+
+   El primer `findstr` muestra el nombre del archivo. El segundo no muestra nada. La foto se ve
+   igual en "Mi perfil".
+4. Un archivo cortado a la mitad responde 422 y no aparece nada nuevo en `uploads/users/<tu id>/avatar/`.
+5. Borra `foto-gps.jpg` al terminar.
+
+**CSP en todas las pruebas E2E.** Todas importan `test` de `e2e/fixtures.js`: un fixture automático
+vigila la CSP en cada página, también en los contextos que la prueba abre aparte, y exige cero
+violaciones. Cada violación se informa con la directiva, el archivo y la línea, y la pantalla.
+Antes, el colector estaba solo en algunas pruebas (tema, menú y estados no lo tenían). Con el
+vigilante probado, la corrida completa (27 pruebas) dio **cero violaciones** en todas las pantallas.
+
+**Primera carga estricta:** `npm run build` también mide lo que se descarga al abrir la app en
+la pantalla de llegada: invitado en `#/login` (tope 19 KB), con sesión en `#/` (tope 22 KB).
+
+Pruebas: backend `npx vitest run tests/unit/imageMetadata.test.ts tests/integration/avatar.test.ts`;
+frontend `npx playwright test` (todas, con `e2e/csp.spec.js`).

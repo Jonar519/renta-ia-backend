@@ -7,19 +7,18 @@ import { prisma } from "../../src/config/prisma";
 import { env } from "../../src/config/env";
 import { storageService } from "../../src/services/storage";
 import { storageKeys } from "../../src/services/storage/keys";
+import { GPS_LATITUDE, jpegWithGps, pngWithMetadata, REAL_JPEG, REAL_PNG } from "../fixtures/images";
 
 /**
  * Foto de perfil (B12, migración 021): validación por "magic bytes" (la misma
  * tabla que los documentos), límite de tamaño, almacenamiento con
  * StorageService (claves que arma el servidor), y servirla solo a su dueña.
+ * Se guarda SIN metadatos; lo que no se puede analizar se rechaza (422).
  */
 
-// PNG real de 1×1 y un JPEG mínimo (la firma es lo que se valida).
-const PNG = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
-  "base64"
-);
-const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(200, 1)]);
+// Imágenes reales (tests/fixtures/images.ts): PNG de 1×1 y JPEG de Chrome.
+const PNG = REAL_PNG;
+const JPEG = REAL_JPEG;
 const PDF = Buffer.from("%PDF-1.4\n%% no es una imagen\n");
 
 const upload = (a: Account, buffer: Buffer, filename = "foto.png", contentType = "image/png") =>
@@ -88,6 +87,48 @@ describe("subir la foto", () => {
     }
     const { avatarKey } = await prisma.user.findUniqueOrThrow({ where: { id: account.user.id } });
     expect(avatarKey).toBeNull();
+  });
+
+  it("JPEG con EXIF y ubicación GPS: se guarda y se sirve sin metadatos", async () => {
+    const account = await createAccount("Foto Con GPS");
+    expect((await upload(account, jpegWithGps(), "foto.jpg", "image/jpeg")).status).toBe(201);
+    const { avatarKey } = await prisma.user.findUniqueOrThrow({ where: { id: account.user.id } });
+    const stored = await storageService.readAsBuffer(avatarKey!);
+    const served = (await getAvatar(account)).body as Buffer;
+    const latitude = Buffer.alloc(8);
+    latitude.writeUInt32LE(GPS_LATITUDE[0]);
+    latitude.writeUInt32LE(1, 4);
+    for (const bytes of [stored, served]) {
+      expect(bytes.includes(Buffer.from("Exif", "latin1"))).toBe(false);
+      expect(bytes.includes(Buffer.from("TelefonoX", "latin1"))).toBe(false);
+      expect(bytes.includes(latitude)).toBe(false);
+      expect(bytes.subarray(0, 2)).toEqual(Buffer.from([0xff, 0xd8]));
+    }
+  });
+
+  it("PNG con metadatos (textos, eXIf, tIME, iCCP): se guarda el PNG sin ellos", async () => {
+    const account = await createAccount("Foto PNG Metadatos");
+    expect((await upload(account, pngWithMetadata())).status).toBe(201);
+    expect(Buffer.compare((await getAvatar(account)).body as Buffer, PNG)).toBe(0);
+  });
+
+  it("truncada o malformada: 422 y no se guarda nada (ni el original)", async () => {
+    const account = await createAccount("Foto Ilegible");
+    const dir = path.join(path.resolve(env.storageLocalPath), "users", account.user.id, "avatar");
+    const cases: [Buffer, string, string][] = [
+      [jpegWithGps().subarray(0, 600), "truncada.jpg", "image/jpeg"],
+      [Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe1, 0xff, 0xff]), Buffer.alloc(40)]), "mala.jpg", "image/jpeg"],
+      [Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(200, 1)]), "firma.jpg", "image/jpeg"],
+      [pngWithMetadata().subarray(0, 60), "truncada.png", "image/png"],
+    ];
+    for (const [buffer, filename, type] of cases) {
+      const res = await upload(account, buffer, filename, type);
+      expect(res.status, filename).toBe(422);
+      expect(res.body.error).toBe("No pudimos leer la foto. Elige otra imagen PNG o JPG.");
+    }
+    const { avatarKey } = await prisma.user.findUniqueOrThrow({ where: { id: account.user.id } });
+    expect(avatarKey).toBeNull();
+    expect(fs.existsSync(dir) ? fs.readdirSync(dir) : []).toEqual([]);
   });
 
   it("rechaza más de 512 KB (413) y una subida sin archivo (400)", async () => {

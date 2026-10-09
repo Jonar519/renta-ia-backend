@@ -4,11 +4,14 @@ import { storageService } from "../../services/storage";
 import { storageKeys, type AvatarMime } from "../../services/storage/keys";
 import { ApiError } from "../../utils/apiError";
 import { isAllowedAvatar, MAX_AVATAR_BYTES } from "../../utils/fileType";
+import { stripImageMetadata, UnreadableImageError } from "../../utils/imageMetadata";
 
 /**
  * Foto de perfil (Fase 5, B12; migración 021). El archivo va al
  * almacenamiento (StorageService); en users solo su clave y la fecha.
  * Ownership por construcción: siempre la cuenta de la sesión.
+ * Se guarda la foto SIN metadatos (EXIF con GPS, etc.; utils/imageMetadata):
+ * si no se puede analizar, se rechaza y el original nunca se guarda.
  */
 const NOT_FOUND = "No tienes foto de perfil.";
 
@@ -29,10 +32,18 @@ export const avatarService = {
     if (!isAllowedAvatar(file.mimetype, file.buffer)) {
       throw new ApiError(415, "La foto debe ser una imagen PNG o JPG.");
     }
+    let clean: Buffer;
+    try {
+      clean = stripImageMetadata(file.mimetype, file.buffer);
+    } catch (err) {
+      if (!(err instanceof UnreadableImageError)) throw err;
+      logger.info({ userId, reason: err.message }, "Foto rechazada: no se pudo analizar");
+      throw new ApiError(422, "No pudimos leer la foto. Elige otra imagen PNG o JPG.");
+    }
     const previous = await prisma.user.findUnique({ where: { id: userId }, select: { avatarKey: true } });
     const key = await storageService.save({
       key: storageKeys.avatar(userId, file.mimetype as AvatarMime),
-      buffer: file.buffer,
+      buffer: clean,
     });
     const avatarUpdatedAt = new Date();
     try {
