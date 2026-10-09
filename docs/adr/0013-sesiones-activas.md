@@ -42,8 +42,9 @@ sigue creando refresh tokens sin saber nada de esta tabla.
    - El WebSocket revisa en cada latido (30 s), con **una** consulta, si siguen activas las
      sesiones de todos sus sockets. Un socket ya abierto de la sesión cerrada **puede seguir
      recibiendo avisos de estado de documentos hasta 30 s** (nunca más: antes de B13 eran hasta
-     15 min, lo que quedaba de su token). No puede pedir datos: todo lo demás va por HTTP. Esto cubre también Salir y el cambio de contraseña, y
-     funciona con varias instancias sin pub/sub.
+     15 min, lo que quedaba de su token). No puede pedir datos: todo lo demás va por HTTP.
+     Esto cubre también Salir y el cambio de contraseña, y funciona con varias instancias sin
+     pub/sub.
 6. **Sin reautenticación para cerrar.** Cerrar sesiones solo quita acceso. Alguien que use una
    sesión robada podría cerrar la de la dueña, pero ella vuelve a entrar y, al cambiar la
    contraseña, se cierran todas las demás. La sesión actual no se cierra desde aquí: para eso
@@ -53,7 +54,6 @@ sigue creando refresh tokens sin saber nada de esta tabla.
 
 - Ventana de hasta 30 s en el WebSocket tras cerrar una sesión (punto 5). Acortarla exigiría
   avisar a cada instancia de la API por Redis pub/sub; no se justifica para avisos de estado.
-
 - La última actividad tiene la granularidad de la renovación del token (unos 15 minutos
   mientras se usa), y la pantalla lo dice así.
 - Una escritura más por inicio de sesión y por rotación (la actualización de IP, ubicación y
