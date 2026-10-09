@@ -492,3 +492,35 @@ como `ana@example.com` y abre **Mi perfil** (menú de la cuenta).
    frontend `npm test` (`tests/profile.test.js`) y `npx playwright test e2e/profile.spec.js`.
 
 Capturas en `files/.capturas/B11/` y huellas de la base antes y después de la 020 en `files/.huellas/B11-*.txt`.
+
+## B12: Foto de perfil
+
+Necesitas la migración 021 (`scripts\migrate.bat`), la API y el frontend de esta carpeta.
+
+1. **Elegir y encuadrar.** En **Mi perfil → Foto de perfil**, "Elegir foto" y una imagen PNG o JPG
+   de tu equipo. Aparece el recorte circular:
+   - arrastra la foto, o haz clic en la vista previa y usa las **flechas** (con Mayús, pasos largos);
+   - "Zoom" la acerca. La foto nunca deja huecos: se detiene en sus bordes.
+2. **Guardar.** "Guardar foto": aparece en el perfil y en el **menú de la cuenta**, sin recargar.
+   El navegador la reduce a 256×256 y la vuelve a codificar como JPEG, así que no viajan los datos
+   del archivo original (por ejemplo, la ubicación GPS de una foto de celular).
+3. **Validación real en la API.** Prueba renombrar un PDF a `foto.png` y subirlo. El navegador
+   avisa que no puede leerlo. Y aunque se mandara directo a la API, esta lo rechaza (415) porque
+   verifica la firma del contenido ("magic bytes"), con la misma tabla que los documentos.
+   Más de 512 KB: 413.
+4. **Dónde queda.** El archivo va a `uploads/users/<tu id>/avatar/…`; en la base, solo la clave:
+
+   ```bat
+   docker exec renta_ia_postgres psql -U postgres -d renta_ia -c "SELECT email, avatar_key, avatar_updated_at FROM users WHERE avatar_key IS NOT NULL"
+   ```
+
+   La base exige que la clave esté bajo la carpeta de esa misma cuenta. Al cambiar la foto se borra
+   el archivo anterior; "Quitar foto" la borra.
+
+5. **Solo tú la ves.** La foto se pide con tu sesión (`GET /api/users/me/avatar`) y se muestra como
+   `blob:`. No hay URL para pedir la de otra persona. La respuesta lleva `nosniff` y una CSP que no
+   permite nada.
+6. **Pruebas automatizadas:** backend `npx vitest run tests/integration/avatar.test.ts tests/integration/avatarRateLimit.test.ts`;
+   frontend `npm test` (`tests/avatar.test.js`, `tests/csp.test.js`) y `npx playwright test e2e/avatar.spec.js`.
+
+Capturas en `files/.capturas/B12/` y huellas de la base antes y después de la 021 en `files/.huellas/B12-*.txt`.

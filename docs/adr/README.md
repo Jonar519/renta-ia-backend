@@ -17,5 +17,6 @@ tratan del frontend o de la base de datos, para tener un solo lugar donde buscar
 | [0009](0009-cuentas-pendientes-garantizadas-por-el-esquema.md) | Cuentas pendientes garantizadas por el esquema (FK compuesta)                  | Aceptada |
 | [0010](0010-proveedores-externos-intercambiables.md)           | Proveedores externos intercambiables, con simulado por defecto                 | Aceptada |
 | [0011](0011-mfa-totp.md)                                       | Segundo factor con TOTP propio, secreto cifrado y login en dos pasos           | Aceptada |
+| [0012](0012-vigencia-de-los-enlaces-firmados.md)               | Vigencia de cada enlace o paso firmado (5 min · 15 min · 24 h · 72 h)          | Aceptada |
 
 Formato: Contexto · Decisión · Alternativas consideradas · Consecuencias · Evidencia.

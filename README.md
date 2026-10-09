@@ -174,7 +174,7 @@ test falla si quedó desactualizada).
 | Grupo        | Rutas                                                                                                                                                                                         |
 | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Auth         | `POST /api/auth/login` · `login/mfa` · `refresh` · `logout` · `invitations/lookup` · `invitations/accept` · `password-reset/request` · `lookup` · `confirm` · `GET /api/users/me`             |
-| Perfil       | `GET/PATCH /api/users/me` · `POST/DELETE /api/users/me/email` · `POST /api/users/me/password` · `POST /api/auth/email-change/confirm`                                                         |
+| Perfil       | `GET/PATCH /api/users/me` · `POST/DELETE /api/users/me/email` · `POST /api/users/me/password` · `GET/POST/DELETE /api/users/me/avatar` · `POST /api/auth/email-change/confirm`                |
 | MFA          | `GET /api/users/me/mfa` · `POST /api/users/me/mfa/setup` · `enable` · `disable` · `recovery-codes`                                                                                            |
 | Clientes     | `GET/POST /api/clients` · `GET/PATCH/DELETE /api/clients/:id` · `GET /api/clients/:id/tax-concepts` · `POST /api/clients/:id/summary`                                                         |
 | Documentos   | `POST /api/documents/upload` · `GET /api/documents/client/:clientId` · `GET /api/documents/client/:clientId/by-hash/:sha256` · `GET /api/documents/:id` · `POST /api/documents/:id/reprocess` |
