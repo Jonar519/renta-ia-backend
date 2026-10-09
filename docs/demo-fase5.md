@@ -575,3 +575,50 @@ la pantalla de llegada: invitado en `#/login` (tope 19 KB), con sesión en `#/` 
 
 Pruebas: backend `npx vitest run tests/unit/imageMetadata.test.ts tests/integration/avatar.test.ts`;
 frontend `npx playwright test` (todas, con `e2e/csp.spec.js`).
+
+## B13: Sesiones activas
+
+En **Seguridad**, debajo de la verificación en dos pasos, aparece "Sesiones activas": dónde está
+abierta tu cuenta. Para cada sesión se muestra:
+
+- el navegador y el sistema ("Chrome en Windows"), con "Esta sesión" en la actual;
+- la **ubicación aproximada**;
+- la IP **recortada** (`181.49.12.x`; en IPv6, el `/48`);
+- cuándo empezó y su última actividad.
+
+Lo que no se sabe se muestra como **"desconocida"**. Por ejemplo, las sesiones abiertas antes
+de esta versión no guardaron IP ni equipo.
+
+1. **Varias sesiones.** Inicia sesión con la misma cuenta en dos navegadores (por ejemplo,
+   Chrome y una ventana de incógnito o Edge). En Seguridad verás las dos. Las que ya tenías
+   abiertas antes de B13 aparecen con ubicación e IP "desconocida".
+2. **Ubicación aproximada.** En desarrollo, el proveedor es `mock` (`GEOIP_PROVIDER=mock`): todo
+   llega desde esta máquina, así que dice **"Red local"**. Con una IP pública, el mock no inventa
+   nada y dice "desconocida". Con la base real:
+   - descarga "IP to City Lite" (CSV) de https://db-ip.com/db/lite.php (gratuita, CC BY 4.0);
+   - en el `.env`, pon `GEOIP_PROVIDER=dbip` y `GEOIP_DBIP_CSV=<ruta del .csv>`;
+   - reinicia la API. Carga en segundo plano (el log dice "GeoIP: DB-IP Lite cargada"). La IP
+     nunca sale del servidor.
+3. **Cerrar una.** "Cerrar sesión" en la otra fila. En el otro navegador, la siguiente acción (o
+   recargar) lleva al login: el cierre es inmediato. Si tenía abierta la vista de un cliente, su
+   conexión en tiempo real se corta en menos de 30 s.
+4. **Cerrar todas las demás.** El botón pide confirmación y dice cuántas cerrará. "Volver" no
+   cierra nada y devuelve el foco al botón. La sesión actual sigue abierta. La actual no se puede
+   cerrar desde aquí: para eso está "Salir".
+5. **Qué queda en la base** (nunca la IP completa ni el User-Agent completo):
+
+   ```bat
+   docker exec renta_ia_postgres psql -U postgres -d renta_ia -c "SELECT u.email, s.created_at, s.last_seen_at, s.ip_prefix, s.location, s.device FROM user_sessions s JOIN users u ON u.id = s.user_id ORDER BY s.last_seen_at DESC LIMIT 10"
+   ```
+
+   La base rechaza una IP completa (`chk_user_sessions_ip_prefix`). Cada token pertenece a una
+   sesión de su misma cuenta. La fila de la sesión la crea la base con el primer token, así que
+   la versión de `main` también sigue funcionando contra esta base.
+6. **Admin sin MFA.** Mientras no active la verificación en dos pasos, la sección no aparece: la
+   API solo le permite activarla. Al activarla, aparece.
+7. **Pruebas automatizadas:**
+   - backend: `npx vitest run tests/integration/userSessions.test.ts tests/integration/realtime.test.ts tests/unit/geoip.test.ts tests/unit/sessionClient.test.ts`;
+   - frontend: `npx vitest run tests/activeSessions.test.js` y `npx playwright test e2e/sessions.spec.js`.
+
+Decisiones en ADR 0013. Capturas en `files/.capturas/B13/` y huellas de la base antes y después
+de la 022 en `files/.huellas/B13-*.txt`.

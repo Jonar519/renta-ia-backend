@@ -1,5 +1,5 @@
 import { z } from "zod";
-import "../../utils/schemas";
+import { uuidParams } from "../../utils/schemas";
 import { PASSWORD_MAX_LENGTH } from "../auth/passwordPolicy";
 
 /** Mismo formato que impone la base (chk_users_phone_format). */
@@ -42,3 +42,6 @@ export const changePasswordSchema = z.object({
     .max(PASSWORD_MAX_LENGTH)
     .describe("10 a 72 caracteres; distinta de la actual; sin contraseñas comunes ni el correo o el nombre"),
 });
+
+/** Sesión a cerrar (B13): el id de la sesión (familia de refresh tokens). */
+export const sessionParams = uuidParams("sessionId");

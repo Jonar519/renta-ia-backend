@@ -3,6 +3,7 @@ import { prisma } from "../../config/prisma";
 import { ApiError } from "../../utils/apiError";
 import { AccountLockedError, lockoutService } from "./lockout.service";
 import { sessionsService } from "./sessions.service";
+import type { SessionClient } from "./sessionClient";
 import { mfaService } from "../mfa/mfa.service";
 
 export { AccountLockedError };
@@ -31,7 +32,7 @@ export function normalizeEmail(email: string): string {
 }
 
 export const authService = {
-  async login(input: LoginInput) {
+  async login(input: LoginInput, client: SessionClient) {
     const email = normalizeEmail(input.email);
 
     const remaining = await lockoutService.remainingLockMs(email);
@@ -54,6 +55,6 @@ export const authService = {
       return { mfaRequired: true as const, userId: user.id, ...(await mfaService.startChallenge(user.id)) };
     }
     await lockoutService.registerSuccess(email);
-    return { mfaRequired: false as const, ...(await sessionsService.start(user)) };
+    return { mfaRequired: false as const, ...(await sessionsService.start(user, client)) };
   },
 };

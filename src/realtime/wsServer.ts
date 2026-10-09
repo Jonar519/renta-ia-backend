@@ -24,6 +24,9 @@ import { DocumentEvent, documentEventBus } from "../services/events/documentEven
  *  - Cada evento se envía solo al contador dueño del cliente y a los admin.
  *  - El socket se cierra cuando el token expira (el cliente se reconecta
  *    con un token nuevo).
+ *  - Y cuando su sesión se cierra (Salir, "Sesiones activas", cambio de
+ *    contraseña…): en cada latido, UNA consulta revisa las sesiones de todos
+ *    los sockets y cierra los de sesiones que ya no están activas.
  */
 
 export const WS_PATH = "/ws";
@@ -32,6 +35,7 @@ const HEARTBEAT_MS = 30_000;
 
 interface ClientState {
   user: AuthPayload | null;
+  sid?: string;
   alive: boolean;
   expiryTimer?: NodeJS.Timeout;
 }
@@ -43,7 +47,7 @@ export interface RealtimeServer {
 
 export async function attachRealtime(
   server: Server,
-  options: { authTimeoutMs?: number } = {}
+  options: { authTimeoutMs?: number; heartbeatMs?: number } = {}
 ): Promise<RealtimeServer> {
   const authTimeoutMs = options.authTimeoutMs ?? 5_000;
   const wss = new WebSocketServer({ noServer: true, maxPayload: 4 * 1024 });
@@ -92,6 +96,7 @@ export async function attachRealtime(
       clearTimeout(authTimer);
       // Mientras se verifica la sesión, otros mensajes no deben reautenticar.
       state.user = { userId: payload.userId, role: payload.role };
+      state.sid = payload.sid;
       sessionsService
         .isActive(payload.sid)
         .then((active) => {
@@ -128,7 +133,21 @@ export async function attachRealtime(
       state.alive = false;
       ws.ping();
     }
-  }, HEARTBEAT_MS);
+    const sids = [...new Set([...states.values()].flatMap((s) => (s.sid ? [s.sid] : [])))];
+    sessionsService
+      .activeAmong(sids)
+      .then((active) => {
+        for (const [ws, state] of states) {
+          if (state.sid && !active.has(state.sid)) ws.close(WS_CLOSE.unauthorized, "Sesión cerrada");
+        }
+      })
+      .catch((err: unknown) =>
+        logger.warn(
+          { err: err instanceof Error ? err.message : err },
+          "No se pudieron revisar las sesiones de los WebSocket"
+        )
+      );
+  }, options.heartbeatMs ?? HEARTBEAT_MS);
   heartbeat.unref();
 
   const unsubscribe = await documentEventBus.subscribe((event: DocumentEvent) => {

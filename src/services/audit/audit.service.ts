@@ -53,6 +53,8 @@ export type AuditAction =
   | "user.password.change"
   | "user.avatar.update"
   | "user.avatar.remove"
+  | "user.session.close"
+  | "user.session.close_others"
   | "admin.audit.view";
 
 export interface AuditEntry {

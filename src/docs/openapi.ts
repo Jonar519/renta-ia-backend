@@ -42,6 +42,7 @@ import {
   changePasswordSchema,
   emailChangeConfirmSchema,
   emailChangeSchema,
+  sessionParams,
   updateProfileSchema,
 } from "../modules/users/profile.schema";
 import { paginationQuerySchema } from "../utils/pagination";
@@ -470,6 +471,43 @@ route({
   tag: "Perfil",
   summary: "Quitar la foto (borra el archivo)",
   responses: { 204: { description: "Quitada" }, 401: errors[401], 404: json(ErrorResponse, "Sin foto") },
+});
+// ---------- Sesiones activas (B13) ----------
+const ActiveSession = z.object({
+  id: z.string().uuid(),
+  current: z.boolean().openapi({ description: "Es la sesión de este access token" }),
+  createdAt: z.string().datetime(),
+  lastSeenAt: z.string().datetime().openapi({ description: "Última renovación del token" }),
+  ip: z.string().nullable().openapi({ description: "Recortada: 181.49.12.x o 2001:db8:85a3::/48; null = desconocida" }),
+  location: z.string().nullable().openapi({ description: "Ubicación APROXIMADA por IP; null = desconocida" }),
+  device: z.string().nullable().openapi({ description: "Navegador en sistema; null = desconocido" }),
+});
+route({
+  method: "get",
+  path: "/api/users/me/sessions",
+  tag: "Perfil",
+  summary: "Sesiones activas de la propia cuenta (la actual primero). Las anteriores a B13 no tienen IP ni ubicación.",
+  responses: { 200: json(z.array(ActiveSession), "Sesiones activas"), 401: errors[401] },
+});
+route({
+  method: "delete",
+  path: "/api/users/me/sessions/{sessionId}",
+  tag: "Perfil",
+  summary: "Cerrar una sesión de la propia cuenta (no la actual). Efecto inmediato, también en el WebSocket.",
+  params: sessionParams,
+  responses: {
+    204: { description: "Cerrada" },
+    400: json(ErrorResponse, "Es la sesión actual (usa Salir) o el id no es un UUID"),
+    401: errors[401],
+    404: json(ErrorResponse, "No existe, es de otra cuenta o ya estaba cerrada"),
+  },
+});
+route({
+  method: "delete",
+  path: "/api/users/me/sessions",
+  tag: "Perfil",
+  summary: "Cerrar todas las demás sesiones de la propia cuenta (la actual sigue abierta)",
+  responses: { 200: json(z.object({ closed: z.number().int() }), "Cuántas se cerraron"), 401: errors[401] },
 });
 route({
   method: "post",

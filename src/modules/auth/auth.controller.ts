@@ -8,6 +8,7 @@ import {
   sessionsService,
 } from "./sessions.service";
 import { audit } from "../../services/audit/audit.service";
+import { sessionClient } from "./sessionClient";
 import { ApiError } from "../../utils/apiError";
 import { InvalidInvitationError, invitationsService } from "../invitations/invitations.service";
 import { InvalidResetTokenError, passwordResetService } from "./passwordReset.service";
@@ -56,7 +57,7 @@ function sendSession(res: Response, status: number, session: Awaited<ReturnType<
 export const authController = {
   async login(req: Request, res: Response) {
     try {
-      const result = await authService.login(req.body);
+      const result = await authService.login(req.body, sessionClient(req));
       if (result.mfaRequired) {
         // Contraseña correcta, falta el segundo factor: todavía no hay sesión ni cookie.
         audit(req, {
@@ -82,7 +83,7 @@ export const authController = {
   async loginMfa(req: Request, res: Response) {
     try {
       const { user, method } = await mfaService.completeChallenge(req.body.challengeToken, req.body.code);
-      const session = await sessionsService.start(user);
+      const session = await sessionsService.start(user, sessionClient(req));
       audit(req, { action: "auth.login.success", userId: user.id, entity: "user", entityId: user.id });
       if (method === "recovery") {
         audit(req, { action: "auth.mfa.recovery_code_used", userId: user.id, entity: "user", entityId: user.id });
@@ -104,7 +105,9 @@ export const authController = {
 
   /** Activa la cuenta invitada con la contraseña elegida por la persona e inicia sesión. */
   async acceptInvitation(req: Request, res: Response) {
-    const session = await auditingInvalid(req, () => invitationsService.accept(req.body.token, req.body.password));
+    const session = await auditingInvalid(req, () =>
+      invitationsService.accept(req.body.token, req.body.password, sessionClient(req))
+    );
     audit(req, {
       action: "auth.invitation.accept",
       userId: session.user.id,
@@ -154,7 +157,7 @@ export const authController = {
 
   async refresh(req: Request, res: Response) {
     try {
-      const session = await sessionsService.rotate(readRefreshCookie(req));
+      const session = await sessionsService.rotate(readRefreshCookie(req), sessionClient(req));
       sendSession(res, 200, session);
     } catch (err) {
       if (err instanceof RefreshReuseError) {

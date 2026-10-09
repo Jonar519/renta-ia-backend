@@ -30,6 +30,7 @@ model User {
   portalClients      Client[]              @relation("ClientPortalUser")
   uploadedDocs       Document[]            @relation("UploadedBy")
   refreshTokens      RefreshToken[]
+  sessions           UserSession[]
   invitations        UserInvitation[]      @relation("InvitedUser")
   sentInvitations    UserInvitation[]      @relation("InvitedBy")
   passwordResets     PasswordResetToken[]
@@ -262,11 +263,34 @@ model RefreshToken {
   replacedBy   RefreshToken?  @relation("RefreshTokenRotation", fields: [replacedById], references: [id], onUpdate: NoAction)
   replaces     RefreshToken[] @relation("RefreshTokenRotation")
   user         User           @relation(fields: [userId, userStatus], references: [id, status], onDelete: Cascade, onUpdate: NoAction, map: "fk_refresh_tokens_active_user")
+  /// La sesión (familia) a la que pertenece; la crea la base al insertar el primer token (022).
+  session      UserSession    @relation(fields: [familyId, userId], references: [id, userId], onDelete: Cascade, onUpdate: NoAction, map: "fk_refresh_tokens_session")
 
   @@index([expiresAt], map: "idx_refresh_tokens_expires")
   @@index([familyId], map: "idx_refresh_tokens_family")
   @@index([userId], map: "idx_refresh_tokens_user")
   @@map("refresh_tokens")
+}
+
+/// Sesión activa = familia de refresh tokens (migración 022). IP recortada
+/// (a.b.c.0 o el /48 de IPv6), ubicación aproximada y equipo; sin datos en las
+/// sesiones anteriores a 022 ("desconocida"). last_seen_at lo mueve la base.
+model UserSession {
+  id            String         @id @db.Uuid
+  userId        String         @map("user_id") @db.Uuid
+  /// Siempre active (CHECK): una cuenta pendiente no puede tener sesiones.
+  userStatus    AccountStatus  @default(active) @map("user_status")
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastSeenAt    DateTime       @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  ipPrefix      String?        @map("ip_prefix") @db.VarChar(45)
+  location      String?        @db.VarChar(120)
+  device        String?        @db.VarChar(80)
+  user          User           @relation(fields: [userId, userStatus], references: [id, status], onDelete: Cascade, onUpdate: NoAction, map: "fk_user_sessions_active_user")
+  refreshTokens RefreshToken[]
+
+  @@unique([id, userId], map: "uq_user_sessions_id_user")
+  @@index([userId], map: "idx_user_sessions_user")
+  @@map("user_sessions")
 }
 
 /// Invitación de un solo uso (72 h). Solo el SHA-256 del token; la cuenta debe estar pendiente.

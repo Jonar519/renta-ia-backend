@@ -10,7 +10,8 @@ import { audit } from "../../services/audit/audit.service";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { mfaRouter } from "../mfa/mfa.routes";
 import { profileService } from "./profile.service";
-import { changePasswordSchema, emailChangeSchema, updateProfileSchema } from "./profile.schema";
+import { changePasswordSchema, emailChangeSchema, sessionParams, updateProfileSchema } from "./profile.schema";
+import { sessionsService } from "../auth/sessions.service";
 
 /**
  * La propia cuenta (/api/users/me). Ownership por construcción: todas las
@@ -122,6 +123,38 @@ usersRouter.get(
     res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
     res.setHeader("Content-Disposition", "inline");
     res.send(buffer);
+  })
+);
+
+/**
+ * Sesiones activas (B13). Ownership por construcción: solo las de
+ * req.user.userId; la actual se reconoce por el sid del access token.
+ */
+usersRouter.get(
+  "/me/sessions",
+  asyncHandler(async (req, res) => {
+    res.json(await sessionsService.list(req.user!.userId, req.user!.sid));
+  })
+);
+
+usersRouter.delete(
+  "/me/sessions/:sessionId",
+  validate({ params: sessionParams }),
+  asyncHandler(async (req, res) => {
+    const sessionId = req.params.sessionId as string;
+    await sessionsService.close(req.user!.userId, req.user!.sid, sessionId);
+    audit(req, { action: "user.session.close", entity: "session", entityId: sessionId });
+    res.status(204).end();
+  })
+);
+
+/** Cierra todas las demás sesiones (la actual sigue abierta). */
+usersRouter.delete(
+  "/me/sessions",
+  asyncHandler(async (req, res) => {
+    const closed = await sessionsService.closeOthers(req.user!.userId, req.user!.sid);
+    audit(req, { action: "user.session.close_others", entity: "user", entityId: req.user!.userId });
+    res.json({ closed });
   })
 );
 

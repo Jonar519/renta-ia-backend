@@ -56,7 +56,9 @@ describe("auth.service: login", () => {
 
   it("login con contraseña incorrecta da 401", async () => {
     const { email } = await createAccount("Login");
-    await expect(authService.login({ email, password: "otra-clave" })).rejects.toMatchObject({ statusCode: 401 });
+    await expect(
+      authService.login({ email, password: "otra-clave" }, { ipPrefix: null, location: null, device: null })
+    ).rejects.toMatchObject({ statusCode: 401 });
     const res = await request(app).post("/api/auth/login").send({ email, password: "otra-clave" });
     expect(res.status).toBe(401);
   });

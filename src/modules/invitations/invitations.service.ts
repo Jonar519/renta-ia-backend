@@ -10,6 +10,7 @@ import { sendEmail } from "../../services/email";
 import { normalizeEmail } from "../auth/auth.service";
 import { passwordProblems } from "../auth/passwordPolicy";
 import { sessionsService } from "../auth/sessions.service";
+import type { SessionClient } from "../auth/sessionClient";
 import { invitationEmail } from "./invitations.email";
 import { inviteSchema } from "./invitations.schema";
 
@@ -203,7 +204,7 @@ export const invitationsService = {
   },
 
   /** Activa la cuenta: contraseña propia + invitación consumida, en una transacción. Inicia sesión. */
-  async accept(token: string, password: string) {
+  async accept(token: string, password: string, client: SessionClient) {
     const invitation = await findOpenInvitation(token);
     const { user } = invitation;
     const problems = passwordProblems(password, { email: user.email, name: user.name });
@@ -231,7 +232,7 @@ export const invitationsService = {
       return updated === 1 ? tx.user.findUniqueOrThrow({ where: { id: user.id } }) : null;
     });
     if (!activated) throw new InvalidInvitationError();
-    return sessionsService.start(activated);
+    return sessionsService.start(activated, client);
   },
 };
 

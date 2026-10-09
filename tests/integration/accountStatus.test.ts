@@ -80,12 +80,15 @@ describe("017: estado de la cuenta (users)", () => {
 describe("017: una cuenta pendiente nunca tiene sesiones", () => {
   it("INSERT de una sesión para una cuenta pendiente → rechazado por la FK compuesta", async () => {
     const invited = await insertUser("invited");
-    await expect(insertSession(invited)).rejects.toThrow(/fk_refresh_tokens_active_user/);
+    // Desde 022 la base lo rechaza aún antes: tampoco puede existir la fila de
+    // la sesión (user_sessions), que se crea al insertar el primer token.
+    await expect(insertSession(invited)).rejects.toThrow(/fk_user_sessions_active_user/);
   });
 
   it("forzar user_status = 'invited' en la sesión → rechazado por el CHECK", async () => {
-    const invited = await insertUser("invited");
-    await expect(insertSession(invited, "'invited'::account_status")).rejects.toThrow(/chk_refresh_tokens_user_active/);
+    // Cuenta activa: la sesión (022) sí puede existir; el CHECK del token es el que rechaza.
+    const active = await insertUser("active");
+    await expect(insertSession(active, "'invited'::account_status")).rejects.toThrow(/chk_refresh_tokens_user_active/);
   });
 
   it("volver pendiente una cuenta CON sesiones → rechazado (FK ON UPDATE NO ACTION)", async () => {
@@ -122,7 +125,9 @@ describe("017: una cuenta pendiente nunca tiene sesiones", () => {
     const { sessionsService } = await import("../../src/modules/auth/sessions.service");
     const invited = await insertUser("invited");
     const user = await prisma.user.findUniqueOrThrow({ where: { id: invited } });
-    await expect(sessionsService.start(user)).rejects.toThrow(/fk_refresh_tokens_active_user|Foreign key/i);
+    await expect(sessionsService.start(user, { ipPrefix: null, location: null, device: null })).rejects.toThrow(
+      /fk_refresh_tokens_active_user|Foreign key/i
+    );
     expect(await prisma.refreshToken.count({ where: { userId: invited } })).toBe(0);
   });
 

@@ -1,3 +1,4 @@
+import fs from "fs";
 import "dotenv/config";
 
 function required(name: string): string {
@@ -17,6 +18,26 @@ function aiProvider(): "anthropic" | "mock" {
   }
   if (value === "mock" && nodeEnv === "production") {
     throw new Error("AI_PROVIDER=mock es solo para pruebas y no puede usarse con NODE_ENV=production.");
+  }
+  return value;
+}
+
+/**
+ * Ubicación aproximada de las sesiones (services/geoip, decisión D2):
+ *  - "mock" (por defecto): solo reconoce IP locales; las demás quedan
+ *    "desconocida". Sirve en cualquier entorno (no inventa datos).
+ *  - "dbip": DB-IP Lite en CSV, descargado a un archivo local; exige
+ *    GEOIP_DBIP_CSV con una ruta que exista.
+ */
+function geoipProvider(): "mock" | "dbip" {
+  const value = process.env.GEOIP_PROVIDER || "mock";
+  if (value !== "mock" && value !== "dbip") {
+    throw new Error(`GEOIP_PROVIDER="${value}" no es válido. Usa "mock" o "dbip".`);
+  }
+  if (value === "dbip") {
+    const file = process.env.GEOIP_DBIP_CSV;
+    if (!file) throw new Error("GEOIP_PROVIDER=dbip requiere la variable de entorno GEOIP_DBIP_CSV.");
+    if (!fs.existsSync(file)) throw new Error(`GEOIP_DBIP_CSV="${file}" no existe.`);
   }
   return value;
 }
@@ -158,6 +179,10 @@ export const env = {
   ),
   emailFrom: process.env.EMAIL_FROM ?? "Renta IA <no-responder@renta-ia.local>",
   sesRegion: process.env.SES_REGION,
+
+  // Ubicación aproximada de las sesiones (ver geoipProvider).
+  geoipProvider: geoipProvider(),
+  geoipDbipCsv: process.env.GEOIP_DBIP_CSV,
 
   // Almacenamiento de documentos (Fase 3: disco local · Fase 6: S3)
   storageDriver: process.env.STORAGE_DRIVER ?? "local",
