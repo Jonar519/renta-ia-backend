@@ -45,3 +45,18 @@ export const changePasswordSchema = z.object({
 
 /** Sesión a cerrar (B13): el id de la sesión (familia de refresh tokens). */
 export const sessionParams = uuidParams("sessionId");
+
+/** Exportar mis datos (B14): se vuelve a pedir la contraseña. */
+export const exportDataSchema = z.object({ password: currentPassword });
+
+/** Eliminar mi cuenta (B14): contraseña y, si tiene MFA, un código de la app o de recuperación. */
+export const deleteAccountSchema = z.object({
+  password: currentPassword,
+  code: z
+    .string()
+    .trim()
+    .min(1)
+    .max(24)
+    .optional()
+    .describe("Obligatorio si la cuenta tiene verificación en dos pasos"),
+});

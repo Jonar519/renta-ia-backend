@@ -55,6 +55,8 @@ export type AuditAction =
   | "user.avatar.remove"
   | "user.session.close"
   | "user.session.close_others"
+  | "user.data.export"
+  | "user.account.delete"
   | "admin.audit.view";
 
 export interface AuditEntry {

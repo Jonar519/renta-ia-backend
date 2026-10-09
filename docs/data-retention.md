@@ -1,0 +1,124 @@
+# Retención de datos y eliminación de cuentas
+
+Qué guarda Renta IA de cada persona, qué se entrega al **exportar** y qué pasa al **eliminar** la
+cuenta (Fase 5, B14). La implementación está en `src/modules/users/account.service.ts`. Las
+garantías de la base, en las migraciones `023_account_status_deleted.sql` y
+`024_account_deletion.sql`.
+
+Este documento describe lo que hace el sistema **hoy**. Lo que todavía no existe está en la
+sección "Decisiones pendientes".
+
+## La regla de fondo: la cuenta eliminada queda como lápida
+
+La fila de `users` **nunca se borra**: pasa a `status = 'deleted'` y se vacía. Hay tres motivos:
+
+1. **`documents.uploaded_by` es `ON DELETE RESTRICT`.** Un documento (un certificado de ingresos,
+   un extracto) es parte del **expediente del cliente**, no de quien lo subió. Borrar la cuenta
+   no puede borrar el documento, y el documento tiene que seguir teniendo un autor. La base no
+   deja borrar la fila de alguien que subió documentos, y la política lo respeta: el documento
+   queda con su autor, que ahora se llama "Cuenta eliminada".
+2. **`clients.accountant_user_id` también es `RESTRICT`.** Un cliente siempre tiene un contador.
+   Desde 024, además, ese contador tiene que estar **activo** (FK compuesta
+   `fk_clients_active_accountant`). Por eso, un contador con clientes no puede eliminar su
+   cuenta (ver más abajo).
+3. **Auditoría.** `audit_log.user_id` es `ON DELETE SET NULL`. Borrar la fila dejaría registros
+   sin autor. Con la lápida, cada registro sigue apuntando a "Cuenta eliminada".
+
+Lo que queda en la lápida, garantizado por la base:
+
+| Columna                     | Valor en una cuenta eliminada                    | Quién lo garantiza                                                  |
+| --------------------------- | ------------------------------------------------ | ------------------------------------------------------------------- |
+| `status`, `deleted_at`      | `deleted`, fecha de eliminación                  | `chk_users_deleted_at`                                              |
+| `name`                      | `Cuenta eliminada`                               | `chk_users_deleted_scrubbed`                                        |
+| `email`                     | `eliminada-<id>@renta-ia.invalid` (no existe)    | `chk_users_deleted_scrubbed`                                        |
+| `phone`, `avatar_key`       | `NULL`                                           | `chk_users_deleted_scrubbed`                                        |
+| `password_hash`             | `NULL` (nadie puede entrar)                      | `chk_users_password_by_status`                                      |
+| `role`, `id`, `created_at`  | se conservan (el rol explica qué hacía la cuenta) | —                                                                   |
+| Sesiones, MFA, tokens       | no puede tener ninguno                           | FK compuestas de 017-022: exigen `status = 'active'`                |
+
+El correo anterior **queda libre**: un admin puede volver a invitar a esa dirección y se crea una
+cuenta nueva, sin relación con la anterior.
+
+## Eliminar la cuenta
+
+`POST /api/users/me/deletion` (pantalla: Mi perfil → "Tus datos"). Exige:
+
+- la **contraseña** actual (un fallo cuenta en el bloqueo progresivo, como en el login);
+- si la cuenta tiene verificación en dos pasos, un **código** de la app o uno de recuperación.
+
+No se puede eliminar (409, y la pantalla lo dice antes de pedir la contraseña) en estos casos:
+
+- **Un contador con clientes a su cargo.** Primero tiene que eliminarlos. Renta IA todavía no
+  permite pasar clientes a otro contador. La base lo impide por su cuenta: un cliente exige un
+  contador activo.
+- **El único administrador activo.** Sin otro admin, nadie podría invitar ni restablecer el MFA
+  de nadie.
+
+Qué pasa, en una sola transacción:
+
+| Dato                                                         | Qué se hace                                         | Por qué                                                       |
+| ------------------------------------------------------------ | --------------------------------------------------- | ------------------------------------------------------------- |
+| Nombre, correo, teléfono, contraseña                         | se vacían (lápida)                                  | datos personales                                              |
+| Foto de perfil                                               | se borra el archivo                                 | dato personal                                                 |
+| Sesiones y refresh tokens (`user_sessions`)                  | se borran: todas las sesiones dejan de servir       | la lápida no puede tener sesiones (FK)                         |
+| MFA (secreto, códigos de recuperación, pasos del login)      | se borran                                           | idem                                                          |
+| Enlaces de recuperación y de cambio de correo                | se borran                                           | idem                                                          |
+| Vínculos asistente ↔ contador                                | se borran                                           | ya no hay persona que asista                                  |
+| Usuario de portal de un cliente                              | el cliente queda sin usuario de portal              | el cliente sigue siendo del contador                          |
+| Conversaciones con la IA que inició (`ai_conversations`)     | se borran, con sus mensajes                         | son sus preguntas                                             |
+| Correos guardados para esa dirección (`email_outbox`)        | se borran (incluido un cambio de correo pendiente)  | contienen su dirección y, en el proveedor simulado, el cuerpo |
+| Contador de intentos fallidos (`login_attempts`)             | se borra                                            | ya no hay cuenta que proteger                                 |
+| **Documentos que subió**                                     | **se conservan**, con autor "Cuenta eliminada"      | son del expediente del cliente (`RESTRICT`)                   |
+| **Registros de auditoría** (`audit_log`)                     | **se conservan**, con su IP y navegador             | seguridad: "yo no hice eso"; ver decisiones pendientes        |
+| Clientes, alertas y conceptos                                | no se tocan                                         | son del contador                                              |
+
+Además:
+
+- **No se envía un correo de aviso.** Enviarlo exigiría guardar la dirección en `email_outbox`
+  justo después de borrarla. La confirmación se muestra en pantalla.
+- Se registra `user.account.delete` en la auditoría.
+- La respuesta borra la cookie de sesión del navegador.
+
+## Exportar mis datos
+
+`POST /api/users/me/export` (pide la contraseña: una sesión robada no basta) devuelve un JSON
+descargable, `renta-ia-mis-datos-AAAA-MM-DD.json`, con formato `renta-ia-export-v1`:
+
+- **Cuenta:**
+  - nombre, correo, teléfono, rol y fechas;
+  - un cambio de correo pendiente, si lo hay;
+  - la foto, como `data:` URI.
+- **Verificación en dos pasos:** si está activa, desde cuándo y cuántos códigos de recuperación
+  quedan. **Nunca** el secreto ni los códigos.
+- **Sesiones activas:** IP recortada, ubicación aproximada y equipo (B13).
+- **Actividad** (`audit_log`): lo que hizo la persona, con IP y navegador, y lo que otras cuentas
+  hicieron **sobre la suya** (por ejemplo, un admin que restableció su MFA). De esto último se
+  entregan la acción y la fecha, **sin** la IP ni el navegador de la otra persona.
+- **Conversaciones con la IA** que inició, con sus mensajes.
+- **Documentos que subió:** solo metadatos (nombre, tipo, estado, fecha), sin los archivos.
+- **Vínculos:** a qué contadores asiste o qué asistentes tiene (solo nombres).
+- **Usuario del portal:** los datos de **su** cliente (son suyos).
+- **Contador:** **cuántos** clientes tiene a cargo, sin sus datos. Los datos de los clientes son
+  de esas personas, no del contador.
+
+Nada secreto sale en el export: ni hashes de contraseña o de tokens ni el secreto del MFA. Las
+pruebas lo verifican. Se registra `user.data.export`.
+
+## Retención de lo demás (estado actual)
+
+| Dato                                            | Cuánto se guarda hoy                                                        |
+| ----------------------------------------------- | --------------------------------------------------------------------------- |
+| Web Vitals (`web_vitals`, sin datos personales) | 90 días (tarea diaria `web-vitals-retention`)                               |
+| Sesiones y refresh tokens vencidos o cerrados   | sin purga automática; no se muestran (solo cuentan los vigentes)            |
+| Enlaces firmados usados o vencidos              | sin purga automática; solo su hash, inservibles después de vencer (ADR 0012) |
+| `email_outbox`                                  | sin purga automática                                                        |
+| `audit_log`                                     | sin purga automática (el modelo de amenazas ya lo anotaba)                   |
+
+## Decisiones pendientes
+
+1. **Plazo de retención de `audit_log`.** Hoy se guarda sin límite, con IP y navegador, también
+   de cuentas eliminadas. Hace falta un plazo, por ejemplo 12 meses, y una tarea diaria como la
+   de Web Vitals.
+2. **Purga de lo vencido:** sesiones, tokens y `email_outbox`.
+3. **Reasignar clientes** de un contador a otro. Hoy, para eliminar su cuenta, un contador tiene
+   que eliminar sus clientes.

@@ -20,6 +20,8 @@ model User {
   /// Foto de perfil (migración 021): clave en el almacenamiento, bajo users/<este id>/avatar/.
   avatarKey          String?               @map("avatar_key") @db.VarChar(200)
   avatarUpdatedAt    DateTime?             @map("avatar_updated_at") @db.Timestamptz(6)
+  /// Solo en cuentas eliminadas (024).
+  deletedAt          DateTime?             @map("deleted_at") @db.Timestamptz(6)
   role               UserRole              @default(accountant)
   status             AccountStatus         @default(active)
   createdAt          DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -59,7 +61,9 @@ model Client {
   portalUserId     String?          @map("portal_user_id") @db.Uuid
   conversations    AiConversation[]
   alerts           Alert[]
-  accountant       User             @relation(fields: [accountantUserId], references: [id], onUpdate: NoAction)
+  /// Siempre active (CHECK, 024): un contador con clientes no puede eliminarse.
+  accountantStatus AccountStatus    @default(active) @map("accountant_status")
+  accountant       User             @relation(fields: [accountantUserId, accountantStatus], references: [id, status], onUpdate: NoAction, map: "fk_clients_active_accountant")
   portalUser       User?            @relation("ClientPortalUser", fields: [portalUserId], references: [id], onUpdate: NoAction)
   documents        Document[]
   taxConcepts      TaxConcept[]
@@ -413,6 +417,8 @@ model EmailOutbox {
 enum AccountStatus {
   invited
   active
+  /// Cuenta eliminada (024): lápida anónima, sin datos personales.
+  deleted
 
   @@map("account_status")
 }

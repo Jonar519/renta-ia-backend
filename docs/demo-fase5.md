@@ -624,3 +624,44 @@ de esta versión no guardaron IP ni equipo.
 
 Decisiones en ADR 0013 (aceptada). Capturas en `files/.capturas/B13/` y huellas de la base antes y después
 de la 022 en `files/.huellas/B13-*.txt`.
+
+## B14: Exportar y eliminar la cuenta
+
+En **Mi perfil**, al final, aparece la sección **"Tus datos"**. La política completa (qué se
+borra, qué se conserva y por qué) está en `docs/data-retention.md`.
+
+1. **Descargar mis datos.** Escribe tu contraseña y pulsa "Descargar mis datos". El navegador
+   baja `renta-ia-mis-datos-AAAA-MM-DD.json`. Ábrelo y revisa:
+   - tu cuenta, tus sesiones activas y tu actividad (con IP y navegador);
+   - tus conversaciones con la IA y los documentos que subiste (solo metadatos);
+   - de los clientes que atiendes, solo **cuántos** son.
+
+   No hay contraseñas, hashes ni el secreto del MFA. Si un admin hizo algo sobre tu cuenta, sale
+   la acción, **sin** la IP del admin.
+2. **Un contador con clientes no puede eliminar su cuenta.** Con la cuenta de un contador que
+   tenga clientes, la sección dice cuántos son y que primero hay que eliminarlos. No muestra el
+   formulario. La base también lo impide: un cliente exige un contador activo.
+3. **Eliminar.** Con una cuenta sin clientes (por ejemplo, un asistente o una cuenta nueva):
+   1. escribe la contraseña (y el código de la app, si tiene verificación en dos pasos);
+   2. marca "Entiendo que no se puede deshacer" y pulsa "Eliminar mi cuenta";
+   3. en la confirmación, "Volver" no hace nada; "Eliminar mi cuenta" te lleva al login con el
+      aviso "Eliminamos tu cuenta";
+   4. intenta entrar con el mismo correo: "Credenciales inválidas".
+4. **La lápida en la base** (cambia el correo por el de la cuenta eliminada):
+
+   ```bat
+   docker exec renta_ia_postgres psql -U postgres -d renta_ia -c "SELECT id, status, name, email, phone, deleted_at FROM users WHERE status = 'deleted'"
+   docker exec renta_ia_postgres psql -U postgres -d renta_ia -c "SELECT d.original_name, u.name AS subido_por FROM documents d JOIN users u ON u.id = d.uploaded_by WHERE u.status = 'deleted'"
+   ```
+
+   La fila sigue, sin datos personales. Sus documentos siguen en el expediente del cliente, con
+   autor "Cuenta eliminada" (`documents.uploaded_by` es `ON DELETE RESTRICT`). El correo queda
+   libre para una invitación nueva.
+5. **El único admin no puede eliminarse.** Si eres el único administrador activo, la sección te
+   pide invitar a otro antes.
+6. **Pruebas automatizadas:**
+   - backend: `npx vitest run tests/integration/accountData.test.ts`;
+   - frontend: `npx vitest run tests/accountData.test.js` y `npx playwright test e2e/accountData.spec.js`.
+
+Capturas en `files/.capturas/B14/` y huellas de la base antes y después de 023-024 en
+`files/.huellas/B14-*.txt`.

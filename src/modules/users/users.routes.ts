@@ -10,8 +10,16 @@ import { audit } from "../../services/audit/audit.service";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { mfaRouter } from "../mfa/mfa.routes";
 import { profileService } from "./profile.service";
-import { changePasswordSchema, emailChangeSchema, sessionParams, updateProfileSchema } from "./profile.schema";
-import { sessionsService } from "../auth/sessions.service";
+import {
+  changePasswordSchema,
+  deleteAccountSchema,
+  emailChangeSchema,
+  exportDataSchema,
+  sessionParams,
+  updateProfileSchema,
+} from "./profile.schema";
+import { accountService } from "./account.service";
+import { REFRESH_COOKIE, refreshCookieOptions, sessionsService } from "../auth/sessions.service";
 
 /**
  * La propia cuenta (/api/users/me). Ownership por construcción: todas las
@@ -155,6 +163,51 @@ usersRouter.delete(
     const closed = await sessionsService.closeOthers(req.user!.userId, req.user!.sid);
     audit(req, { action: "user.session.close_others", entity: "user", entityId: req.user!.userId });
     res.json({ closed });
+  })
+);
+
+/**
+ * Exportar mis datos (B14): JSON descargable. POST porque lleva la
+ * contraseña en el cuerpo (nunca en la URL).
+ */
+usersRouter.post(
+  "/me/export",
+  profileLimiter,
+  validate({ body: exportDataSchema }),
+  asyncHandler(async (req, res) => {
+    const data = await accountService.exportData(req.user!.userId, req.user!.sid, req.body.password);
+    audit(req, { action: "user.data.export", entity: "user", entityId: req.user!.userId });
+    const day = new Date().toISOString().slice(0, 10);
+    res.setHeader("Content-Disposition", `attachment; filename="renta-ia-mis-datos-${day}.json"`);
+    res.setHeader("Cache-Control", "no-store");
+    res.json(data);
+  })
+);
+
+/** ¿Se puede eliminar la cuenta? (contador con clientes, único admin → no, y por qué). */
+usersRouter.get(
+  "/me/deletion",
+  asyncHandler(async (req, res) => {
+    res.json(await accountService.deletionStatus(req.user!.userId));
+  })
+);
+
+/**
+ * Eliminar mi cuenta (B14). Irreversible: contraseña + segundo factor si lo
+ * tiene. Queda una lápida anónima (ver account.service y docs/data-retention.md);
+ * se cierran todas las sesiones y se borra la cookie de esta.
+ */
+usersRouter.post(
+  "/me/deletion",
+  profileLimiter,
+  validate({ body: deleteAccountSchema }),
+  asyncHandler(async (req, res) => {
+    const userId = req.user!.userId;
+    await accountService.deleteAccount(userId, req.body.password, req.body.code);
+    audit(req, { action: "user.account.delete", userId, entity: "user", entityId: userId });
+    const { maxAge: _maxAge, ...cookie } = refreshCookieOptions();
+    res.clearCookie(REFRESH_COOKIE, cookie);
+    res.status(204).end();
   })
 );
 

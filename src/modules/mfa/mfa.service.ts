@@ -205,6 +205,22 @@ export const mfaService = {
     return { recoveryCodes };
   },
 
+  /**
+   * Segundo factor para una acción irreversible con la sesión ya iniciada
+   * (eliminar la cuenta, B14): si la cuenta tiene MFA, exige un código de la
+   * app o uno de recuperación. Un fallo cuenta en el bloqueo, como en el login.
+   * Sin MFA no pide nada (la contraseña ya se reconfirmó).
+   */
+  async confirmSecondFactor(user: User, code: string | undefined) {
+    if (!(await this.isEnabled(user.id))) return;
+    encryptionKey();
+    if (!code) throw new ApiError(400, "Escribe el código de tu app de autenticación o un código de recuperación.");
+    if (!(await consumeSecondFactor(user.id, code, { allowRecovery: true }))) {
+      await lockoutService.registerFailure(user.email);
+      throw wrongCode();
+    }
+  },
+
   /** Desactivar: contraseña + código (o código de recuperación). */
   async disable(userId: string, password: string, code: string) {
     encryptionKey();

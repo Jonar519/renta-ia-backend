@@ -120,7 +120,10 @@ export const invitationsService = {
 
     if (input.role === "assistant") {
       const accountant = await prisma.user.findUnique({ where: { id: input.accountantUserId! } });
-      if (accountant?.role !== "accountant") throw new ApiError(400, "accountantUserId no es un contador");
+      // Una cuenta eliminada (B14) conserva el rol en su lápida: no sirve como contador.
+      if (accountant?.role !== "accountant" || accountant.status === "deleted") {
+        throw new ApiError(400, "accountantUserId no es un contador");
+      }
     }
     if (input.role === "client") {
       const client = await prisma.client.findUnique({ where: { id: input.clientId! } });

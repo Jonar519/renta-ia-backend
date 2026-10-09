@@ -42,6 +42,8 @@ import {
   changePasswordSchema,
   emailChangeConfirmSchema,
   emailChangeSchema,
+  deleteAccountSchema,
+  exportDataSchema,
   sessionParams,
   updateProfileSchema,
 } from "../modules/users/profile.schema";
@@ -508,6 +510,46 @@ route({
   tag: "Perfil",
   summary: "Cerrar todas las demás sesiones de la propia cuenta (la actual sigue abierta)",
   responses: { 200: json(z.object({ closed: z.number().int() }), "Cuántas se cerraron"), 401: errors[401] },
+});
+// ---------- Exportar y eliminar la cuenta (B14) ----------
+route({
+  method: "post",
+  path: "/api/users/me/export",
+  tag: "Perfil",
+  summary:
+    "Descargar mis datos (JSON, adjunto). Pide la contraseña. Incluye cuenta, sesiones, actividad, conversaciones con la IA y documentos subidos (sin archivos); de los clientes a cargo, solo cuántos.",
+  body: exportDataSchema,
+  responses: {
+    200: { description: "renta-ia-export-v1 (Content-Disposition: attachment)" },
+    400: json(ErrorResponse, "Contraseña incorrecta"),
+    401: errors[401],
+    429: errors[429],
+  },
+});
+route({
+  method: "get",
+  path: "/api/users/me/deletion",
+  tag: "Perfil",
+  summary: "¿Se puede eliminar la cuenta? Si no, por qué (contador con clientes, único admin).",
+  responses: {
+    200: json(z.object({ canDelete: z.boolean(), reason: z.string().nullable() }), "Estado"),
+    401: errors[401],
+  },
+});
+route({
+  method: "post",
+  path: "/api/users/me/deletion",
+  tag: "Perfil",
+  summary:
+    "Eliminar mi cuenta (irreversible). Contraseña y, con MFA, un código. Queda una lápida anónima; se cierran todas las sesiones. Ver docs/data-retention.md.",
+  body: deleteAccountSchema,
+  responses: {
+    204: { description: "Eliminada; borra la cookie de sesión" },
+    400: json(ErrorResponse, "Contraseña o código incorrectos, o falta el código"),
+    401: errors[401],
+    409: json(ErrorResponse, "Contador con clientes a cargo o único administrador activo"),
+    429: errors[429],
+  },
 });
 route({
   method: "post",
