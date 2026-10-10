@@ -736,3 +736,51 @@ puede eliminar su cuenta sin borrar el trabajo (`docs/data-retention.md`).
 - frontend: `npx vitest run tests/adminReassign.test.js` y `npx playwright test e2e/reassign.spec.js`.
 
 Capturas en `files/.capturas/B15/reasignar-*.png`.
+
+## B16: Revisión de conceptos
+
+En el detalle de un cliente → **Documentos** → "Conceptos tributarios extraídos", cada concepto
+lleva su estado en la columna **Revisión**:
+- **"Extraído por IA · sin revisar"** (badge violeta: el violeta es solo para lo que produce la IA).
+  Dice "sin revisar" y no "validado", porque nada lo ha validado todavía.
+- **"Revisado"**, con quién lo revisó. Si se corrigió el monto, también lo que había leído la IA
+  ("Corregido · la IA leyó $1.500.000").
+
+1. **Revisar.** "Revisar" abre el monto en la misma fila, con lo que leyó la IA debajo. Acepta el
+   formato colombiano (`1.450.000,50`).
+   - "Confirmar" deja el concepto revisado: con el mismo monto, sigue siendo "de la IA"; con otro,
+     "corregido".
+   - El badge cambia a "Revisado" con un pequeño efecto, **una sola vez**. Es su única
+     micro-interacción (D4).
+   - Los totales por año se recalculan, y la nota "Incluye N conceptos extraídos por IA sin
+     revisar" baja.
+   - **Recarga la página:** sigue revisado. El badge de IA ya no vuelve a ese concepto.
+2. **Quién, cuándo y qué leyó la IA quedan en la base** (cambia el nombre del cliente):
+
+   ```bat
+   docker exec renta_ia_postgres psql -U postgres -d renta_ia -c "SELECT t.concept_type, t.amount, t.ai_amount, t.source, t.reviewed_at, u.name AS revisor FROM tax_concepts t LEFT JOIN users u ON u.id = t.reviewed_by JOIN clients c ON c.id = t.client_id WHERE c.full_name = 'María Gómez'"
+   ```
+
+   La base rechaza combinaciones imposibles: "de la IA" con otro monto, "corregido" sin revisión,
+   o una revisión sin autor (migración 026). Las alertas se vuelven a evaluar con el monto revisado.
+3. **El usuario del portal** ve solo "Revisado" o "Extraído por IA · sin revisar": sin botón, sin
+   quién ni el valor de la IA. La API ni siquiera se los envía. Puedes comprobarlo en las
+   herramientas del navegador → Red → `tax-concepts`.
+4. **Reprocesar un documento con conceptos revisados (D6).** En un documento con "Reintentar
+   análisis" (terminó con advertencias o en error) y algún concepto revisado:
+   - aparece **"¿Descartar las revisiones?"**, con cuántas se perderían;
+   - **"Volver"** no cambia nada;
+   - **"Descartar revisiones y reprocesar"** vuelve a extraer los conceptos, que quedan otra vez
+     sin revisar. Se audita como `document.reprocess.discard_reviews`.
+
+   Tampoco un reintento automático de la cola borra revisiones: el worker solo las reemplaza con
+   esa confirmación.
+5. **Login.** La tercera línea dice ahora "Tú decides — lo extraído queda marcado hasta que lo
+   revisas", porque ya es verdad.
+
+**Pruebas automatizadas:**
+- backend: `npx vitest run tests/integration/conceptReview.test.ts tests/integration/conceptReviewWorker.test.ts`;
+- frontend: `npx vitest run tests/conceptReview.test.js` y `npx playwright test e2e/conceptReview.spec.js`.
+
+Capturas en `files/.capturas/B16/` y huellas de la base antes y después de la 026 en
+`files/.huellas/B16-*.txt`.
