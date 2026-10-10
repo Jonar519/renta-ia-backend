@@ -109,8 +109,52 @@ describe("conceptos: ownership", () => {
     expect((await review(assistant, client.id, concept.id, { amount: 1 })).status).toBe(200);
     expect((await review(await testAdmin(), client.id, concept.id, { amount: 2 })).status).toBe(200);
     expect((await review(portal, client.id, concept.id, { amount: 3 })).status).toBe(403);
-    // El portal sí VE el estado de revisión.
-    expect((await list(portal, client.id)).body[0]).toMatchObject({ source: "person", amount: "2" });
+    // El portal sí VE el estado de revisión (solo revisado o no).
+    expect((await list(portal, client.id)).body[0]).toMatchObject({ reviewed: true, amount: "2" });
+  });
+
+  it("el portal recibe SOLO si está revisado: ni quién lo revisó, ni lo que leyó la IA, ni si se corrigió", async () => {
+    const { owner, client, concept } = await setup("Contador Interno");
+    const portal = await createAccountWithRole("client", { clientId: client.id });
+    await review(owner, client.id, concept.id, { amount: 1234567 }); // corregido (la IA leyó 1.500.000)
+
+    const res = await list(portal, client.id);
+    expect(res.status).toBe(200);
+    expect(Object.keys(res.body[0]).sort()).toEqual([
+      "amount",
+      "conceptType",
+      "description",
+      "id",
+      "periodYear",
+      "reviewed",
+    ]);
+    expect(res.body[0]).toMatchObject({ reviewed: true, amount: "1234567" });
+    // En la respuesta cruda no viaja nada interno.
+    const raw = JSON.stringify(res.body);
+    for (const internal of ["Contador Interno", "1500000", "aiAmount", "reviewer", "reviewedAt", "source", "person"]) {
+      expect(raw.includes(internal), internal).toBe(false);
+    }
+    // Sin revisar, también solo el indicador.
+    const fresh = await prisma.taxConcept.create({
+      data: {
+        documentId: concept.documentId,
+        clientId: client.id,
+        conceptType: "deduction",
+        amount: 10,
+        periodYear: 2025,
+      },
+    });
+    const unreviewed = (await list(portal, client.id)).body.find((c: { id: string }) => c.id === fresh.id);
+    expect(unreviewed).toEqual(expect.objectContaining({ reviewed: false }));
+    expect(unreviewed).not.toHaveProperty("aiAmount");
+    // El equipo del contador sí recibe el detalle.
+    const staff = (await list(owner, client.id)).body.find((c: { id: string }) => c.id === concept.id);
+    expect(staff).toMatchObject({
+      reviewed: true,
+      aiAmount: "1500000",
+      source: "person",
+      reviewer: { name: "Contador Interno" },
+    });
   });
 
   it("ids inválidos: 400", async () => {

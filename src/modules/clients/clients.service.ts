@@ -93,11 +93,25 @@ export const clientsService = {
     await assertClientAccess(id, user);
     // Solo los campos que muestra la UI: con miles de conceptos, cada campo
     // de más son decenas de KB de JSON.
-    return prisma.taxConcept.findMany({
+    const rows = await prisma.taxConcept.findMany({
       where: { clientId: id },
       orderBy: [{ periodYear: "desc" }, { createdAt: "desc" }],
       select: conceptSelect,
     });
+    // El usuario del portal ve solo SI está revisado. Quién lo revisó, qué
+    // leyó la IA y si se corrigió son datos internos del contador: la API no
+    // los envía (no basta con ocultarlos en pantalla).
+    if (user.role === "client") {
+      return rows.map(({ id: conceptId, conceptType, description, amount, periodYear, reviewedAt }) => ({
+        id: conceptId,
+        conceptType,
+        description,
+        amount,
+        periodYear,
+        reviewed: reviewedAt !== null,
+      }));
+    }
+    return rows.map((row) => ({ ...row, reviewed: row.reviewedAt !== null }));
   },
 
   /**
@@ -127,6 +141,6 @@ export const clientsService = {
       .catch((err: unknown) =>
         logger.warn({ err: err instanceof Error ? err.message : err }, "No se pudieron reevaluar las alertas")
       );
-    return updated;
+    return { ...updated, reviewed: true };
   },
 };

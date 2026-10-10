@@ -189,11 +189,13 @@ const TaxConcept = registry.register(
     conceptType: z.string(),
     description: z.string().nullable(),
     amount: z.string().describe("Decimal como texto: el vigente (el de la IA o el corregido)"),
-    aiAmount: z.string().describe("Lo que leyó la IA (no cambia nunca)"),
-    source: z.enum(["ai", "person"]).describe("ai = monto de la IA; person = corregido por una persona"),
     periodYear: z.number().int(),
-    reviewedAt: z.string().datetime().nullable().describe("null = Extraído por IA · sin revisar"),
-    reviewer: z.object({ name: z.string() }).nullable(),
+    reviewed: z.boolean().describe("false = Extraído por IA · sin revisar"),
+    // Solo para el equipo del contador y el admin: el portal NO los recibe.
+    aiAmount: z.string().optional().describe("Lo que leyó la IA (la API no lo modifica). No va al portal."),
+    source: z.enum(["ai", "person"]).optional().describe("ai = monto de la IA; person = corregido. No va al portal."),
+    reviewedAt: z.string().datetime().nullable().optional().describe("No va al portal."),
+    reviewer: z.object({ name: z.string() }).nullable().optional().describe("No va al portal."),
   })
 );
 const page = <T extends ZodTypeAny>(item: T) =>

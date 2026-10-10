@@ -517,9 +517,16 @@
             "type": "string",
             "description": "Decimal como texto: el vigente (el de la IA o el corregido)"
           },
+          "periodYear": {
+            "type": "integer"
+          },
+          "reviewed": {
+            "type": "boolean",
+            "description": "false = Extraído por IA · sin revisar"
+          },
           "aiAmount": {
             "type": "string",
-            "description": "Lo que leyó la IA (no cambia nunca)"
+            "description": "Lo que leyó la IA (la API no lo modifica). No va al portal."
           },
           "source": {
             "type": "string",
@@ -527,16 +534,13 @@
               "ai",
               "person"
             ],
-            "description": "ai = monto de la IA; person = corregido por una persona"
-          },
-          "periodYear": {
-            "type": "integer"
+            "description": "ai = monto de la IA; person = corregido. No va al portal."
           },
           "reviewedAt": {
             "type": "string",
             "nullable": true,
             "format": "date-time",
-            "description": "null = Extraído por IA · sin revisar"
+            "description": "No va al portal."
           },
           "reviewer": {
             "type": "object",
@@ -548,7 +552,8 @@
             },
             "required": [
               "name"
-            ]
+            ],
+            "description": "No va al portal."
           }
         },
         "required": [
@@ -556,11 +561,8 @@
           "conceptType",
           "description",
           "amount",
-          "aiAmount",
-          "source",
           "periodYear",
-          "reviewedAt",
-          "reviewer"
+          "reviewed"
         ]
       }
     },
