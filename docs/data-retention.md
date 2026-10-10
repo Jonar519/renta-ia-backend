@@ -25,15 +25,15 @@ La fila de `users` **nunca se borra**: pasa a `status = 'deleted'` y se vacía. 
 
 Lo que queda en la lápida, garantizado por la base:
 
-| Columna                     | Valor en una cuenta eliminada                    | Quién lo garantiza                                                  |
-| --------------------------- | ------------------------------------------------ | ------------------------------------------------------------------- |
-| `status`, `deleted_at`      | `deleted`, fecha de eliminación                  | `chk_users_deleted_at`                                              |
-| `name`                      | `Cuenta eliminada`                               | `chk_users_deleted_scrubbed`                                        |
-| `email`                     | `eliminada-<id>@renta-ia.invalid` (no existe)    | `chk_users_deleted_scrubbed`                                        |
-| `phone`, `avatar_key`       | `NULL`                                           | `chk_users_deleted_scrubbed`                                        |
-| `password_hash`             | `NULL` (nadie puede entrar)                      | `chk_users_password_by_status`                                      |
-| `role`, `id`, `created_at`  | se conservan (el rol explica qué hacía la cuenta) | —                                                                   |
-| Sesiones, MFA, tokens       | no puede tener ninguno                           | FK compuestas de 017-022: exigen `status = 'active'`                |
+| Columna                    | Valor en una cuenta eliminada                     | Quién lo garantiza                                   |
+| -------------------------- | ------------------------------------------------- | ---------------------------------------------------- |
+| `status`, `deleted_at`     | `deleted`, fecha de eliminación                   | `chk_users_deleted_at`                               |
+| `name`                     | `Cuenta eliminada`                                | `chk_users_deleted_scrubbed`                         |
+| `email`                    | `eliminada-<id>@renta-ia.invalid` (no existe)     | `chk_users_deleted_scrubbed`                         |
+| `phone`, `avatar_key`      | `NULL`                                            | `chk_users_deleted_scrubbed`                         |
+| `password_hash`            | `NULL` (nadie puede entrar)                       | `chk_users_password_by_status`                       |
+| `role`, `id`, `created_at` | se conservan (el rol explica qué hacía la cuenta) | —                                                    |
+| Sesiones, MFA, tokens      | no puede tener ninguno                            | FK compuestas de 017-022: exigen `status = 'active'` |
 
 El correo anterior **queda libre**: un admin puede volver a invitar a esa dirección y se crea una
 cuenta nueva, sin relación con la anterior.
@@ -56,21 +56,21 @@ No se puede eliminar (409, y la pantalla lo dice antes de pedir la contraseña) 
 
 Qué pasa, en una sola transacción:
 
-| Dato                                                         | Qué se hace                                         | Por qué                                                       |
-| ------------------------------------------------------------ | --------------------------------------------------- | ------------------------------------------------------------- |
-| Nombre, correo, teléfono, contraseña                         | se vacían (lápida)                                  | datos personales                                              |
-| Foto de perfil                                               | se borra el archivo                                 | dato personal                                                 |
-| Sesiones y refresh tokens (`user_sessions`)                  | se borran: todas las sesiones dejan de servir       | la lápida no puede tener sesiones (FK)                         |
-| MFA (secreto, códigos de recuperación, pasos del login)      | se borran                                           | idem                                                          |
-| Enlaces de recuperación y de cambio de correo                | se borran                                           | idem                                                          |
-| Vínculos asistente ↔ contador                                | se borran                                           | ya no hay persona que asista                                  |
-| Usuario de portal de un cliente                              | el cliente queda sin usuario de portal              | el cliente sigue siendo del contador                          |
-| Conversaciones con la IA que inició (`ai_conversations`)     | se borran, con sus mensajes                         | son sus preguntas                                             |
-| Correos guardados para esa dirección (`email_outbox`)        | se borran (incluido un cambio de correo pendiente)  | contienen su dirección y, en el proveedor simulado, el cuerpo |
-| Contador de intentos fallidos (`login_attempts`)             | se borra                                            | ya no hay cuenta que proteger                                 |
-| **Documentos que subió**                                     | **se conservan**, con autor "Cuenta eliminada"      | son del expediente del cliente (`RESTRICT`)                   |
-| **Registros de auditoría** (`audit_log`)                     | **se conservan** 12 meses, con la IP **recortada** (/24 en IPv4, /48 en IPv6) y el navegador como "Chrome en Windows" | seguridad: "yo no hice eso", sin que la lápida guarde un dato personal |
-| Clientes, alertas y conceptos                                | no se tocan                                         | son del contador                                              |
+| Dato                                                     | Qué se hace                                                                                                           | Por qué                                                                |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Nombre, correo, teléfono, contraseña                     | se vacían (lápida)                                                                                                    | datos personales                                                       |
+| Foto de perfil                                           | se borra el archivo                                                                                                   | dato personal                                                          |
+| Sesiones y refresh tokens (`user_sessions`)              | se borran: todas las sesiones dejan de servir                                                                         | la lápida no puede tener sesiones (FK)                                 |
+| MFA (secreto, códigos de recuperación, pasos del login)  | se borran                                                                                                             | idem                                                                   |
+| Enlaces de recuperación y de cambio de correo            | se borran                                                                                                             | idem                                                                   |
+| Vínculos asistente ↔ contador                            | se borran                                                                                                             | ya no hay persona que asista                                           |
+| Usuario de portal de un cliente                          | el cliente queda sin usuario de portal                                                                                | el cliente sigue siendo del contador                                   |
+| Conversaciones con la IA que inició (`ai_conversations`) | se borran, con sus mensajes                                                                                           | son sus preguntas                                                      |
+| Correos guardados para esa dirección (`email_outbox`)    | se borran (incluido un cambio de correo pendiente)                                                                    | contienen su dirección y, en el proveedor simulado, el cuerpo          |
+| Contador de intentos fallidos (`login_attempts`)         | se borra                                                                                                              | ya no hay cuenta que proteger                                          |
+| **Documentos que subió**                                 | **se conservan**, con autor "Cuenta eliminada"                                                                        | son del expediente del cliente (`RESTRICT`)                            |
+| **Registros de auditoría** (`audit_log`)                 | **se conservan** 12 meses, con la IP **recortada** (/24 en IPv4, /48 en IPv6) y el navegador como "Chrome en Windows" | seguridad: "yo no hice eso", sin que la lápida guarde un dato personal |
+| Clientes, alertas y conceptos                            | no se tocan                                                                                                           | son del contador                                                       |
 
 Además:
 
@@ -113,16 +113,16 @@ pruebas lo verifican. Se registra `user.data.export`.
 Una tarea diaria del worker (`data-retention`, 03:45 hora de Colombia, junto a la de Web Vitals;
 `src/services/retention/retention.service.ts`) borra lo vencido. Cada plazo protege algo:
 
-| Dato                                                | Se borra                                                    | Por qué ese plazo                                                                                          |
-| --------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `audit_log`                                         | a los **12 meses**                                          | decisión del usuario: suficiente para investigar un "yo no hice eso"                                       |
-| Sesiones (`user_sessions`, con sus tokens)          | sin ningún token vigente y **30 días** sin actividad        | una sesión cerrada sigue visible un tiempo para quien revisa qué pasó                                      |
-| Refresh tokens                                      | **7 días** después de vencer                                | los rotados de una sesión ACTIVA se quedan mientras sirven: detectan el robo por reutilización (ADR 0007) |
-| Enlaces de recuperación y de cambio de correo       | **7 días** después de vencer, usados o no                   | ya no sirven (ADR 0012); solo se guardaba su hash                                                          |
-| Pasos del login con MFA (`mfa_challenges`)          | **1 día** después de vencer                                 | duran 5 minutos                                                                                            |
-| `email_outbox`                                      | a los **30 días**                                           | guarda direcciones y, con el proveedor simulado, el cuerpo del correo                                      |
-| Intentos fallidos (`login_attempts`)                | **30 días** sin fallos, si la cuenta no está bloqueada      | el bloqueo progresivo solo mira fallos recientes                                                           |
-| Web Vitals (`web_vitals`, sin datos personales)     | a los **90 días** (tarea `web-vitals-retention`)            | métricas de rendimiento                                                                                    |
+| Dato                                            | Se borra                                               | Por qué ese plazo                                                                                         |
+| ----------------------------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| `audit_log`                                     | a los **12 meses**                                     | decisión del usuario: suficiente para investigar un "yo no hice eso"                                      |
+| Sesiones (`user_sessions`, con sus tokens)      | sin ningún token vigente y **30 días** sin actividad   | una sesión cerrada sigue visible un tiempo para quien revisa qué pasó                                     |
+| Refresh tokens                                  | **7 días** después de vencer                           | los rotados de una sesión ACTIVA se quedan mientras sirven: detectan el robo por reutilización (ADR 0007) |
+| Enlaces de recuperación y de cambio de correo   | **7 días** después de vencer, usados o no              | ya no sirven (ADR 0012); solo se guardaba su hash                                                         |
+| Pasos del login con MFA (`mfa_challenges`)      | **1 día** después de vencer                            | duran 5 minutos                                                                                           |
+| `email_outbox`                                  | a los **30 días**                                      | guarda direcciones y, con el proveedor simulado, el cuerpo del correo                                     |
+| Intentos fallidos (`login_attempts`)            | **30 días** sin fallos, si la cuenta no está bloqueada | el bloqueo progresivo solo mira fallos recientes                                                          |
+| Web Vitals (`web_vitals`, sin datos personales) | a los **90 días** (tarea `web-vitals-retention`)       | métricas de rendimiento                                                                                   |
 
 **No se purgan las invitaciones.** Una invitación vencida es lo que "Usuarios" muestra como
 "vencida" (para reenviarla o cancelarla) y mantiene ligada la cuenta pendiente.

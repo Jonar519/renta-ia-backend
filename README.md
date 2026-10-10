@@ -4,7 +4,10 @@ API REST + worker de IA del **Sistema de Gestión Documental Contable con IA**.
 Se conecta a la base de datos del repositorio [`renta-ia-database`](../renta-ia-database)
 mediante Prisma (solo como cliente: el esquema lo gestiona ese repo).
 
+- **Guía de prueba completa de la plataforma (Fase 5):** [`docs/demo-fase5.md`](docs/demo-fase5.md)
 - Decisiones de arquitectura: [`docs/adr/`](docs/adr/README.md)
+- Modelo de dominio (roles, entidades, ciclos de vida, reglas): [`renta-ia-database/docs/modelo-de-dominio.md`](../renta-ia-database/docs/modelo-de-dominio.md)
+- Retención y eliminación de datos: [`docs/data-retention.md`](docs/data-retention.md)
 - Modelo de amenazas (STRIDE): [`docs/threat-model.md`](docs/threat-model.md)
 - Pruebas de carga con mediciones reales: [`docs/load-test-report.md`](docs/load-test-report.md)
 - API (OpenAPI 3): [`docs/openapi.json`](docs/openapi.json) y, fuera de producción, **http://localhost:4000/docs**
@@ -18,14 +21,21 @@ renta-ia-backend/
 │   ├── config/                   # env (validación), logger (pino), prisma, redis, calendario y reglas tributarias
 │   ├── middlewares/              # auth (JWT), ownership (clientScope por rol), role, csrf, validate (zod), rateLimit, error
 │   ├── modules/                  # routes → (schema zod) → controller → service → Prisma
-│   │   ├── auth/                 # login, refresh, logout, bloqueo progresivo, política de contraseñas
+│   │   ├── auth/                 # login (y paso MFA), refresh, logout, sesiones, recuperación, bloqueo, política de contraseñas
 │   │   ├── invitations/          # alta de cuentas SOLO por invitación (token firmado, 72 h, un solo uso)
-│   │   ├── admin/                # alta de usuarios assistant/client, consulta de auditoría
-│   │   ├── users/ clients/ documents/ alerts/ ai/ metrics/
+│   │   ├── mfa/                  # verificación en dos pasos TOTP (secreto cifrado, códigos de recuperación, QR)
+│   │   ├── users/                # mi perfil, foto, cambio de correo y contraseña, exportar y eliminar la cuenta
+│   │   ├── admin/                # invitaciones, reasignar clientes, restablecer MFA, auditoría
+│   │   ├── clients/              # clientes, conceptos y su revisión humana, resumen
+│   │   ├── documents/            # subida, archivo original, reprocesar (D6)
+│   │   ├── alerts/ ai/ metrics/
 │   ├── services/
 │   │   ├── llm/                  # proveedor de IA (anthropic | mock), delimitadores anti prompt-injection
 │   │   ├── storage/              # interfaz de almacenamiento (hoy disco local)
 │   │   ├── audit/                # registro de auditoría (audit_log)
+│   │   ├── email/                # correo: mock (email_outbox) | SES
+│   │   ├── geoip/                # ubicación aproximada de una sesión: mock | DB-IP Lite (archivo local)
+│   │   ├── retention/            # purga programada diaria (docs/data-retention.md)
 │   │   ├── access/               # audiencia de un cliente (para el tiempo real)
 │   │   └── events/               # eventos worker → API (Redis pub/sub)
 │   ├── observability/            # /health, /ready y métricas Prometheus
@@ -102,6 +112,7 @@ curl http://localhost:4000/ready
 | `STORAGE_DRIVER` / `STORAGE_LOCAL_PATH` | `local` / `./uploads`                                | Almacenamiento de archivos                                                                                                                                                                  |
 | `EMAIL_PROVIDER`                        | `mock` (fuera de producción) / `ses` (producción)    | `mock` no envía nada: guarda cada correo completo en `email_outbox` (**prohibido en producción**). `ses`: Amazon SES v2 ([ADR 0010](docs/adr/0010-proveedores-externos-intercambiables.md)) |
 | `EMAIL_FROM` / `SES_REGION`             | remitente local / vacía                              | Obligatorias con `EMAIL_PROVIDER=ses`; las credenciales las toma el SDK de AWS (`AWS_*`, perfil o rol IAM)                                                                                  |
+| `GEOIP_PROVIDER` / `GEOIP_DBIP_CSV`     | `mock` / vacía                                       | Ubicación aproximada de las sesiones. `dbip`: el CSV gratuito "IP to City Lite" de db-ip.com, leído en el servidor (la IP no sale)                                                          |
 | `APP_URL`                               | `http://localhost:5173`                              | URL pública del frontend: base de los enlaces de los correos (obligatoria en producción)                                                                                                    |
 | `TAX_CALENDAR_PATH` / `TAX_RULES_PATH`  | JSON en `src/config/`                                | Calendario (fechas **de ejemplo**) y parámetros tributarios                                                                                                                                 |
 
@@ -136,6 +147,15 @@ curl http://localhost:4000/ready
 - Roles: `admin`, `accountant`, `assistant` (clientes de su contador, sin crear ni
   borrar) y `client` (solo lectura de su expediente). Todos se crean por invitación; la
   relación del asistente con su contador y la del portal con su expediente se crean al invitar.
+- **Sesiones activas:** cada sesión guarda su equipo, ubicación aproximada e IP **recortada**; se
+  puede cerrar una o todas las demás, con efecto inmediato ([ADR 0013](docs/adr/0013-sesiones-activas.md)).
+- **Mis datos:** exportar (JSON, con la contraseña) y eliminar la cuenta (lápida anónima; un contador
+  con clientes no puede, el único admin tampoco). Política: [`docs/data-retention.md`](docs/data-retention.md).
+- **Archivo original** (`GET /api/documents/:id/file`): con el mismo alcance que el documento (404 a
+  lo ajeno), tipo por la firma del contenido, `CSP: default-src 'none'; sandbox`, `no-store`; auditado.
+- **Revisión de conceptos:** confirmar o corregir lo que extrajo la IA. Lo que leyó la IA se conserva y
+  queda quién y cuándo. Reprocesar con revisiones exige confirmación (409 `reviewed_concepts`, D6).
+  El portal solo recibe si está revisado.
 - Auditoría en `audit_log` (sin datos sensibles), consultable en `GET /api/admin/audit`.
 - Detalles y riesgos residuales: [`docs/threat-model.md`](docs/threat-model.md) y [ADR 0007](docs/adr/0007-esquema-de-sesion.md).
 
@@ -171,19 +191,21 @@ La referencia completa, generada desde los schemas zod, está en **`/docs`** (Sw
 fuera de producción) y en `docs/openapi.json` (`npm run openapi` la regenera; un
 test falla si quedó desactualizada).
 
-| Grupo        | Rutas                                                                                                                                                                                         |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Auth         | `POST /api/auth/login` · `login/mfa` · `refresh` · `logout` · `invitations/lookup` · `invitations/accept` · `password-reset/request` · `lookup` · `confirm` · `GET /api/users/me`             |
-| Perfil       | `GET/PATCH /api/users/me` · `POST/DELETE /api/users/me/email` · `POST /api/users/me/password` · `GET/POST/DELETE /api/users/me/avatar` · `POST /api/auth/email-change/confirm`                |
-| MFA          | `GET /api/users/me/mfa` · `POST /api/users/me/mfa/setup` · `enable` · `disable` · `recovery-codes`                                                                                            |
-| Clientes     | `GET/POST /api/clients` · `GET/PATCH/DELETE /api/clients/:id` · `GET /api/clients/:id/tax-concepts` · `POST /api/clients/:id/summary`                                                         |
-| Documentos   | `POST /api/documents/upload` · `GET /api/documents/client/:clientId` · `GET /api/documents/client/:clientId/by-hash/:sha256` · `GET /api/documents/:id` · `POST /api/documents/:id/reprocess` |
-| Alertas      | `GET /api/alerts/client/:clientId` · `PATCH /api/alerts/:id` · `POST /api/alerts/deadlines/run` (admin)                                                                                       |
-| IA           | `POST /api/ai/chat`                                                                                                                                                                           |
-| Admin        | `GET/POST /api/admin/invitations` · `POST /api/admin/invitations/:userId/resend` · `DELETE /api/admin/invitations/:userId` · `DELETE /api/admin/users/:userId/mfa` · `GET /api/admin/audit`   |
-| Métricas web | `POST /api/metrics/web-vitals` · `GET /api/metrics/web-vitals/summary` (admin)                                                                                                                |
-| Operación    | `GET /health` · `GET /ready` · `GET /metrics` (token) · `GET /docs` (no producción)                                                                                                           |
-| Tiempo real  | `WS /ws` (token en el primer mensaje)                                                                                                                                                         |
+| Grupo        | Rutas                                                                                                                                                                                                                                                                                             |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth         | `POST /api/auth/login` · `login/mfa` · `refresh` · `logout` · `invitations/lookup` · `invitations/accept` · `password-reset/request` · `lookup` · `confirm` · `GET /api/users/me`                                                                                                                 |
+| Perfil       | `GET/PATCH /api/users/me` (incluye la densidad de las tablas) · `POST/DELETE /api/users/me/email` · `POST /api/users/me/password` · `GET/POST/DELETE /api/users/me/avatar` · `POST /api/auth/email-change/confirm`                                                                                |
+| Sesiones     | `GET/DELETE /api/users/me/sessions` · `DELETE /api/users/me/sessions/:sessionId`                                                                                                                                                                                                                  |
+| Mis datos    | `POST /api/users/me/export` · `GET/POST /api/users/me/deletion`                                                                                                                                                                                                                                   |
+| MFA          | `GET /api/users/me/mfa` · `POST /api/users/me/mfa/setup` · `enable` · `disable` · `recovery-codes`                                                                                                                                                                                                |
+| Clientes     | `GET/POST /api/clients` · `GET/PATCH/DELETE /api/clients/:id` · `GET /api/clients/:id/tax-concepts` · `PATCH /api/clients/:id/tax-concepts/:conceptId` (revisión) · `POST /api/clients/:id/summary`                                                                                               |
+| Documentos   | `POST /api/documents/upload` · `GET /api/documents/client/:clientId` · `GET /api/documents/client/:clientId/by-hash/:sha256` · `GET /api/documents/:id` · `GET /api/documents/:id/file` (original) · `POST /api/documents/:id/reprocess`                                                          |
+| Alertas      | `GET /api/alerts/client/:clientId` · `PATCH /api/alerts/:id` · `POST /api/alerts/deadlines/run` (admin)                                                                                                                                                                                           |
+| IA           | `POST /api/ai/chat`                                                                                                                                                                                                                                                                               |
+| Admin        | `GET/POST /api/admin/invitations` · `POST /api/admin/invitations/:userId/resend` · `DELETE /api/admin/invitations/:userId` · `DELETE /api/admin/users/:userId/mfa` · `POST /api/admin/clients/reassign` · `GET /api/admin/accountants` · `GET /api/admin/portal-clients` · `GET /api/admin/audit` |
+| Métricas web | `POST /api/metrics/web-vitals` · `GET /api/metrics/web-vitals/summary` (admin)                                                                                                                                                                                                                    |
+| Operación    | `GET /health` · `GET /ready` · `GET /metrics` (token) · `GET /docs` (no producción)                                                                                                                                                                                                               |
+| Tiempo real  | `WS /ws` (token en el primer mensaje)                                                                                                                                                                                                                                                             |
 
 Listados paginados por cursor: `?limit=50&cursor=...` → `{ items, nextCursor }`.
 Un recurso de otro cliente responde **404** (no 403) para no revelar que existe.
@@ -232,7 +254,8 @@ Pruebas de carga: [`loadtests/README.md`](loadtests/README.md)
 `loadtest:chat`, `loadtest:upload`, `loadtest:ratelimit`).
 
 CI (`.github/workflows/ci.yml`): lint, typecheck, tests, build; y un job
-`security` con `npm audit --omit=dev` y gitleaks.
+`security` con `npm audit --omit=dev` y gitleaks (los falsos positivos revisados, en
+`.gitleaksignore`). Lo que necesita para pasar: ver "CI" en el README raíz.
 
 ## Cambios de esquema
 
@@ -259,10 +282,11 @@ calendario oficial de la DIAN.
 
 ## Estado
 
-| Tema                                                                       | Estado                           |
-| -------------------------------------------------------------------------- | -------------------------------- |
-| API, pipeline de IA, tiempo real, alertas, resumen                         | ✅                               |
-| Sesión con refresh rotativo, CSRF, bloqueo, roles, auditoría, threat model | ✅                               |
-| Health/ready, apagado ordenado, métricas, pruebas de carga                 | ✅                               |
-| OpenAPI, ADR                                                               | ✅                               |
-| Despliegue en AWS (Dockerfile de producción, S3, infraestructura)          | Pendiente (fuera del Proyecto 1) |
+| Tema                                                                                                                                              | Estado                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| API, pipeline de IA, tiempo real, alertas, resumen                                                                                                | ✅                               |
+| Sesión con refresh rotativo, CSRF, bloqueo, roles, auditoría, threat model                                                                        | ✅                               |
+| Health/ready, apagado ordenado, métricas, pruebas de carga                                                                                        | ✅                               |
+| OpenAPI, ADR                                                                                                                                      | ✅                               |
+| Fase 5: invitaciones, recuperación, MFA, perfil y foto, sesiones activas, mis datos, densidad, reasignar, revisión de conceptos, archivo original | ✅ (guía: `docs/demo-fase5.md`)  |
+| Despliegue en AWS (Dockerfile de producción, S3, infraestructura)                                                                                 | Pendiente (fuera del Proyecto 1) |
