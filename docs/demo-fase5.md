@@ -784,3 +784,69 @@ lleva su estado en la columna **Revisión**:
 
 Capturas en `files/.capturas/B16/` y huellas de la base antes y después de la 026 en
 `files/.huellas/B16-*.txt`.
+
+## B17: Vista dividida I, el documento original
+
+En el detalle de un cliente → **Documentos**, cada documento tiene ahora una acción para ver o
+bajar el archivo que se subió. **El visor es solo para el contador y el asistente.** El usuario del
+portal y el admin ven **"Descargar"** en su lugar (decisiones escritas: el visor no cabía en su
+presupuesto de JS).
+
+1. **Contador o asistente: "Ver original"** abre el visor encima de los conceptos, con el nombre
+   del archivo como título (recibe el foco). Para volver a la tabla, usa "Cerrar" o Escape: el
+   foco vuelve al botón del documento.
+   - **Imagen (JPG o PNG):** se muestra tal cual con `<img>`.
+   - **PDF:** se dibuja página por página, con "‹ ›" para cambiar de página y "− +" para el zoom.
+   - Siempre está **"Descargar"**. Es también la alternativa accesible: la página dibujada de un
+     PDF no expone su texto a un lector de pantalla.
+   - **Estados propios:**
+     - cargando;
+     - archivo no disponible ("El archivo original de este documento no está disponible.");
+     - sin conexión;
+     - PDF protegido con contraseña;
+     - PDF dañado;
+     - tipo que no se puede mostrar.
+
+     Los que no se pueden mostrar ofrecen "Reintentar" y la descarga cuando ya hay archivo.
+2. **pdf.js se descarga solo al abrir un PDF.** Es la excepción D3 (unos 496 KB gzip: la
+   biblioteca y su worker, con su propio tope de 520 KB fuera de los topes por rol). Para verlo:
+   herramientas del navegador → Red, filtro `pdf`.
+   - **Abrir Documentos:** no aparece nada.
+   - **"Ver original" en una imagen:** solo baja el visor (`documentViewer-…js`, unos 1,7 KB),
+     sin pdf.js.
+   - **"Ver original" en un PDF:** recién ahí aparecen `pdf.min-…mjs` y `pdf.worker.min-…mjs`,
+     del mismo origen que la app. El Service Worker no los precachea.
+3. **La CSP no se relajó:** `object-src` y `frame-src` siguen en `'none'` (no se usa el visor de
+   PDF del navegador ni un iframe). En la consola no aparece ninguna violación.
+4. **Portal y admin: "Descargar"** baja el archivo con su nombre, sin abrir el visor y sin
+   descargar su código ni pdf.js.
+5. **El archivo exige sesión y propiedad.** `GET /api/documents/:id/file`:
+   - responde 404 si el documento no está a tu alcance (un contador no ve los archivos de los
+     clientes de otro);
+   - el tipo sale del contenido guardado, no del nombre;
+   - se sirve con `Content-Security-Policy: default-src 'none'; sandbox`, `nosniff` y
+     `Cache-Control: private, no-store`;
+   - cada vista queda auditada como `document.file.view`:
+
+   ```bat
+   docker exec renta_ia_postgres psql -U postgres -d renta_ia -c "SELECT action, entity_id, created_at FROM audit_log WHERE action = 'document.file.view' ORDER BY created_at DESC LIMIT 5"
+   ```
+
+**El build vigila a pdf.js** (`npm run build` → `scripts/check-bundle.mjs`). Falla si:
+- pdf.js pasa sus 520 KB;
+- se empaqueta como módulo, o su código aparece dentro de otro chunk;
+- una pantalla lo importa, o importa el visor, de forma estática;
+- lo carga otro archivo que no sea el visor;
+- el Service Worker lo precachea;
+- `pdfjs-dist` no tiene la versión exacta en `package.json`;
+- el permiso del visor incluye al admin o al portal.
+
+**Pruebas automatizadas:**
+- backend: `npx vitest run tests/integration/documentFile.test.ts`. Incluye la prueba de
+  propiedad cruzada: "ownership: otro contador 404; asistente del contador, portal del cliente y
+  admin sí";
+- frontend: `npx vitest run tests/documentViewer.test.js` y
+  `npx playwright test e2e/documentViewer.spec.js`.
+
+Capturas en `files/.capturas/B17/`. Huellas de la base en `files/.huellas/B17-*.txt` (B17 no
+cambia el esquema).
