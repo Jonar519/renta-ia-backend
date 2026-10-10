@@ -192,6 +192,7 @@ const TaxConcept = registry.register(
     periodYear: z.number().int(),
     reviewed: z.boolean().describe("false = Extraído por IA · sin revisar"),
     // Solo para el equipo del contador y el admin: el portal NO los recibe.
+    documentId: z.string().uuid().optional().describe("Documento del que salió (vista dividida). No va al portal."),
     aiAmount: z.string().optional().describe("Lo que leyó la IA (la API no lo modifica). No va al portal."),
     source: z.enum(["ai", "person"]).optional().describe("ai = monto de la IA; person = corregido. No va al portal."),
     reviewedAt: z.string().datetime().nullable().optional().describe("No va al portal."),

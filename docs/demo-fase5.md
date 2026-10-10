@@ -850,3 +850,35 @@ presupuesto de JS).
 
 Capturas en `files/.capturas/B17/`. Huellas de la base en `files/.huellas/B17-*.txt` (B17 no
 cambia el esquema).
+
+## B18: Vista dividida, el original junto a sus conceptos
+
+Solo para el **contador** y el **asistente**, que son los que tienen visor. El portal y el admin
+siguen con "Descargar", sin vista dividida.
+
+1. En **Documentos**, abre un PDF con **"Ver original"**.
+   - **En una pantalla ancha (1200 px o más):** el visor queda a la izquierda y el panel
+     **"Conceptos tributarios extraídos"** a la derecha. El visor se queda fijo mientras bajas por
+     los conceptos, que se muestran como tarjetas porque media columna no alcanza para la tabla.
+   - **En pantallas más angostas y en móvil (375 y 320 px):** se apilan, el visor arriba, sin
+     desplazamiento horizontal.
+2. **Es la misma tabla de conceptos, filtrada al documento abierto.** Arriba dice, por ejemplo,
+   "Conceptos de certificado.pdf: 3 de 4". Los totales siguen siendo de todo el cliente. Si el
+   documento no tiene conceptos, la tabla lo dice.
+3. **Revisar desde la vista dividida** usa el mismo formulario y el mismo endpoint de B16
+   (`PATCH /api/clients/:id/tax-concepts/:conceptId`). No hay otra forma de editar un concepto.
+4. **Cierra el original** con "Cerrar" o Escape.
+   - Vuelven todos los conceptos, con la revisión ya aplicada, y los totales ya recalculados.
+   - El foco vuelve al botón "Ver original" del documento.
+5. **Teclado:** al abrir, el foco va al título del visor. Tab recorre primero los controles del
+   visor y luego los conceptos (Revisar…).
+
+La API manda el documento de origen de cada concepto (`documentId`) solo al equipo del contador:
+el portal no lo recibe.
+
+**Pruebas automatizadas:**
+- backend: `npx vitest run tests/integration/conceptReview.test.ts`;
+- frontend: `npx vitest run tests/splitView.test.js` y `npx playwright test e2e/splitView.spec.js`.
+
+Capturas en `files/.capturas/B18/`. Huellas de la base en `files/.huellas/B18-*.txt` (B18 no
+cambia el esquema).

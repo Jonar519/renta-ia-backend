@@ -131,7 +131,16 @@ describe("conceptos: ownership", () => {
     expect(res.body[0]).toMatchObject({ reviewed: true, amount: "1234567" });
     // En la respuesta cruda no viaja nada interno.
     const raw = JSON.stringify(res.body);
-    for (const internal of ["Contador Interno", "1500000", "aiAmount", "reviewer", "reviewedAt", "source", "person"]) {
+    for (const internal of [
+      "Contador Interno",
+      "1500000",
+      "aiAmount",
+      "reviewer",
+      "reviewedAt",
+      "source",
+      "person",
+      "documentId",
+    ]) {
       expect(raw.includes(internal), internal).toBe(false);
     }
     // Sin revisar, también solo el indicador.
@@ -150,6 +159,7 @@ describe("conceptos: ownership", () => {
     // El equipo del contador sí recibe el detalle.
     const staff = (await list(owner, client.id)).body.find((c: { id: string }) => c.id === concept.id);
     expect(staff).toMatchObject({
+      documentId: concept.documentId,
       reviewed: true,
       aiAmount: "1500000",
       source: "person",

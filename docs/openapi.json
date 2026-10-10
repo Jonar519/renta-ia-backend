@@ -524,6 +524,11 @@
             "type": "boolean",
             "description": "false = Extraído por IA · sin revisar"
           },
+          "documentId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Documento del que salió (vista dividida). No va al portal."
+          },
           "aiAmount": {
             "type": "string",
             "description": "Lo que leyó la IA (la API no lo modifica). No va al portal."

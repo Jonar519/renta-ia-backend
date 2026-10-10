@@ -10,6 +10,8 @@ import { rulesService } from "../ai/rules.service";
 /** Lo que la UI muestra de cada concepto, con su revisión (B16). */
 const conceptSelect = {
   id: true,
+  // Vista dividida (B18): el contador filtra los conceptos del documento abierto.
+  documentId: true,
   conceptType: true,
   description: true,
   amount: true,
