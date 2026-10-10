@@ -29,7 +29,7 @@ import {
 import { alertClientParams, alertIdParams, updateAlertStatusSchema } from "../modules/alerts/alerts.schema";
 import { chatSchema } from "../modules/ai/ai.schema";
 import { summaryQuerySchema, webVitalsPayloadSchema } from "../modules/metrics/metrics.schema";
-import { auditQuerySchema, portalClientsQuerySchema } from "../modules/admin/admin.schema";
+import { auditQuerySchema, portalClientsQuerySchema, reassignClientsSchema } from "../modules/admin/admin.schema";
 import {
   loginMfaSchema,
   mfaDisableSchema,
@@ -902,13 +902,39 @@ route({
   },
 });
 route({
+  method: "post",
+  path: "/api/admin/clients/reassign",
+  tag: "Admin",
+  summary:
+    "Reasignar TODOS los clientes de un contador a otro (con sus documentos, alertas y conversaciones). Así un contador puede eliminar su cuenta.",
+  body: reassignClientsSchema,
+  responses: {
+    200: json(z.object({ moved: z.number().int() }), "Cuántos clientes se movieron"),
+    400: json(ErrorResponse, "Ids inválidos, iguales, o alguno no es un contador activo"),
+    403: errors[403],
+    409: json(
+      ErrorResponse,
+      "Sin clientes que mover, o el destino ya tiene clientes con los mismos documentos (no se mueve ninguno)"
+    ),
+  },
+});
+route({
   method: "get",
   path: "/api/admin/accountants",
   tag: "Admin",
-  summary: "Contadores activos (para ligar un asistente al invitarlo)",
+  summary: "Contadores activos, con cuántos clientes tiene cada uno (ligar un asistente; reasignar clientes)",
   responses: {
     200: json(
-      z.object({ items: z.array(z.object({ id: z.string().uuid(), name: z.string(), email: z.string().email() })) }),
+      z.object({
+        items: z.array(
+          z.object({
+            id: z.string().uuid(),
+            name: z.string(),
+            email: z.string().email(),
+            clientCount: z.number().int(),
+          })
+        ),
+      }),
       "Contadores"
     ),
     403: errors[403],

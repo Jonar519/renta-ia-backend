@@ -639,8 +639,9 @@ borra, qué se conserva y por qué) está en `docs/data-retention.md`.
    No hay contraseñas, hashes ni el secreto del MFA. Si un admin hizo algo sobre tu cuenta, sale
    la acción, **sin** la IP del admin.
 2. **Un contador con clientes no puede eliminar su cuenta.** Con la cuenta de un contador que
-   tenga clientes, la sección dice cuántos son y que primero hay que eliminarlos. No muestra el
-   formulario. La base también lo impide: un cliente exige un contador activo.
+   tenga clientes, la sección dice cuántos son y que un administrador debe reasignarlos (ver
+   "Reasignar clientes" más abajo) o que hay que eliminarlos. No muestra el formulario. La base
+   también lo impide: un cliente exige un contador activo.
 3. **Eliminar.** Con una cuenta sin clientes (por ejemplo, un asistente o una cuenta nueva):
    1. escribe la contraseña (y el código de la app, si tiene verificación en dos pasos);
    2. marca "Entiendo que no se puede deshacer" y pulsa "Eliminar mi cuenta";
@@ -709,3 +710,29 @@ celda corte su contenido.
 
 Capturas en `files/.capturas/B15/` y huellas de la base antes y después de la 025 en
 `files/.huellas/B15-*.txt`.
+
+## Después de B15: reasignar clientes
+
+En **Usuarios** (solo admin), al final, está **"Reasignar clientes"**. Pasa **todos** los clientes
+de un contador a otro, con sus documentos, alertas, conceptos y conversaciones. Así un contador
+puede eliminar su cuenta sin borrar el trabajo (`docs/data-retention.md`).
+
+1. Elige el **contador de origen** (solo aparecen los que tienen clientes, con cuántos) y el
+   **de destino**. Cada opción lleva nombre y correo, porque dos contadores pueden llamarse igual.
+2. "Reasignar" pide **confirmación** con cuántos clientes y a quién. "Volver" no mueve nada.
+3. Al confirmar:
+   - entrando como el contador de destino, el cliente aparece en su lista;
+   - el de origen ya no lo ve;
+   - en Mi perfil → "Tus datos", el de origen ya puede eliminar su cuenta.
+
+   Los asistentes del contador anterior dejan de ver esos clientes. Los documentos conservan
+   quién los subió.
+4. **Si el destino ya tiene un cliente con el mismo número de documento**, no se mueve ninguno
+   (409), y el mensaje dice cuáles chocan.
+5. Se registra `admin.clients.reassign` en la auditoría.
+
+**Pruebas automatizadas:**
+- backend: `npx vitest run tests/integration/reassignClients.test.ts`;
+- frontend: `npx vitest run tests/adminReassign.test.js` y `npx playwright test e2e/reassign.spec.js`.
+
+Capturas en `files/.capturas/B15/reasignar-*.png`.

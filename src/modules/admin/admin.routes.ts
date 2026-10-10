@@ -6,7 +6,7 @@ import { validate } from "../../middlewares/validate.middleware";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { audit } from "../../services/audit/audit.service";
 import { adminService } from "./admin.service";
-import { auditQuerySchema, portalClientsQuerySchema } from "./admin.schema";
+import { auditQuerySchema, portalClientsQuerySchema, reassignClientsSchema } from "./admin.schema";
 import { invitationsService } from "../invitations/invitations.service";
 import { invitedUserParams, inviteSchema } from "../invitations/invitations.schema";
 import { mfaService } from "../mfa/mfa.service";
@@ -78,6 +78,17 @@ adminRouter.get(
   "/accountants",
   asyncHandler(async (_req, res) => {
     res.json({ items: await adminService.listAccountants() });
+  })
+);
+
+/** Reasignar todos los clientes de un contador a otro (pantalla Usuarios). */
+adminRouter.post(
+  "/clients/reassign",
+  validate({ body: reassignClientsSchema }),
+  asyncHandler(async (req, res) => {
+    const result = await adminService.reassignClients(req.body.fromUserId, req.body.toUserId);
+    audit(req, { action: "admin.clients.reassign", entity: "user", entityId: req.body.fromUserId });
+    res.json(result);
   })
 );
 

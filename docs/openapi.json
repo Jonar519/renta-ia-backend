@@ -4452,12 +4452,99 @@
         }
       }
     },
+    "/api/admin/clients/reassign": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Reasignar TODOS los clientes de un contador a otro (con sus documentos, alertas y conversaciones). Así un contador puede eliminar su cuenta.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fromUserId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "toUserId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "fromUserId",
+                  "toUserId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cuántos clientes se movieron",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "moved": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "moved"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Ids inválidos, iguales, o alguno no es un contador activo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El rol no permite esta acción, o (code: mfa_enrollment_required) un admin debe activar MFA primero",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sin clientes que mover, o el destino ya tiene clientes con los mismos documentos (no se mueve ninguno)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/accountants": {
       "get": {
         "tags": [
           "Admin"
         ],
-        "summary": "Contadores activos (para ligar un asistente al invitarlo)",
+        "summary": "Contadores activos, con cuántos clientes tiene cada uno (ligar un asistente; reasignar clientes)",
         "security": [
           {
             "bearerAuth": []
@@ -4486,12 +4573,16 @@
                           "email": {
                             "type": "string",
                             "format": "email"
+                          },
+                          "clientCount": {
+                            "type": "integer"
                           }
                         },
                         "required": [
                           "id",
                           "name",
-                          "email"
+                          "email",
+                          "clientCount"
                         ]
                       }
                     }

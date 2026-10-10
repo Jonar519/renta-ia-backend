@@ -246,7 +246,8 @@ describe("datos para el formulario de invitación (solo admin)", () => {
     expect(ids).toContain(active.user.id);
     expect(ids).not.toContain(pending.userId);
     expect(ids).not.toContain(admin.user.id);
-    expect(Object.keys(res.body.items[0]).sort()).toEqual(["email", "id", "name"]);
+    // clientCount: para reasignar clientes (Usuarios, tras B15).
+    expect(Object.keys(res.body.items[0]).sort()).toEqual(["clientCount", "email", "id", "name"]);
   });
 
   it("expedientes sin portal: busca por nombre o documento, excluye los que ya tienen portal, máx. 20", async () => {

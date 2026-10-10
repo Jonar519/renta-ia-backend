@@ -49,8 +49,8 @@ async function deletionBlocker(user: User): Promise<string | null> {
   const clients = await prisma.client.count({ where: { accountantUserId: user.id } });
   if (clients > 0) {
     return clients === 1
-      ? "Tienes 1 cliente a tu cargo. Elimínalo antes de eliminar tu cuenta: Renta IA todavía no permite pasarlo a otro contador."
-      : `Tienes ${clients} clientes a tu cargo. Elimínalos antes de eliminar tu cuenta: Renta IA todavía no permite pasarlos a otro contador.`;
+      ? "Tienes 1 cliente a tu cargo. Antes de eliminar tu cuenta, pide a un administrador que lo reasigne a otro contador (en Usuarios) o elimínalo."
+      : `Tienes ${clients} clientes a tu cargo. Antes de eliminar tu cuenta, pide a un administrador que los reasigne a otro contador (en Usuarios) o elimínalos.`;
   }
   if (user.role === "admin") {
     const otherAdmins = await prisma.user.count({ where: { role: "admin", status: "active", id: { not: user.id } } });

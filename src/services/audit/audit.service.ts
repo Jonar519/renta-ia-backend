@@ -45,6 +45,7 @@ export type AuditAction =
   | "mfa.disabled"
   | "mfa.recovery_codes.regenerated"
   | "admin.mfa.reset"
+  | "admin.clients.reassign"
   | "user.profile.update"
   | "user.email_change.requested"
   | "user.email_change.cancelled"

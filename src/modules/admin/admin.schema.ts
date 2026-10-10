@@ -19,3 +19,11 @@ export const auditQuerySchema = z.object({
   entity: z.enum(["user", "client", "document", "session", "audit"]).optional(),
   entityId: z.string().max(64).optional(),
 });
+
+/** Reasignar TODOS los clientes de un contador a otro (antes de eliminar su cuenta, por ejemplo). */
+export const reassignClientsSchema = z
+  .object({ fromUserId: uuidSchema, toUserId: uuidSchema })
+  .refine((d) => d.fromUserId !== d.toUserId, {
+    message: "Elige dos contadores distintos",
+    path: ["toUserId"],
+  });

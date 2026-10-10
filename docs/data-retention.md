@@ -5,8 +5,7 @@ cuenta (Fase 5, B14). La implementación está en `src/modules/users/account.ser
 garantías de la base, en las migraciones `023_account_status_deleted.sql` y
 `024_account_deletion.sql`.
 
-Este documento describe lo que hace el sistema **hoy**. Lo que todavía no existe está en la
-sección "Decisiones pendientes".
+Este documento describe lo que hace el sistema **hoy**.
 
 ## La regla de fondo: la cuenta eliminada queda como lápida
 
@@ -48,9 +47,10 @@ cuenta nueva, sin relación con la anterior.
 
 No se puede eliminar (409, y la pantalla lo dice antes de pedir la contraseña) en estos casos:
 
-- **Un contador con clientes a su cargo.** Primero tiene que eliminarlos. Renta IA todavía no
-  permite pasar clientes a otro contador. La base lo impide por su cuenta: un cliente exige un
-  contador activo.
+- **Un contador con clientes a su cargo.** Primero un admin los **reasigna** a otro contador
+  (Usuarios → "Reasignar clientes": se mueven todos, con sus documentos, alertas y
+  conversaciones), o el contador los elimina. La base lo impide por su cuenta: un cliente exige
+  un contador activo.
 - **El único administrador activo.** Sin otro admin, nadie podría invitar ni restablecer el MFA
   de nadie.
 
@@ -129,9 +129,3 @@ Una tarea diaria del worker (`data-retention`, 03:45 hora de Colombia, junto a l
 
 Las pruebas (`tests/integration/retention.test.ts`) crean, para cada categoría, un dato viejo
 (se borra) y uno vigente (se queda), y comprueban que la tarea queda registrada.
-
-## Decisiones pendientes
-
-1. **Reasignar clientes** de un contador a otro. Hoy, para eliminar su cuenta, un contador tiene
-   que eliminar sus clientes. La pantalla (en Usuarios, para admin) espera la confirmación del
-   presupuesto.
