@@ -492,7 +492,7 @@ const ActiveSession = z.object({
   current: z.boolean().openapi({ description: "Es la sesión de este access token" }),
   createdAt: z.string().datetime(),
   lastSeenAt: z.string().datetime().openapi({ description: "Última renovación del token" }),
-  ip: z.string().nullable().openapi({ description: "Recortada: 181.49.12.x o 2001:db8:85a3::/48; null = desconocida" }),
+  ip: z.string().nullable().openapi({ description: "Recortada: 203.0.113.x o 2001:db8:85a3::/48; null = desconocida" }),
   location: z.string().nullable().openapi({ description: "Ubicación APROXIMADA por IP; null = desconocida" }),
   device: z.string().nullable().openapi({ description: "Navegador en sistema; null = desconocido" }),
 });

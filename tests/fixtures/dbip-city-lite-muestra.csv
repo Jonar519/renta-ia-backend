@@ -1,6 +1,6 @@
 1.0.0.0,1.0.0.255,OC,AU,Queensland,"South Brisbane",-27.4767,153.017
-181.49.0.0,181.49.255.255,SA,CO,"Bogota D.C.","Bogotá",4.60971,-74.0817
 190.0.0.0,190.0.15.255,SA,CO,Antioquia,"Medellín, Antioquia",6.25184,-75.5636
 200.1.1.0,200.1.1.255,SA,BR,"Sao Paulo",,-23.5475,-46.6361
+203.0.113.0,203.0.113.255,SA,CO,"Bogota D.C.","Bogotá",4.60971,-74.0817
 2800:e2:0:0:0:0:0:0,2800:e2:ffff:ffff:ffff:ffff:ffff:ffff,SA,CO,"Bogota D.C.","Bogotá",4.60971,-74.0817
 2a00:1450::,2a00:1450:ffff:ffff:ffff:ffff:ffff:ffff,EU,IE,Leinster,Dublin,53.3498,-6.26031

@@ -267,7 +267,7 @@ describe("auditoría de una cuenta eliminada", () => {
     const account = await createAccount("Auditoría Recortada");
     const id = account.user.id;
     // Actividad con IP y navegador completos (IPv4, IPv6 e IPv4 dentro de IPv6).
-    for (const ip of ["181.49.12.77", "2800:e2:1234:5678::9", "::ffff:190.0.3.4"]) {
+    for (const ip of ["203.0.113.77", "2800:e2:1234:5678::9", "::ffff:190.0.3.4"]) {
       await prisma.auditLog.create({ data: { action: "auth.login.success", userId: id, ip, userAgent: CHROME } });
     }
     // Lo que OTRA cuenta (un admin) hizo sobre esta: dato de esa otra persona.
@@ -299,7 +299,7 @@ describe("auditoría de una cuenta eliminada", () => {
         expect(row.ip, row.action).toMatch(/^(\d{1,3}\.){3}0$|^([0-9a-f]{1,4}(:[0-9a-f]{1,4}){0,2})?::$/);
       if (row.userAgent !== null) expect(row.userAgent, row.action).toBe("Chrome en Windows");
     }
-    expect(rows.map((r) => r.ip)).toEqual(expect.arrayContaining(["181.49.12.0", "2800:e2:1234::", "190.0.3.0"]));
+    expect(rows.map((r) => r.ip)).toEqual(expect.arrayContaining(["203.0.113.0", "2800:e2:1234::", "190.0.3.0"]));
     // El registro de la eliminación ya nace recortado.
     const deletion = rows.find((r) => r.action === "user.account.delete");
     expect(deletion).toMatchObject({ entityId: id, ip: "127.0.0.0", userAgent: "Chrome en Windows" });

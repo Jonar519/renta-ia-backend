@@ -2,7 +2,7 @@ import { isIPv4, isIPv6 } from "net";
 
 /**
  * Direcciones IP de las sesiones (B13). Se guarda SOLO un prefijo:
- *  - IPv4: sin el último octeto (181.49.12.77 → 181.49.12.0), se muestra 181.49.12.x;
+ *  - IPv4: sin el último octeto (203.0.113.77 → 203.0.113.0), se muestra 203.0.113.x;
  *  - IPv6: el /48 (2001:db8:85a3:1::7 → 2001:db8:85a3::), se muestra 2001:db8:85a3::/48.
  * La IP completa solo se usa en memoria para la ubicación aproximada.
  */

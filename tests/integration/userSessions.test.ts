@@ -208,10 +208,10 @@ describe("022: garantías de la base", () => {
     const account = await createAccount("IP Completa");
     const sid = (await login(account.email)).sid;
     const setIp = (ip: string) => sql(`UPDATE user_sessions SET ip_prefix = $1 WHERE id = $2::uuid`, ip, sid);
-    for (const bad of ["181.49.12.77", "181.49.12.1", "999.1.1.0", "2001:db8:85a3:1::", "2001:db8::7"]) {
+    for (const bad of ["203.0.113.77", "203.0.113.1", "999.1.1.0", "2001:db8:85a3:1::", "2001:db8::7"]) {
       await expect(setIp(bad), bad).rejects.toThrow(/chk_user_sessions_ip_prefix/);
     }
-    for (const ok of ["181.49.12.0", "2001:db8:85a3::", "::"]) await expect(setIp(ok)).resolves.toBe(1);
+    for (const ok of ["203.0.113.0", "2001:db8:85a3::", "::"]) await expect(setIp(ok)).resolves.toBe(1);
   });
 
   it("un token no puede pertenecer a la sesión de otra cuenta", async () => {

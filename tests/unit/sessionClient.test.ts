@@ -11,11 +11,11 @@ const fakeReq = (ip: string | undefined, userAgent?: string) =>
 
 describe("prefijo de la IP", () => {
   it("IPv4: sin el último octeto; se muestra con x", () => {
-    expect(ipPrefix("181.49.12.77")).toBe("181.49.12.0");
-    expect(displayIpPrefix("181.49.12.0")).toBe("181.49.12.x");
+    expect(ipPrefix("203.0.113.77")).toBe("203.0.113.0");
+    expect(displayIpPrefix("203.0.113.0")).toBe("203.0.113.x");
   });
   it("IPv4 dentro de IPv6 (::ffff:) se trata como IPv4", () => {
-    expect(normalizeIp("::ffff:181.49.12.77")).toBe("181.49.12.77");
+    expect(normalizeIp("::ffff:203.0.113.77")).toBe("203.0.113.77");
     expect(ipPrefix("::ffff:127.0.0.1")).toBe("127.0.0.0");
   });
   it("IPv6: solo el /48, comprimido", () => {
@@ -72,8 +72,8 @@ describe("equipo (User-Agent)", () => {
 
 describe("sessionClient", () => {
   it("IP pública con el mock: prefijo sí, ubicación desconocida (no se inventa)", () => {
-    const req = fakeReq("181.49.12.77", "Mozilla/5.0 (X11; Linux x86_64; rv:131.0) Gecko/20100101 Firefox/131.0");
-    expect(sessionClient(req)).toEqual({ ipPrefix: "181.49.12.0", location: null, device: "Firefox en Linux" });
+    const req = fakeReq("203.0.113.77", "Mozilla/5.0 (X11; Linux x86_64; rv:131.0) Gecko/20100101 Firefox/131.0");
+    expect(sessionClient(req)).toEqual({ ipPrefix: "203.0.113.0", location: null, device: "Firefox en Linux" });
   });
   it("sin IP ni User-Agent: todo null", () => {
     expect(sessionClient(fakeReq(undefined))).toEqual({ ipPrefix: null, location: null, device: null });
