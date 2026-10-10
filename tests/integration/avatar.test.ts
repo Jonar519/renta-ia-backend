@@ -7,7 +7,7 @@ import { prisma } from "../../src/config/prisma";
 import { env } from "../../src/config/env";
 import { storageService } from "../../src/services/storage";
 import { storageKeys } from "../../src/services/storage/keys";
-import { GPS_LATITUDE, jpegWithGps, pngWithMetadata, REAL_JPEG, REAL_PNG } from "../fixtures/images";
+import { at, GPS_LATITUDE, jpegWithGps, pngWithMetadata, REAL_JPEG, REAL_PNG } from "../fixtures/images";
 
 /**
  * Foto de perfil (B12, migración 021): validación por "magic bytes" (la misma
@@ -96,7 +96,7 @@ describe("subir la foto", () => {
     const stored = await storageService.readAsBuffer(avatarKey!);
     const served = (await getAvatar(account)).body as Buffer;
     const latitude = Buffer.alloc(8);
-    latitude.writeUInt32LE(GPS_LATITUDE[0]);
+    latitude.writeUInt32LE(at(GPS_LATITUDE, 0));
     latitude.writeUInt32LE(1, 4);
     for (const bytes of [stored, served]) {
       expect(bytes.includes(Buffer.from("Exif", "latin1"))).toBe(false);

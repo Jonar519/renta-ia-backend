@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { stripImageMetadata, UnreadableImageError } from "../../src/utils/imageMetadata";
-import { GPS_LATITUDE, jpegWithGps, pngChunk, pngWith, pngWithMetadata, REAL_JPEG, REAL_PNG } from "../fixtures/images";
+import {
+  at,
+  GPS_LATITUDE,
+  jpegWithGps,
+  pngChunk,
+  pngWith,
+  pngWithMetadata,
+  REAL_JPEG,
+  REAL_PNG,
+} from "../fixtures/images";
 
 /**
  * Quitar metadatos de las fotos (utils/imageMetadata): lista de permitidos,
@@ -12,11 +21,17 @@ function jpegMarkers(buf: Buffer): number[] {
   const markers: number[] = [];
   let p = 2;
   while (p < buf.length) {
-    const m = buf[p + 1];
+    const m = at(buf, p + 1);
     markers.push(m);
     if (m === 0xd9) break;
     p += 2 + buf.readUInt16BE(p + 2);
-    if (m === 0xda) while (!(buf[p] === 0xff && buf[p + 1] !== 0 && !(buf[p + 1] >= 0xd0 && buf[p + 1] <= 0xd7))) p++;
+    // Datos comprimidos: hasta el próximo marcador (0xFF seguido de algo que no sea 0x00 ni RSTn).
+    // `at` corta con un error claro si el archivo se acaba antes (en vez de seguir sin fin).
+    const isMarker = (q: number) => {
+      const next = at(buf, q + 1);
+      return at(buf, q) === 0xff && next !== 0 && !(next >= 0xd0 && next <= 0xd7);
+    };
+    if (m === 0xda) while (!isMarker(p)) p++;
   }
   return markers;
 }
@@ -31,7 +46,7 @@ function pngTypes(buf: Buffer): string[] {
 /** Los bytes de un RATIONAL de la latitud, como quedan en el EXIF. */
 const latitudeBytes = () => {
   const b = Buffer.alloc(8);
-  b.writeUInt32LE(GPS_LATITUDE[0]);
+  b.writeUInt32LE(at(GPS_LATITUDE, 0));
   b.writeUInt32LE(1, 4);
   return b;
 };
@@ -140,7 +155,7 @@ describe("PNG", () => {
 
   it("malformado: CRC incorrecto, longitud fuera de rango, sin IHDR o bloque crítico desconocido", () => {
     const badCrc = Buffer.from(REAL_PNG);
-    badCrc[8 + 8 + 2] ^= 0xff; // un byte del ancho de IHDR
+    badCrc[8 + 8 + 2] = at(badCrc, 8 + 8 + 2) ^ 0xff; // un byte del ancho de IHDR
     expect(unreadable("image/png", badCrc)).toThrow(/CRC/);
     const badLength = Buffer.from(REAL_PNG);
     badLength.writeUInt32BE(0x7fffffff, 8);

@@ -82,6 +82,17 @@ export function jpegWithGps(base = REAL_JPEG): Buffer {
   ]);
 }
 
+/**
+ * El elemento `i` de un arreglo o Buffer. Si no existe, lanza un error que dice
+ * cuál faltó, en vez de seguir con `undefined` (con noUncheckedIndexedAccess,
+ * el compilador lo exige; y una prueba no debe pasar por un byte inexistente).
+ */
+export function at<T>(items: ArrayLike<T>, i: number): T {
+  const value = items[i];
+  if (value === undefined) throw new Error(`Índice ${i} fuera de rango (largo ${items.length})`);
+  return value;
+}
+
 const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
   let c = n;
   for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
@@ -89,7 +100,7 @@ const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
 });
 const crc32 = (data: Buffer) => {
   let c = 0xffffffff;
-  for (const byte of data) c = CRC_TABLE[(c ^ byte) & 0xff] ^ (c >>> 8);
+  for (const byte of data) c = at(CRC_TABLE, (c ^ byte) & 0xff) ^ (c >>> 8);
   return (c ^ 0xffffffff) >>> 0;
 };
 
