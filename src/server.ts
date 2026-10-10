@@ -4,8 +4,10 @@ import { logger } from "./config/logger";
 import { prisma } from "./config/prisma";
 import { redisConnection } from "./config/redis";
 import { attachRealtime } from "./realtime/wsServer";
+import { getGeoIpProvider } from "./services/geoip";
 import { markShuttingDown } from "./observability/health";
 import { flushAudit } from "./services/audit/audit.service";
+import { flushPasswordResets } from "./modules/auth/passwordReset.service";
 import { documentQueue } from "./queues/documentQueue";
 import { closeHttpServer, createGracefulShutdown } from "./lifecycle/shutdown";
 
@@ -14,6 +16,8 @@ const app = createApp();
 async function main() {
   await prisma.$connect();
   logger.info("Conectado a la base de datos.");
+  // Con DB-IP Lite, el CSV empieza a cargar ya (en segundo plano) y no en el primer login.
+  getGeoIpProvider();
 
   const server = app.listen(env.port, () => {
     logger.info(`Servidor escuchando en http://localhost:${env.port}`);
@@ -41,6 +45,7 @@ async function main() {
       },
       { name: "WebSocket", run: () => realtime.close() },
       { name: "servidor HTTP", run: () => closeHttpServer(server) },
+      { name: "recuperaciones de contraseña en curso", run: () => flushPasswordResets() },
       { name: "auditoría pendiente", run: () => flushAudit() },
       { name: "cola", run: () => documentQueue.close() },
       { name: "Redis", run: () => redisConnection.quit() },

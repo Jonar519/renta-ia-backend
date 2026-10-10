@@ -21,6 +21,11 @@ export default defineConfig({
       JWT_SECRET: "test-jwt-secret-solo-para-pruebas",
       // Fijo: el .env local de desarrollo no debe cambiar lo que prueban los tests.
       JWT_EXPIRES_IN: "15m",
+      // Clave fija SOLO para pruebas (32 bytes en base64): cifra los secretos TOTP.
+      MFA_ENCRYPTION_KEY: "cHJ1ZWJhcy1yZW50YS1pYS1tZmEtY2xhdmUtMzJiISE=",
+      // Los tests mockean el SDK de Anthropic/Voyage: un AI_PROVIDER=mock del
+      // .env (stack E2E) los haría pasar por el proveedor simulado y fallar.
+      AI_PROVIDER: "anthropic",
       ANTHROPIC_API_KEY: "test-anthropic-key",
       VOYAGE_API_KEY: "test-voyage-key",
       CORS_ORIGIN: "http://localhost:5173",

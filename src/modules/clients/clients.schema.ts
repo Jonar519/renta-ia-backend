@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { optionalText, uuidParams } from "../../utils/schemas";
+import { optionalText, uuidParams, uuidSchema } from "../../utils/schemas";
 
 const fullName = z.string().trim().min(2).max(200);
 const documentNumber = z
@@ -45,4 +45,21 @@ export const updateClientSchema = z
 // Año gravable a resumir; si se omite, el más reciente con conceptos.
 export const summarySchema = z.object({
   periodYear: z.number().int().min(2000).max(2100).optional(),
+});
+
+/** Revisar un concepto (B16): el cliente y el concepto. */
+export const conceptParams = z.object({ id: uuidSchema, conceptId: uuidSchema });
+
+/**
+ * Revisar un concepto (B16): el monto que la persona confirma (el mismo que
+ * leyó la IA) o corrige. Hasta 2 decimales, como NUMERIC(14, 2).
+ */
+export const reviewConceptSchema = z.object({
+  amount: z
+    .number()
+    .nonnegative()
+    .max(999_999_999_999.99)
+    // Sin centavos de fracción: 0,1 + 0,2 no da exacto en binario, de ahí la tolerancia.
+    .refine((n) => Math.abs(n * 100 - Math.round(n * 100)) < 1e-6, { message: "Máximo 2 decimales" })
+    .describe("Monto confirmado o corregido (COP)"),
 });

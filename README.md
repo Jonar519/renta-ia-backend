@@ -4,7 +4,11 @@ API REST + worker de IA del **Sistema de Gestión Documental Contable con IA**.
 Se conecta a la base de datos del repositorio [`renta-ia-database`](../renta-ia-database)
 mediante Prisma (solo como cliente: el esquema lo gestiona ese repo).
 
+- **Guía de prueba completa de la plataforma (Fase 5):** [`docs/demo-fase5.md`](docs/demo-fase5.md)
+- README general del proyecto (los tres repositorios, puertos, arranque, cómo demostrar cada tema): [`docs/README-general.md`](docs/README-general.md)
 - Decisiones de arquitectura: [`docs/adr/`](docs/adr/README.md)
+- Modelo de dominio (roles, entidades, ciclos de vida, reglas): [`renta-ia-database/docs/modelo-de-dominio.md`](../renta-ia-database/docs/modelo-de-dominio.md)
+- Retención y eliminación de datos: [`docs/data-retention.md`](docs/data-retention.md)
 - Modelo de amenazas (STRIDE): [`docs/threat-model.md`](docs/threat-model.md)
 - Pruebas de carga con mediciones reales: [`docs/load-test-report.md`](docs/load-test-report.md)
 - API (OpenAPI 3): [`docs/openapi.json`](docs/openapi.json) y, fuera de producción, **http://localhost:4000/docs**
@@ -18,13 +22,21 @@ renta-ia-backend/
 │   ├── config/                   # env (validación), logger (pino), prisma, redis, calendario y reglas tributarias
 │   ├── middlewares/              # auth (JWT), ownership (clientScope por rol), role, csrf, validate (zod), rateLimit, error
 │   ├── modules/                  # routes → (schema zod) → controller → service → Prisma
-│   │   ├── auth/                 # registro, login, refresh, logout, bloqueo progresivo, política de contraseñas
-│   │   ├── admin/                # alta de usuarios assistant/client, consulta de auditoría
-│   │   ├── users/ clients/ documents/ alerts/ ai/ metrics/
+│   │   ├── auth/                 # login (y paso MFA), refresh, logout, sesiones, recuperación, bloqueo, política de contraseñas
+│   │   ├── invitations/          # alta de cuentas SOLO por invitación (token firmado, 72 h, un solo uso)
+│   │   ├── mfa/                  # verificación en dos pasos TOTP (secreto cifrado, códigos de recuperación, QR)
+│   │   ├── users/                # mi perfil, foto, cambio de correo y contraseña, exportar y eliminar la cuenta
+│   │   ├── admin/                # invitaciones, reasignar clientes, restablecer MFA, auditoría
+│   │   ├── clients/              # clientes, conceptos y su revisión humana, resumen
+│   │   ├── documents/            # subida, archivo original, reprocesar (D6)
+│   │   ├── alerts/ ai/ metrics/
 │   ├── services/
 │   │   ├── llm/                  # proveedor de IA (anthropic | mock), delimitadores anti prompt-injection
 │   │   ├── storage/              # interfaz de almacenamiento (hoy disco local)
 │   │   ├── audit/                # registro de auditoría (audit_log)
+│   │   ├── email/                # correo: mock (email_outbox) | SES
+│   │   ├── geoip/                # ubicación aproximada de una sesión: mock | DB-IP Lite (archivo local)
+│   │   ├── retention/            # purga programada diaria (docs/data-retention.md)
 │   │   ├── access/               # audiencia de un cliente (para el tiempo real)
 │   │   └── events/               # eventos worker → API (Redis pub/sub)
 │   ├── observability/            # /health, /ready y métricas Prometheus
@@ -75,43 +87,89 @@ curl http://localhost:4000/ready
 
 ## Variables de entorno
 
-| Variable                                | Por defecto              | Descripción                                                                                                         |
-| --------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                          | — (obligatoria)          | PostgreSQL de `renta-ia-database` (puerto **5433** en local)                                                        |
-| `JWT_SECRET`                            | — (obligatoria)          | Clave para firmar los access tokens (HS256)                                                                         |
-| `JWT_EXPIRES_IN`                        | `15m`                    | Vida del access token (el navegador lo guarda solo en memoria)                                                      |
-| `REFRESH_TOKEN_TTL_DAYS`                | `7`                      | Vida del refresh token (cookie httpOnly rotativa)                                                                   |
-| `COOKIE_SECURE`                         | `true` en producción     | Cookie `Secure` (solo HTTPS)                                                                                        |
-| `PORT`                                  | `4000`                   | Puerto de la API y del WebSocket                                                                                    |
-| `NODE_ENV`                              | `development`            | `production` activa `Secure`, exige `CORS_ORIGIN`, oculta `/docs` y prohíbe `AI_PROVIDER=mock` y `RATE_LIMIT_SCALE` |
-| `LOG_LEVEL`                             | `info`                   | Nivel de pino                                                                                                       |
-| `CORS_ORIGIN`                           | `http://localhost:5173`  | Orígenes permitidos (coma). **Obligatorio en producción**                                                           |
-| `TRUST_PROXY`                           | `0`                      | Proxies delante de la API (1 detrás de un balanceador)                                                              |
-| `REDIS_URL`                             | `redis://localhost:6379` | Cola, rate limiting y eventos                                                                                       |
-| `WORKER_CONCURRENCY`                    | `2`                      | Documentos en paralelo por worker (ver informe de carga)                                                            |
-| `METRICS_TOKEN`                         | vacío                    | Token para `GET /metrics` (API) y `:WORKER_METRICS_PORT/metrics` (worker). Vacío = 404                              |
-| `WORKER_METRICS_PORT`                   | `9464`                   | Puerto de métricas del worker                                                                                       |
-| `SHUTDOWN_TIMEOUT_MS`                   | `10000`                  | Tiempo máximo del apagado ordenado                                                                                  |
-| `SHUTDOWN_DRAIN_DELAY_MS`               | `0`                      | Espera entre `/ready = 503` y cerrar el servidor (en producción ≥ intervalo del health check)                       |
-| `AI_PROVIDER`                           | `anthropic`              | `mock` **solo para E2E y pruebas de carga** (rechazado con `NODE_ENV=production`)                                   |
-| `AI_MOCK_LATENCY_MS`                    | `0`                      | Latencia simulada por llamada con `AI_PROVIDER=mock`                                                                |
-| `RATE_LIMIT_SCALE`                      | `1`                      | **Solo pruebas de carga**: multiplica todos los límites (rechazado en producción)                                   |
-| `ANTHROPIC_API_KEY` / `VOYAGE_API_KEY`  | vacías                   | Claves de IA                                                                                                        |
-| `STORAGE_DRIVER` / `STORAGE_LOCAL_PATH` | `local` / `./uploads`    | Almacenamiento de archivos                                                                                          |
-| `TAX_CALENDAR_PATH` / `TAX_RULES_PATH`  | JSON en `src/config/`    | Calendario (fechas **de ejemplo**) y parámetros tributarios                                                         |
+| Variable                                | Por defecto                                          | Descripción                                                                                                                                                                                 |
+| --------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                          | — (obligatoria)                                      | PostgreSQL de `renta-ia-database` (puerto **5433** en local)                                                                                                                                |
+| `JWT_SECRET`                            | — (obligatoria)                                      | Clave para firmar los access tokens (HS256)                                                                                                                                                 |
+| `MFA_ENCRYPTION_KEY`                    | — (**obligatoria en producción**; opcional en local) | Clave AES-256-GCM (32 bytes en base64) que cifra los secretos de MFA. Sin ella, fuera de producción, solo las rutas de MFA responden 503. Ver "Cómo generar `MFA_ENCRYPTION_KEY`"           |
+| `JWT_EXPIRES_IN`                        | `15m`                                                | Vida del access token (el navegador lo guarda solo en memoria)                                                                                                                              |
+| `REFRESH_TOKEN_TTL_DAYS`                | `7`                                                  | Vida del refresh token (cookie httpOnly rotativa)                                                                                                                                           |
+| `COOKIE_SECURE`                         | `true` en producción                                 | Cookie `Secure` (solo HTTPS)                                                                                                                                                                |
+| `PORT`                                  | `4000`                                               | Puerto de la API y del WebSocket                                                                                                                                                            |
+| `NODE_ENV`                              | `development`                                        | `production` activa `Secure`, exige `CORS_ORIGIN`, oculta `/docs` y prohíbe `AI_PROVIDER=mock` y `RATE_LIMIT_SCALE`                                                                         |
+| `LOG_LEVEL`                             | `info`                                               | Nivel de pino                                                                                                                                                                               |
+| `CORS_ORIGIN`                           | `http://localhost:5173`                              | Orígenes permitidos (coma). **Obligatorio en producción**                                                                                                                                   |
+| `TRUST_PROXY`                           | `0`                                                  | Proxies delante de la API (1 detrás de un balanceador)                                                                                                                                      |
+| `REDIS_URL`                             | `redis://localhost:6379`                             | Cola, rate limiting y eventos                                                                                                                                                               |
+| `WORKER_CONCURRENCY`                    | `2`                                                  | Documentos en paralelo por worker (ver informe de carga)                                                                                                                                    |
+| `METRICS_TOKEN`                         | vacío                                                | Token para `GET /metrics` (API) y `:WORKER_METRICS_PORT/metrics` (worker). Vacío = 404                                                                                                      |
+| `WORKER_METRICS_PORT`                   | `9464`                                               | Puerto de métricas del worker                                                                                                                                                               |
+| `SHUTDOWN_TIMEOUT_MS`                   | `10000`                                              | Tiempo máximo del apagado ordenado                                                                                                                                                          |
+| `SHUTDOWN_DRAIN_DELAY_MS`               | `0`                                                  | Espera entre `/ready = 503` y cerrar el servidor (en producción ≥ intervalo del health check)                                                                                               |
+| `AI_PROVIDER`                           | `anthropic`                                          | `mock` **solo para E2E y pruebas de carga** (rechazado con `NODE_ENV=production`)                                                                                                           |
+| `AI_MOCK_LATENCY_MS`                    | `0`                                                  | Latencia simulada por llamada con `AI_PROVIDER=mock`                                                                                                                                        |
+| `RATE_LIMIT_SCALE`                      | `1`                                                  | **Solo pruebas de carga**: multiplica todos los límites (rechazado en producción)                                                                                                           |
+| `ANTHROPIC_API_KEY` / `VOYAGE_API_KEY`  | vacías                                               | Claves de IA                                                                                                                                                                                |
+| `STORAGE_DRIVER` / `STORAGE_LOCAL_PATH` | `local` / `./uploads`                                | Almacenamiento de archivos                                                                                                                                                                  |
+| `EMAIL_PROVIDER`                        | `mock` (fuera de producción) / `ses` (producción)    | `mock` no envía nada: guarda cada correo completo en `email_outbox` (**prohibido en producción**). `ses`: Amazon SES v2 ([ADR 0010](docs/adr/0010-proveedores-externos-intercambiables.md)) |
+| `EMAIL_FROM` / `SES_REGION`             | remitente local / vacía                              | Obligatorias con `EMAIL_PROVIDER=ses`; las credenciales las toma el SDK de AWS (`AWS_*`, perfil o rol IAM)                                                                                  |
+| `GEOIP_PROVIDER` / `GEOIP_DBIP_CSV`     | `mock` / vacía                                       | Ubicación aproximada de las sesiones. `dbip`: el CSV gratuito "IP to City Lite" de db-ip.com, leído en el servidor (la IP no sale)                                                          |
+| `APP_URL`                               | `http://localhost:5173`                              | URL pública del frontend: base de los enlaces de los correos (obligatoria en producción)                                                                                                    |
+| `TAX_CALENDAR_PATH` / `TAX_RULES_PATH`  | JSON en `src/config/`                                | Calendario (fechas **de ejemplo**) y parámetros tributarios                                                                                                                                 |
 
 ## Sesión y seguridad
 
-- `POST /api/auth/login` y `/register` devuelven `{ accessToken, user }` y dejan la
+- **No hay registro público ni alta con contraseña por un admin.** Las cuentas se crean
+  por invitación (`POST /api/admin/invitations`): la cuenta nace pendiente y sin contraseña,
+  el enlace (token firmado, 72 h, un solo uso; en la base solo su SHA-256) viaja solo por
+  correo, y la persona la activa con su contraseña (`POST /api/auth/invitations/accept`).
+  La base impide que una cuenta pendiente tenga sesiones ([ADR 0009](docs/adr/0009-cuentas-pendientes-garantizadas-por-el-esquema.md)).
+- `POST /api/auth/login` y `/invitations/accept` devuelven `{ accessToken, user }` y dejan la
   cookie `renta_ia_refresh` (httpOnly, `SameSite=Strict`, `Path=/api/auth`).
 - `POST /api/auth/refresh` rota la cookie y entrega un access token nuevo;
   `POST /api/auth/logout` revoca la sesión. Ambos exigen `X-Requested-With: renta-ia`.
 - Bloqueo progresivo por cuenta tras 5 fallos (1, 2, 4… hasta 60 min) y 10 fallos / 15 min por IP.
+  Los códigos de MFA fallidos cuentan en el mismo bloqueo.
+- **Verificación en dos pasos (TOTP)** ([ADR 0011](docs/adr/0011-mfa-totp.md)): con MFA activo,
+  `POST /api/auth/login` responde `{ mfaRequired: true, challengeToken, expiresAt }` **sin sesión
+  ni cookie**, y `POST /api/auth/login/mfa` (código de la app o de recuperación) inicia la sesión.
+  El secreto se guarda cifrado (AES-256-GCM, `MFA_ENCRYPTION_KEY`); los 10 códigos de recuperación,
+  solo como hash. Activar MFA cierra las demás sesiones de la cuenta. **Obligatoria para admin:** sin
+  MFA activo, la API solo le responde `GET /api/users/me` y `/api/users/me/mfa/*` (el resto: 403
+  `code: mfa_enrollment_required`) y no puede desactivarla; el admin del seed la activa en su primer login.
+- Cada petición autenticada comprueba que su sesión (`sid`) siga viva: cerrar sesión, restablecer
+  la contraseña o activar MFA invalida los access tokens al instante (costo medido en
+  `docs/load-test-report.md`).
 - Contraseñas: 10–72 caracteres, sin contraseñas comunes ni el correo o el nombre.
+- **Mi perfil** (`/api/users/me`): nombre y teléfono se editan directamente. Cambiar el correo o la
+  contraseña pide la actual (cuenta en el bloqueo). El correo nuevo se confirma con un enlace de
+  24 h y un solo uso (solo su hash), con aviso al correo anterior; cambiar la contraseña cierra las
+  demás sesiones y avisa por correo.
 - Roles: `admin`, `accountant`, `assistant` (clientes de su contador, sin crear ni
-  borrar) y `client` (solo lectura de su expediente). Se crean con `POST /api/admin/users`.
+  borrar) y `client` (solo lectura de su expediente). Todos se crean por invitación; la
+  relación del asistente con su contador y la del portal con su expediente se crean al invitar.
+- **Sesiones activas:** cada sesión guarda su equipo, ubicación aproximada e IP **recortada**; se
+  puede cerrar una o todas las demás, con efecto inmediato ([ADR 0013](docs/adr/0013-sesiones-activas.md)).
+- **Mis datos:** exportar (JSON, con la contraseña) y eliminar la cuenta (lápida anónima; un contador
+  con clientes no puede, el único admin tampoco). Política: [`docs/data-retention.md`](docs/data-retention.md).
+- **Archivo original** (`GET /api/documents/:id/file`): con el mismo alcance que el documento (404 a
+  lo ajeno), tipo por la firma del contenido, `CSP: default-src 'none'; sandbox`, `no-store`; auditado.
+- **Revisión de conceptos:** confirmar o corregir lo que extrajo la IA. Lo que leyó la IA se conserva y
+  queda quién y cuándo. Reprocesar con revisiones exige confirmación (409 `reviewed_concepts`, D6).
+  El portal solo recibe si está revisado.
 - Auditoría en `audit_log` (sin datos sensibles), consultable en `GET /api/admin/audit`.
 - Detalles y riesgos residuales: [`docs/threat-model.md`](docs/threat-model.md) y [ADR 0007](docs/adr/0007-esquema-de-sesion.md).
+
+### Cómo generar `MFA_ENCRYPTION_KEY`
+
+```bat
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+Pega el resultado (44 caracteres) en `.env` como `MFA_ENCRYPTION_KEY=...`. **Guárdala como un
+secreto de producción y no la cambies:** con otra clave los secretos guardados no se pueden
+descifrar y cada cuenta con MFA tendría que restablecerse (`DELETE /api/admin/users/:id/mfa`).
+En local es opcional: sin ella la API arranca igual y solo MFA responde 503.
 
 Probar con curl (cmd.exe), guardando la cookie en un archivo:
 
@@ -134,17 +192,21 @@ La referencia completa, generada desde los schemas zod, está en **`/docs`** (Sw
 fuera de producción) y en `docs/openapi.json` (`npm run openapi` la regenera; un
 test falla si quedó desactualizada).
 
-| Grupo        | Rutas                                                                                                                                                                                         |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Auth         | `POST /api/auth/register` · `login` · `refresh` · `logout` · `GET /api/users/me`                                                                                                              |
-| Clientes     | `GET/POST /api/clients` · `GET/PATCH/DELETE /api/clients/:id` · `GET /api/clients/:id/tax-concepts` · `POST /api/clients/:id/summary`                                                         |
-| Documentos   | `POST /api/documents/upload` · `GET /api/documents/client/:clientId` · `GET /api/documents/client/:clientId/by-hash/:sha256` · `GET /api/documents/:id` · `POST /api/documents/:id/reprocess` |
-| Alertas      | `GET /api/alerts/client/:clientId` · `PATCH /api/alerts/:id` · `POST /api/alerts/deadlines/run` (admin)                                                                                       |
-| IA           | `POST /api/ai/chat`                                                                                                                                                                           |
-| Admin        | `POST /api/admin/users` · `GET /api/admin/audit`                                                                                                                                              |
-| Métricas web | `POST /api/metrics/web-vitals` · `GET /api/metrics/web-vitals/summary` (admin)                                                                                                                |
-| Operación    | `GET /health` · `GET /ready` · `GET /metrics` (token) · `GET /docs` (no producción)                                                                                                           |
-| Tiempo real  | `WS /ws` (token en el primer mensaje)                                                                                                                                                         |
+| Grupo        | Rutas                                                                                                                                                                                                                                                                                             |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth         | `POST /api/auth/login` · `login/mfa` · `refresh` · `logout` · `invitations/lookup` · `invitations/accept` · `password-reset/request` · `lookup` · `confirm` · `GET /api/users/me`                                                                                                                 |
+| Perfil       | `GET/PATCH /api/users/me` (incluye la densidad de las tablas) · `POST/DELETE /api/users/me/email` · `POST /api/users/me/password` · `GET/POST/DELETE /api/users/me/avatar` · `POST /api/auth/email-change/confirm`                                                                                |
+| Sesiones     | `GET/DELETE /api/users/me/sessions` · `DELETE /api/users/me/sessions/:sessionId`                                                                                                                                                                                                                  |
+| Mis datos    | `POST /api/users/me/export` · `GET/POST /api/users/me/deletion`                                                                                                                                                                                                                                   |
+| MFA          | `GET /api/users/me/mfa` · `POST /api/users/me/mfa/setup` · `enable` · `disable` · `recovery-codes`                                                                                                                                                                                                |
+| Clientes     | `GET/POST /api/clients` · `GET/PATCH/DELETE /api/clients/:id` · `GET /api/clients/:id/tax-concepts` · `PATCH /api/clients/:id/tax-concepts/:conceptId` (revisión) · `POST /api/clients/:id/summary`                                                                                               |
+| Documentos   | `POST /api/documents/upload` · `GET /api/documents/client/:clientId` · `GET /api/documents/client/:clientId/by-hash/:sha256` · `GET /api/documents/:id` · `GET /api/documents/:id/file` (original) · `POST /api/documents/:id/reprocess`                                                          |
+| Alertas      | `GET /api/alerts/client/:clientId` · `PATCH /api/alerts/:id` · `POST /api/alerts/deadlines/run` (admin)                                                                                                                                                                                           |
+| IA           | `POST /api/ai/chat`                                                                                                                                                                                                                                                                               |
+| Admin        | `GET/POST /api/admin/invitations` · `POST /api/admin/invitations/:userId/resend` · `DELETE /api/admin/invitations/:userId` · `DELETE /api/admin/users/:userId/mfa` · `POST /api/admin/clients/reassign` · `GET /api/admin/accountants` · `GET /api/admin/portal-clients` · `GET /api/admin/audit` |
+| Métricas web | `POST /api/metrics/web-vitals` · `GET /api/metrics/web-vitals/summary` (admin)                                                                                                                                                                                                                    |
+| Operación    | `GET /health` · `GET /ready` · `GET /metrics` (token) · `GET /docs` (no producción)                                                                                                                                                                                                               |
+| Tiempo real  | `WS /ws` (token en el primer mensaje)                                                                                                                                                                                                                                                             |
 
 Listados paginados por cursor: `?limit=50&cursor=...` → `{ items, nextCursor }`.
 Un recurso de otro cliente responde **404** (no 403) para no revelar que existe.
@@ -193,7 +255,8 @@ Pruebas de carga: [`loadtests/README.md`](loadtests/README.md)
 `loadtest:chat`, `loadtest:upload`, `loadtest:ratelimit`).
 
 CI (`.github/workflows/ci.yml`): lint, typecheck, tests, build; y un job
-`security` con `npm audit --omit=dev` y gitleaks.
+`security` con `npm audit --omit=dev` y gitleaks (los falsos positivos revisados, en
+`.gitleaksignore`). Lo que necesita para pasar: ver "CI" en el README raíz.
 
 ## Cambios de esquema
 
@@ -220,10 +283,11 @@ calendario oficial de la DIAN.
 
 ## Estado
 
-| Tema                                                                       | Estado                           |
-| -------------------------------------------------------------------------- | -------------------------------- |
-| API, pipeline de IA, tiempo real, alertas, resumen                         | ✅                               |
-| Sesión con refresh rotativo, CSRF, bloqueo, roles, auditoría, threat model | ✅                               |
-| Health/ready, apagado ordenado, métricas, pruebas de carga                 | ✅                               |
-| OpenAPI, ADR                                                               | ✅                               |
-| Despliegue en AWS (Dockerfile de producción, S3, infraestructura)          | Pendiente (fuera del Proyecto 1) |
+| Tema                                                                                                                                              | Estado                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| API, pipeline de IA, tiempo real, alertas, resumen                                                                                                | ✅                               |
+| Sesión con refresh rotativo, CSRF, bloqueo, roles, auditoría, threat model                                                                        | ✅                               |
+| Health/ready, apagado ordenado, métricas, pruebas de carga                                                                                        | ✅                               |
+| OpenAPI, ADR                                                                                                                                      | ✅                               |
+| Fase 5: invitaciones, recuperación, MFA, perfil y foto, sesiones activas, mis datos, densidad, reasignar, revisión de conceptos, archivo original | ✅ (guía: `docs/demo-fase5.md`)  |
+| Despliegue en AWS (Dockerfile de producción, S3, infraestructura)                                                                                 | Pendiente (fuera del Proyecto 1) |

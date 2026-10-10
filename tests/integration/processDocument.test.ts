@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Job } from "bullmq";
-import { createClient, createDocument, registerUser } from "../helpers";
+import { createClient, createDocument, createAccount } from "../helpers";
 import { prisma } from "../../src/config/prisma";
 import { processDocument } from "../../src/workers/processDocument";
 import type { DocumentProcessingJob } from "../../src/queues/documentQueue";
@@ -35,7 +35,7 @@ describe("Worker processDocument", () => {
   let userId: string;
 
   beforeAll(async () => {
-    const user = await registerUser();
+    const user = await createAccount();
     userId = user.user.id;
     clientId = (await createClient(user.token)).id;
   });
@@ -115,7 +115,7 @@ describe("Worker processDocument: reprocesamiento", () => {
   let userId: string;
 
   beforeAll(async () => {
-    const user = await registerUser();
+    const user = await createAccount();
     userId = user.user.id;
     clientId = (await createClient(user.token)).id;
   });
@@ -173,7 +173,7 @@ describe("Worker processDocument: reprocesamiento", () => {
 
 describe("Worker processDocument: notificaciones en tiempo real", () => {
   it("publica processing y luego processed (con advertencias) al dueño del cliente", async () => {
-    const user = await registerUser();
+    const user = await createAccount();
     const clientId = (await createClient(user.token)).id;
     const doc = await createDocument(clientId, user.user.id);
     vi.spyOn(console, "log").mockImplementation(() => {});
@@ -194,7 +194,7 @@ describe("Worker processDocument: notificaciones en tiempo real", () => {
   });
 
   it("publica error cuando falla la extracción de texto", async () => {
-    const user = await registerUser();
+    const user = await createAccount();
     const doc = await createDocument((await createClient(user.token)).id, user.user.id);
     vi.spyOn(console, "error").mockImplementation(() => {});
     extractText.mockRejectedValue(new Error("PDF escaneado"));

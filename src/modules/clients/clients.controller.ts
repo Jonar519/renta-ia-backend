@@ -45,6 +45,13 @@ export const clientsController = {
     res.status(204).send();
   },
 
+  async reviewConcept(req: Request, res: Response) {
+    const conceptId = routeParam(req, "conceptId");
+    const concept = await clientsService.reviewConcept(routeParam(req, "id"), conceptId, req.body.amount, req.user!);
+    audit(req, { action: "tax_concept.review", entity: "tax_concept", entityId: conceptId });
+    res.json(concept);
+  },
+
   async listTaxConcepts(req: Request, res: Response) {
     const concepts = await clientsService.listTaxConcepts(routeParam(req, "id"), req.user!);
     res.json(concepts);

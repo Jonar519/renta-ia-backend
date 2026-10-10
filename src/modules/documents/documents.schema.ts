@@ -30,3 +30,11 @@ export const uploadDocumentSchema = z.object({
 });
 
 export const byHashParams = z.object({ clientId: uuidSchema, sha256 });
+
+/**
+ * Reprocesar (D6, B16): si el documento tiene conceptos revisados, la API
+ * responde 409 hasta que la persona confirme que descarta esas revisiones.
+ */
+export const reprocessSchema = z.object({
+  discardReviews: z.boolean().optional().describe('true = "descartar revisiones" confirmado'),
+});

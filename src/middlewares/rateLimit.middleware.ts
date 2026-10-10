@@ -35,6 +35,84 @@ const MINUTE = 60 * 1000;
 // DESPUÉS de authMiddleware.
 const byUser = (req: Request) => req.user?.userId ?? ipKeyGenerator(req.ip ?? "");
 
+/**
+ * Enlaces de invitación (consultar / aceptar), por IP: solo cuentan los
+ * intentos fallidos (token inválido, vencido o contraseña rechazada). Con
+ * 256 bits de token no se pueden adivinar; esto frena el ruido y el abuso.
+ */
+export const invitationLimiter = limiter(
+  "invitation",
+  15 * MINUTE,
+  20,
+  "Demasiados intentos con enlaces de invitación. Espera 15 minutos.",
+  { skipSuccessfulRequests: true }
+);
+
+/**
+ * Pedir recuperación de contraseña, por IP: cuentan TODAS las peticiones
+ * (siempre responden 202). 20 y no menos: una firma entera puede salir a
+ * internet por la misma IP (la red de la oficina). Lo que protege a CADA
+ * cuenta de un bombardeo de correos es otra regla, del servicio: como máximo
+ * un correo por minuto a la misma cuenta.
+ */
+export const passwordResetRequestLimiter = limiter(
+  "password-reset-request",
+  15 * MINUTE,
+  20,
+  "Pediste demasiados enlaces de recuperación. Espera 15 minutos."
+);
+
+/** Usar el enlace de recuperación (consultar / confirmar): solo cuentan los fallidos. */
+export const passwordResetLimiter = limiter(
+  "password-reset",
+  15 * MINUTE,
+  20,
+  "Demasiados intentos con enlaces de recuperación. Espera 15 minutos.",
+  { skipSuccessfulRequests: true }
+);
+
+/**
+ * Segundo paso del login (código de la app o de recuperación), por IP: solo
+ * cuentan los fallidos. Además cada paso admite 5 intentos y cada fallo
+ * suma al bloqueo progresivo de la cuenta.
+ */
+export const mfaLoginLimiter = limiter(
+  "mfa-login",
+  15 * MINUTE,
+  10,
+  "Demasiados códigos incorrectos. Espera 15 minutos.",
+  { skipSuccessfulRequests: true }
+);
+
+/** Configurar, desactivar o regenerar el MFA propio, por usuario: solo cuentan los fallidos. */
+export const mfaManageLimiter = limiter(
+  "mfa-manage",
+  15 * MINUTE,
+  10,
+  "Demasiados intentos fallidos con la verificación en dos pasos. Espera 15 minutos.",
+  { skipSuccessfulRequests: true, keyGenerator: byUser }
+);
+
+/** Cambiar el correo o la contraseña propios (piden la actual), por usuario: solo cuentan los fallidos. */
+export const profileLimiter = limiter("profile", 15 * MINUTE, 10, "Demasiados intentos fallidos. Espera 15 minutos.", {
+  skipSuccessfulRequests: true,
+  keyGenerator: byUser,
+});
+
+/** Confirmar el correo nuevo desde el enlace, por IP: solo cuentan los fallidos. */
+export const emailChangeConfirmLimiter = limiter(
+  "email-change",
+  15 * MINUTE,
+  20,
+  "Demasiados intentos con enlaces de confirmación. Espera 15 minutos.",
+  { skipSuccessfulRequests: true }
+);
+
+/** Cambiar la foto de perfil, por usuario: 20 subidas por hora (cuentan todas). */
+export const avatarLimiter = limiter("avatar", 60 * MINUTE, 20, "Demasiados cambios de foto. Espera un rato.", {
+  keyGenerator: byUser,
+});
+
 /** Límite general por IP para toda la API. */
 export const globalLimiter = limiter(
   "global",

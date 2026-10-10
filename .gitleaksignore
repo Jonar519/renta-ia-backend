@@ -9,3 +9,8 @@ fc46d0c1b2b3e1f1d4bf203fe9dfca0cf9e4f65d:README.md:curl-auth-header:202
 db49bea2c17652d1039af48ebf8dffaa22f1ba88:loadtests/ratelimit.mjs:generic-api-key:31
 8fe96739adf85d89e51095fbcef11d7d1dac5824:tests/helpers.ts:generic-api-key:8
 8fe96739adf85d89e51095fbcef11d7d1dac5824:tests/integration/session.test.ts:generic-api-key:151
+# Valores FIJOS de pruebas de MFA (B8), revisados: no protegen datos reales.
+#  - totp.test.ts: el secreto del vector de prueba de la RFC 6238 ("12345678901234567890" en base32).
+#  - vitest.config.ts: MFA_ENCRYPTION_KEY solo para los tests (la real va en Secrets Manager al desplegar).
+97339aab97ac28996e6424208b729501452b8bbb:tests/unit/totp.test.ts:generic-api-key:79
+97339aab97ac28996e6424208b729501452b8bbb:vitest.config.ts:generic-api-key:25

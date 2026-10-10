@@ -14,7 +14,6 @@ import { logger } from "../../config/logger";
  */
 
 export type AuditAction =
-  | "auth.register"
   | "auth.login.success"
   | "auth.login.failure"
   | "auth.login.locked"
@@ -26,17 +25,48 @@ export type AuditAction =
   | "client.delete"
   | "document.list"
   | "document.view"
+  | "document.file.view"
   | "document.upload"
   | "document.reprocess"
+  | "document.reprocess.discard_reviews"
+  | "tax_concept.review"
   | "ai.chat"
   | "ai.summary"
-  | "admin.user.create"
+  | "admin.invitation.create"
+  | "admin.invitation.resend"
+  | "admin.invitation.cancel"
+  | "auth.invitation.accept"
+  | "auth.invitation.invalid"
+  | "auth.password_reset.requested"
+  | "auth.password_reset.completed"
+  | "auth.password_reset.invalid"
+  | "auth.login.mfa_challenge"
+  | "auth.mfa.failure"
+  | "auth.mfa.recovery_code_used"
+  | "mfa.setup.started"
+  | "mfa.enabled"
+  | "mfa.disabled"
+  | "mfa.recovery_codes.regenerated"
+  | "admin.mfa.reset"
+  | "admin.clients.reassign"
+  | "user.profile.update"
+  | "user.email_change.requested"
+  | "user.email_change.cancelled"
+  | "user.email_change.completed"
+  | "user.email_change.invalid"
+  | "user.password.change"
+  | "user.avatar.update"
+  | "user.avatar.remove"
+  | "user.session.close"
+  | "user.session.close_others"
+  | "user.data.export"
+  | "user.account.delete"
   | "admin.audit.view";
 
 export interface AuditEntry {
   action: AuditAction;
   userId?: string | null;
-  entity?: "user" | "client" | "document" | "session" | "audit";
+  entity?: "user" | "client" | "document" | "session" | "audit" | "tax_concept";
   entityId?: string | null;
 }
 

@@ -1,0 +1,32 @@
+{
+  "measuredAt": "2026-10-06T11:21:19.652Z",
+  "api": "http://localhost:4300",
+  "machine": {
+    "cpu": "AMD Ryzen 9 7900 12-Core Processor",
+    "logicalCpus": 24,
+    "ramGb": 31.1,
+    "os": "Windows_NT 10.0.26300",
+    "node": "v24.13.1"
+  },
+  "scenario": "list",
+  "clients": 250,
+  "result": {
+    "name": "list",
+    "connections": 50,
+    "durationSeconds": 20.02,
+    "requests": 26640,
+    "throughputRps": 1330.7,
+    "latencyMs": {
+      "p50": 36.9,
+      "p95": 45.6,
+      "p99": 52.8,
+      "max": 145.5
+    },
+    "statusCodes": {
+      "200": 26640
+    },
+    "socketErrors": 0,
+    "timeouts": 0,
+    "errorRate": 0
+  }
+}

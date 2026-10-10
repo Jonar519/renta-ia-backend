@@ -10,3 +10,6 @@ uploads/
 
 # Pruebas de carga: estado local (cuentas sintéticas) y archivos temporales
 loadtests/.state.json
+
+# Datos de idioma de Tesseract (OCR): los descarga tesseract.js al procesar una imagen.
+*.traineddata

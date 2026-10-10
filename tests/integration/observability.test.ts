@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
-import { app, authHeader, createClient, registerUser } from "../helpers";
+import { app, authHeader, createClient, createAccount } from "../helpers";
 import { env } from "../../src/config/env";
 import { redisConnection } from "../../src/config/redis";
 import { documentQueue } from "../../src/queues/documentQueue";
@@ -52,7 +52,7 @@ describe("GET /metrics (Prometheus)", () => {
 
   it("expone duración HTTP por PATRÓN de ruta (sin ids), estado de la cola, etapas y LLM", async () => {
     env.metricsToken = TOKEN;
-    const user = await registerUser();
+    const user = await createAccount();
     const client = await createClient(user.token);
     await request(app).get(`/api/clients/${client.id}`).set(authHeader(user.token));
     vi.mocked(documentQueue.getJobCounts).mockResolvedValueOnce({

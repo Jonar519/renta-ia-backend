@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
-import { app, authHeader, createClient, createDocument, registerUser } from "../helpers";
+import { app, authHeader, createClient, createDocument, createAccount } from "../helpers";
 import { embeddingsService } from "../../src/modules/ai/embeddings.service";
 import { replaceEmbeddings, searchSimilarChunks } from "../../src/modules/ai/embeddings.repository";
 
@@ -28,8 +28,8 @@ describe("Aislamiento del RAG entre clientes", () => {
   let clientOtherAccountant: string;
 
   beforeAll(async () => {
-    const owner = await registerUser("Contador dueño");
-    const other = await registerUser("Otro contador");
+    const owner = await createAccount("Contador dueño");
+    const other = await createAccount("Otro contador");
     token = owner.token;
     clientA = (await createClient(owner.token)).id;
     // B1: otro cliente del MISMO contador (el caso más fácil de filtrar mal).

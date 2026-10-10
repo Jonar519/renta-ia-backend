@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import { app, authHeader, createClient, createDocument, registerUser, unique } from "../helpers";
+import { app, authHeader, createClient, createDocument, createAccount, unique } from "../helpers";
 import { prisma } from "../../src/config/prisma";
 import { parseTaxCalendar } from "../../src/config/taxConfig";
 import { runDeadlineCheck } from "../../src/modules/alerts/deadlines.service";
@@ -19,7 +19,7 @@ const testCalendar = parseTaxCalendar({
 const at = (iso: string) => new Date(`${iso}T12:00:00Z`); // mediodía UTC = mañana en Bogotá
 
 async function clientWithDocumentNumber(documentNumber: string) {
-  const { token } = await registerUser();
+  const { token } = await createAccount();
   const res = await request(app)
     .post("/api/clients")
     .set(authHeader(token))
@@ -84,7 +84,7 @@ describe("Job de alertas de vencimiento", () => {
 
 describe("Deduplicación de alertas (carrera entre jobs)", () => {
   it("dos upserts simultáneos de la misma situación dejan UNA sola alerta activa", async () => {
-    const { token } = await registerUser();
+    const { token } = await createAccount();
     const clientId = (await createClient(token)).id;
     const input = {
       clientId,
@@ -98,7 +98,7 @@ describe("Deduplicación de alertas (carrera entre jobs)", () => {
   });
 
   it("la base rechaza una segunda alerta activa con la misma dedupe_key", async () => {
-    const { token } = await registerUser();
+    const { token } = await createAccount();
     const clientId = (await createClient(token)).id;
     const data = { clientId, dedupeKey: "x", alertType: "inconsistency" as const, message: "m" };
     await prisma.alert.create({ data });
@@ -115,8 +115,8 @@ describe("PATCH /api/alerts/:id", () => {
   let alertId: string;
 
   beforeAll(async () => {
-    tokenA = (await registerUser()).token;
-    tokenB = (await registerUser()).token;
+    tokenA = (await createAccount()).token;
+    tokenB = (await createAccount()).token;
     const clientId = (await createClient(tokenA)).id;
     alertId = (await prisma.alert.create({ data: { clientId, alertType: "inconsistency", message: "revisar" } })).id;
   });
@@ -152,7 +152,7 @@ describe("PATCH /api/alerts/:id", () => {
 
 describe("Regla exógena vs. certificado de ingresos (integración)", () => {
   async function clientWithIncomes(exogenous: number, certificate: number) {
-    const user = await registerUser();
+    const user = await createAccount();
     const clientId = (await createClient(user.token)).id;
     for (const [docType, amount] of [
       ["exogenous_info", exogenous],

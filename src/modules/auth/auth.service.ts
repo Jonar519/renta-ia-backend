@@ -1,14 +1,12 @@
 import bcrypt from "bcrypt";
 import { prisma } from "../../config/prisma";
 import { ApiError } from "../../utils/apiError";
-import { lockoutService } from "./lockout.service";
+import { AccountLockedError, lockoutService } from "./lockout.service";
 import { sessionsService } from "./sessions.service";
+import type { SessionClient } from "./sessionClient";
+import { mfaService } from "../mfa/mfa.service";
 
-interface RegisterInput {
-  name: string;
-  email: string;
-  password: string;
-}
+export { AccountLockedError };
 
 interface LoginInput {
   email: string;
@@ -33,51 +31,30 @@ export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-export class AccountLockedError extends ApiError {
-  constructor(remainingMs: number) {
-    const minutes = Math.max(1, Math.ceil(remainingMs / 60_000));
-    super(429, `Demasiados intentos fallidos. Intenta de nuevo en ${minutes} minuto${minutes === 1 ? "" : "s"}.`);
-  }
-}
-
 export const authService = {
-  async register(input: RegisterInput) {
-    const email = normalizeEmail(input.email);
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) {
-      throw new ApiError(409, "Ya existe un usuario con ese correo");
-    }
-
-    const passwordHash = await bcrypt.hash(input.password, 10);
-
-    const user = await prisma.user.create({
-      data: {
-        name: input.name,
-        email,
-        passwordHash,
-        // El registro público SIEMPRE crea contadores. Otros roles (admin,
-        // assistant, client) los crea un admin (POST /api/admin/users).
-        role: "accountant",
-      },
-    });
-
-    return sessionsService.start(user);
-  },
-
-  async login(input: LoginInput) {
+  async login(input: LoginInput, client: SessionClient) {
     const email = normalizeEmail(input.email);
 
     const remaining = await lockoutService.remainingLockMs(email);
     if (remaining > 0) throw new AccountLockedError(remaining);
 
     const user = await prisma.user.findUnique({ where: { email } });
+    // Una cuenta pendiente (invitada) no tiene contraseña: se compara contra el
+    // hash ficticio y responde EXACTAMENTE igual que un correo inexistente
+    // (mismo mensaje y mismo tiempo), sin revelar que la cuenta existe. La
+    // base además le impide tener sesiones (migración 017).
     const valid = await bcrypt.compare(input.password, user?.passwordHash ?? DUMMY_HASH);
-    if (!user || !valid) {
+    if (!user || user.status !== "active" || !valid) {
       await lockoutService.registerFailure(email);
       throw new ApiError(401, INVALID_CREDENTIALS);
     }
 
+    // Con MFA activo la contraseña no basta: no hay sesión todavía, sino un
+    // paso de verificación (el bloqueo se limpia al completarlo).
+    if (await mfaService.isEnabled(user.id)) {
+      return { mfaRequired: true as const, userId: user.id, ...(await mfaService.startChallenge(user.id)) };
+    }
     await lockoutService.registerSuccess(email);
-    return sessionsService.start(user);
+    return { mfaRequired: false as const, ...(await sessionsService.start(user, client)) };
   },
 };

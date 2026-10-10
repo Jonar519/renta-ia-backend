@@ -101,6 +101,28 @@ documento tardará lo que tarden esas APIs, no 300 ms.
 - Los contadores viven en Redis (`rate-limit-redis`), así que el límite se
   comparte entre varias instancias de la API (no medido con varias instancias).
 
+### Costo de verificar la sesión en cada petición (Fase 5, B7)
+
+Desde B7 el access token lleva `sid` (la familia de su refresh token) y cada petición
+autenticada, igual que el WebSocket, consulta si esa sesión sigue viva
+(`sessionsService.isActive`, una búsqueda por `idx_refresh_tokens_family`). Así, cerrar
+sesión o restablecer la contraseña invalida los access tokens **al instante**, sin esperar
+sus 15 minutos. La medición A/B usa el escenario `list`, 50 conexiones, 20 s por corrida,
+alternando las variantes con y sin la consulta (`list-c50-{con,sin}-sid-*.json`):
+
+| Variante                     | req/s |     p50 |     p95 |     p99 |
+| ---------------------------- | ----: | ------: | ------: | ------: |
+| Con verificación (corrida 1) |  1186 | 41,4 ms | 49,6 ms | 54,0 ms |
+| Sin verificación (corrida 1) |  1343 | 36,7 ms | 45,2 ms | 50,6 ms |
+| Con verificación (corrida 2) |  1172 | 42,0 ms | 50,6 ms | 56,8 ms |
+| Sin verificación (corrida 2) |  1331 | 36,9 ms | 45,6 ms | 52,8 ms |
+
+**Costo:** unos 12 % menos de throughput **en saturación** y unos +5 ms en p50 y p95, sin
+errores. Es una consulta más a PostgreSQL por petición. Se acepta porque la revocación
+inmediata es un requisito de seguridad del bloque. Si en algún momento pesa, la
+alternativa es una lista de sesiones revocadas en Redis con TTL igual a la vida del access
+token: más barata, pero con una segunda fuente de verdad. No se implementa ahora.
+
 ## Límites conocidos de estas mediciones
 
 - **Una sola máquina:** generador, API, worker, PostgreSQL y Redis comparten los

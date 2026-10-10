@@ -5,6 +5,13 @@ import type { AppRole, AuthPayload } from "../../middlewares/auth.middleware";
 export interface VerifiedToken extends AuthPayload {
   /** Expiración (segundos desde epoch), para cerrar conexiones largas (WebSocket) a tiempo. */
   exp?: number;
+  /**
+   * Sesión a la que pertenece (familia de refresh tokens). Quien lo valida
+   * comprueba además que siga activa (sessionsService.isActive): cerrar la
+   * sesión o restablecer la contraseña invalida el access token AL INSTANTE,
+   * no a los 15 minutos.
+   */
+  sid: string;
 }
 
 const ROLES: AppRole[] = ["admin", "accountant", "assistant", "client"];
@@ -17,10 +24,15 @@ const ROLES: AppRole[] = ["admin", "accountant", "assistant", "client"];
 export function verifyAccessToken(token: string): VerifiedToken | null {
   try {
     const payload = jwt.verify(token, env.jwtSecret, { algorithms: ["HS256"] });
-    if (typeof payload !== "object" || typeof payload.userId !== "string" || !ROLES.includes(payload.role)) {
+    if (
+      typeof payload !== "object" ||
+      typeof payload.userId !== "string" ||
+      typeof payload.sid !== "string" ||
+      !ROLES.includes(payload.role)
+    ) {
       return null;
     }
-    return { userId: payload.userId, role: payload.role as AppRole, exp: payload.exp };
+    return { userId: payload.userId, role: payload.role as AppRole, exp: payload.exp, sid: payload.sid };
   } catch {
     return null;
   }

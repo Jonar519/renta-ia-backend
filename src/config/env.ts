@@ -1,3 +1,4 @@
+import fs from "fs";
 import "dotenv/config";
 
 function required(name: string): string {
@@ -22,6 +23,52 @@ function aiProvider(): "anthropic" | "mock" {
 }
 
 /**
+ * Ubicación aproximada de las sesiones (services/geoip, decisión D2):
+ *  - "mock" (por defecto): solo reconoce IP locales; las demás quedan
+ *    "desconocida". Sirve en cualquier entorno (no inventa datos).
+ *  - "dbip": DB-IP Lite en CSV, descargado a un archivo local; exige
+ *    GEOIP_DBIP_CSV con una ruta que exista.
+ */
+function geoipProvider(): "mock" | "dbip" {
+  const value = process.env.GEOIP_PROVIDER || "mock";
+  if (value !== "mock" && value !== "dbip") {
+    throw new Error(`GEOIP_PROVIDER="${value}" no es válido. Usa "mock" o "dbip".`);
+  }
+  if (value === "dbip") {
+    const file = process.env.GEOIP_DBIP_CSV;
+    if (!file) throw new Error("GEOIP_PROVIDER=dbip requiere la variable de entorno GEOIP_DBIP_CSV.");
+    if (!fs.existsSync(file)) throw new Error(`GEOIP_DBIP_CSV="${file}" no existe.`);
+  }
+  return value;
+}
+
+/**
+ * Proveedor de correo (services/email). Regla de proveedores externos:
+ *  - "mock" (por defecto fuera de producción): no envía nada; guarda cada
+ *    correo, con su contenido, en la tabla email_outbox para pruebas y demos.
+ *    Prohibido con NODE_ENV=production (el cuerpo puede llevar un token).
+ *  - "ses" (Amazon SES v2): exige SES_REGION y EMAIL_FROM al arrancar. Las
+ *    credenciales las resuelve el SDK (variables AWS_*, perfil o rol IAM) en
+ *    el momento de enviar; sin ellas el envío falla y queda registrado.
+ */
+function emailProvider(): "mock" | "ses" {
+  // || y no ??: una línea "EMAIL_PROVIDER=" vacía en el .env cuenta como no definida.
+  const value = process.env.EMAIL_PROVIDER || (nodeEnv === "production" ? "ses" : "mock");
+  if (value !== "mock" && value !== "ses") {
+    throw new Error(`EMAIL_PROVIDER="${value}" no es válido. Usa "mock" o "ses".`);
+  }
+  if (value === "mock" && nodeEnv === "production") {
+    throw new Error("EMAIL_PROVIDER=mock es solo para desarrollo y pruebas y no puede usarse con NODE_ENV=production.");
+  }
+  if (value === "ses") {
+    for (const name of ["SES_REGION", "EMAIL_FROM"]) {
+      if (!process.env[name]) throw new Error(`EMAIL_PROVIDER=ses requiere la variable de entorno ${name}.`);
+    }
+  }
+  return value;
+}
+
+/**
  * Multiplicador de TODOS los límites de rate limiting. Existe solo para las
  * pruebas de carga (loadtests/): con el valor por defecto (1) un solo equipo
  * choca contra el límite global de 300 solicitudes / 15 min en segundos.
@@ -36,6 +83,28 @@ function rateLimitScale(): number {
     throw new Error("RATE_LIMIT_SCALE es solo para pruebas de carga y no puede usarse con NODE_ENV=production.");
   }
   return value;
+}
+
+/**
+ * Clave de cifrado de los secretos TOTP (AES-256-GCM): 32 bytes en base64.
+ * Generarla: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+ *  - Obligatoria en producción (el servidor no arranca sin ella).
+ *  - Fuera de producción es opcional: sin ella la API arranca igual y solo
+ *    las rutas de MFA responden 503 explicando qué falta.
+ *  - Si se pierde o se cambia, los secretos guardados no se pueden descifrar
+ *    y cada cuenta con MFA tendría que volver a configurarlo.
+ */
+function mfaEncryptionKey(): Buffer | undefined {
+  const value = process.env.MFA_ENCRYPTION_KEY;
+  if (!value) {
+    if (nodeEnv === "production") required("MFA_ENCRYPTION_KEY");
+    return undefined;
+  }
+  const key = Buffer.from(value, "base64");
+  if (key.length !== 32 || key.toString("base64") !== value) {
+    throw new Error("MFA_ENCRYPTION_KEY debe ser exactamente 32 bytes codificados en base64 (44 caracteres).");
+  }
+  return key;
 }
 
 function positiveInt(name: string, fallback: number): number {
@@ -61,6 +130,8 @@ export const env = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "15m",
   // Refresh token (cookie httpOnly, rotativo): días de vida de una sesión inactiva.
   refreshTokenTtlDays: Number(process.env.REFRESH_TOKEN_TTL_DAYS ?? 7),
+  // Cifrado de los secretos TOTP (ver mfaEncryptionKey).
+  mfaEncryptionKey: mfaEncryptionKey(),
   // Cookie Secure (solo HTTPS). Por defecto en producción; en local (http) no.
   cookieSecure: (process.env.COOKIE_SECURE ?? (nodeEnv === "production" ? "true" : "false")) === "true",
   nodeEnv,
@@ -97,6 +168,21 @@ export const env = {
   // "anthropic" (real, por defecto) o "mock" (SOLO pruebas; prohibido en producción).
   aiProvider: aiProvider(),
   aiMockLatencyMs: Number(process.env.AI_MOCK_LATENCY_MS ?? 0),
+
+  // Correo (ver emailProvider): "mock" por defecto fuera de producción.
+  emailProvider: emailProvider(),
+  // URL pública del frontend: base de los enlaces que viajan por correo
+  // (invitación, recuperación…). Obligatoria en producción.
+  appUrl: (process.env.APP_URL || (nodeEnv === "production" ? required("APP_URL") : "http://localhost:5173")).replace(
+    /\/+$/,
+    ""
+  ),
+  emailFrom: process.env.EMAIL_FROM ?? "Renta IA <no-responder@renta-ia.local>",
+  sesRegion: process.env.SES_REGION,
+
+  // Ubicación aproximada de las sesiones (ver geoipProvider).
+  geoipProvider: geoipProvider(),
+  geoipDbipCsv: process.env.GEOIP_DBIP_CSV,
 
   // Almacenamiento de documentos (Fase 3: disco local · Fase 6: S3)
   storageDriver: process.env.STORAGE_DRIVER ?? "local",

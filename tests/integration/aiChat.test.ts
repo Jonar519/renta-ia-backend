@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
-import { app, authHeader, createClient, registerUser } from "../helpers";
+import { app, authHeader, createClient, createAccount } from "../helpers";
 import { prisma } from "../../src/config/prisma";
 import { embeddingsService } from "../../src/modules/ai/embeddings.service";
 
@@ -15,7 +15,7 @@ describe("POST /api/ai/chat", () => {
   let clientId: string;
 
   beforeAll(async () => {
-    const user = await registerUser();
+    const user = await createAccount();
     token = user.token;
     clientId = (await createClient(token)).id;
   });

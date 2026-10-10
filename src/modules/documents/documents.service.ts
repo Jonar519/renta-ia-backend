@@ -3,7 +3,9 @@ import { DocumentType, Prisma } from "@prisma/client";
 import { prisma } from "../../config/prisma";
 import { ApiError } from "../../utils/apiError";
 import { isUuid } from "../../utils/uuid";
+import { detectFileType } from "../../utils/fileType";
 import { storageService } from "../../services/storage";
+import { storageKeys } from "../../services/storage/keys";
 import { documentQueue } from "../../queues/documentQueue";
 import { publishDocumentEvent } from "../../services/events/documentEvents";
 import { clientAudience } from "../../services/access/clientAudience";
@@ -74,9 +76,8 @@ export const documentsService = {
     if (existing) throw duplicateError(existing);
 
     const storageKey = await storageService.save({
+      key: storageKeys.document(input.clientId, input.originalName),
       buffer: input.buffer,
-      clientId: input.clientId,
-      fileName: input.originalName,
     });
 
     let document;
@@ -151,12 +152,39 @@ export const documentsService = {
   },
 
   /**
+   * El archivo original (B17, vista dividida). Ownership: el mismo alcance que
+   * ver el documento (404 si no está a su alcance). El tipo se toma de la
+   * firma del contenido guardado, no del nombre.
+   */
+  async getFile(id: string, user: AuthPayload) {
+    const document = isUuid(id)
+      ? await prisma.document.findFirst({
+          where: { id, client: clientScope(user) },
+          select: { id: true, originalName: true, storageKey: true },
+        })
+      : null;
+    if (!document) throw new ApiError(404, "Documento no encontrado");
+    const buffer = await storageService.readAsBuffer(document.storageKey).catch(() => {
+      throw new ApiError(404, "El archivo original de este documento no está disponible.");
+    });
+    const contentType = detectFileType(buffer);
+    if (!contentType) throw new ApiError(422, "El archivo guardado no es un PDF ni una imagen admitida.");
+    return { buffer, contentType, fileName: document.originalName };
+  },
+
+  /**
    * Vuelve a encolar el análisis de un documento (p. ej. cuando falló por
    * falta de crédito en la API de IA). Solo si ya terminó (processed o
    * error); uno en cola o procesándose responde 409. Al reprocesar, el
    * worker reemplaza los conceptos y embeddings anteriores del documento.
    */
-  async reprocess(id: string, user: AuthPayload) {
+  /**
+   * Reintentar el análisis. D6 (B16): si hay conceptos revisados por una
+   * persona, 409 (code "reviewed_concepts") salvo que se confirme
+   * "descartar revisiones"; entonces el worker los reemplaza. Devuelve cuántas
+   * revisiones se descartan (para auditarlo).
+   */
+  async reprocess(id: string, user: AuthPayload, discardReviews = false) {
     const document = isUuid(id)
       ? await prisma.document.findFirst({
           where: { id, client: clientScope(user) },
@@ -164,6 +192,18 @@ export const documentsService = {
       : null;
     if (!document) {
       throw new ApiError(404, "Documento no encontrado");
+    }
+
+    const reviewed = await prisma.taxConcept.count({ where: { documentId: id, reviewedAt: { not: null } } });
+    if (reviewed > 0 && !discardReviews) {
+      throw new ApiError(
+        409,
+        reviewed === 1
+          ? "Este documento tiene 1 concepto revisado. Reprocesarlo descarta esa revisión."
+          : `Este documento tiene ${reviewed} conceptos revisados. Reprocesarlo descarta esas revisiones.`,
+        { reviewedCount: reviewed },
+        "reviewed_concepts"
+      );
     }
 
     // Transición condicional en una sola sentencia: dos clics simultáneos no
@@ -176,7 +216,7 @@ export const documentsService = {
       throw new ApiError(409, "El documento ya está en cola o procesándose");
     }
 
-    await documentQueue.add("process-document", { documentId: id });
+    await documentQueue.add("process-document", { documentId: id, discardReviews: reviewed > 0 });
     await publishDocumentEvent({
       documentId: id,
       clientId: document.clientId,
@@ -184,6 +224,6 @@ export const documentsService = {
       status: "uploaded",
       errorMessage: null,
     });
-    return prisma.document.findUniqueOrThrow({ where: { id } });
+    return { document: await prisma.document.findUniqueOrThrow({ where: { id } }), discardedReviews: reviewed };
   },
 };

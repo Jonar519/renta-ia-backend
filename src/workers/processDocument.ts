@@ -56,7 +56,17 @@ export async function processDocument(job: Job<DocumentProcessingJob>) {
       const concepts = await timeStage("concepts", () => extractionService.extractTaxConcepts(text));
       console.log(`[worker] ${concepts.length} concepto(s) tributario(s) extraído(s)`);
 
-      if (concepts.length > 0) {
+      // D6: con conceptos ya revisados por una persona, solo se reemplazan si
+      // al reprocesar se confirmó "descartar revisiones".
+      const reviewed =
+        concepts.length > 0
+          ? await prisma.taxConcept.count({ where: { documentId: document.id, reviewedAt: { not: null } } })
+          : 0;
+      if (reviewed > 0 && !job.data.discardReviews) {
+        warnings.push(
+          `Hay ${reviewed} concepto(s) revisado(s): no se reemplazaron. Para volver a extraerlos hay que reprocesar descartando las revisiones.`
+        );
+      } else if (concepts.length > 0) {
         // Si el documento se reprocesa (reintento de BullMQ o re-subida), los
         // conceptos nuevos REEMPLAZAN a los anteriores de ese documento, en una
         // transacción. Si la extracción no devolvió nada, se conservan los que
@@ -70,6 +80,7 @@ export async function processDocument(job: Job<DocumentProcessingJob>) {
               conceptType: c.conceptType,
               description: c.description,
               amount: c.amount,
+              aiAmount: c.amount,
               periodYear: c.periodYear,
             })),
           }),

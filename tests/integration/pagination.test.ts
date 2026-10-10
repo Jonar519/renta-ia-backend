@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import { app, authHeader, createClient, registerUser } from "../helpers";
+import { app, authHeader, createClient, createAccount } from "../helpers";
 import { prisma } from "../../src/config/prisma";
 import { decodeCursor, encodeCursor } from "../../src/utils/pagination";
 
@@ -11,7 +11,7 @@ describe("Paginación por cursor", () => {
   const DOCS = 23;
 
   beforeAll(async () => {
-    const user = await registerUser();
+    const user = await createAccount();
     token = user.token;
     userId = user.user.id;
     clientId = (await createClient(token)).id;

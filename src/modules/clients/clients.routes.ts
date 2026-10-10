@@ -1,6 +1,13 @@
 import { Router } from "express";
 import { clientsController } from "./clients.controller";
-import { clientIdParams, createClientSchema, summarySchema, updateClientSchema } from "./clients.schema";
+import {
+  clientIdParams,
+  conceptParams,
+  createClientSchema,
+  reviewConceptSchema,
+  summarySchema,
+  updateClientSchema,
+} from "./clients.schema";
 import { authMiddleware } from "../../middlewares/auth.middleware";
 import { forbidRoles, requireRole } from "../../middlewares/role.middleware";
 import { summaryLimiter } from "../../middlewares/rateLimit.middleware";
@@ -27,6 +34,13 @@ clientsRouter.get(
   "/:id/tax-concepts",
   validate({ params: clientIdParams }),
   asyncHandler(clientsController.listTaxConcepts)
+);
+// Revisar un concepto extraído por IA (B16). El portal es de solo lectura.
+clientsRouter.patch(
+  "/:id/tax-concepts/:conceptId",
+  readOnlyClient,
+  validate({ params: conceptParams, body: reviewConceptSchema }),
+  asyncHandler(clientsController.reviewConcept)
 );
 clientsRouter.post(
   "/:id/summary",

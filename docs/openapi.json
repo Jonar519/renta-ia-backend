@@ -50,6 +50,10 @@
                 "message"
               ]
             }
+          },
+          "code": {
+            "type": "string",
+            "description": "Identificador estable: mfa_enrollment_required, mfa_challenge_invalid"
           }
         },
         "required": [
@@ -78,13 +82,197 @@
               "assistant",
               "client"
             ]
+          },
+          "mfaEnabled": {
+            "type": "boolean",
+            "description": "Si es false y el rol lo exige (admin), solo puede activarlo"
+          },
+          "avatarUpdatedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "description": "null = sin foto de perfil"
+          },
+          "tableDensity": {
+            "type": "string",
+            "enum": [
+              "comfortable",
+              "compact"
+            ],
+            "description": "Densidad de las tablas (B15): preferencia de trabajo de la cuenta"
           }
         },
         "required": [
           "id",
           "name",
           "email",
-          "role"
+          "role",
+          "mfaEnabled",
+          "avatarUpdatedAt",
+          "tableDensity"
+        ]
+      },
+      "Invitation": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "accountant",
+              "assistant",
+              "client"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "expired"
+            ]
+          },
+          "invitedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "accountant": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ]
+          },
+          "client": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "fullName": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "fullName"
+            ]
+          }
+        },
+        "required": [
+          "userId",
+          "name",
+          "email",
+          "role",
+          "status",
+          "invitedAt",
+          "expiresAt",
+          "accountant",
+          "client"
+        ],
+        "description": "Cuenta pendiente y su invitación. NUNCA incluye el token ni el enlace: solo viajan por correo."
+      },
+      "Profile": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "accountant",
+              "assistant",
+              "client"
+            ]
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "mfaEnabled": {
+            "type": "boolean"
+          },
+          "avatarUpdatedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "description": "null = sin foto"
+          },
+          "tableDensity": {
+            "type": "string",
+            "enum": [
+              "comfortable",
+              "compact"
+            ],
+            "description": "Densidad de las tablas (B15): preferencia de trabajo de la cuenta"
+          },
+          "pendingEmail": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "email": {
+                "type": "string",
+                "format": "email"
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "email",
+              "expiresAt"
+            ],
+            "description": "Cambio de correo esperando confirmación"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email",
+          "role",
+          "phone",
+          "mfaEnabled",
+          "avatarUpdatedAt",
+          "tableDensity",
+          "pendingEmail"
         ]
       },
       "Session": {
@@ -318,10 +506,6 @@
             "type": "string",
             "format": "uuid"
           },
-          "documentId": {
-            "type": "string",
-            "format": "uuid"
-          },
           "conceptType": {
             "type": "string"
           },
@@ -331,108 +515,65 @@
           },
           "amount": {
             "type": "string",
-            "description": "Decimal como texto"
+            "description": "Decimal como texto: el vigente (el de la IA o el corregido)"
           },
           "periodYear": {
             "type": "integer"
+          },
+          "reviewed": {
+            "type": "boolean",
+            "description": "false = Extraído por IA · sin revisar"
+          },
+          "documentId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Documento del que salió (vista dividida). No va al portal."
+          },
+          "aiAmount": {
+            "type": "string",
+            "description": "Lo que leyó la IA (la API no lo modifica). No va al portal."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "ai",
+              "person"
+            ],
+            "description": "ai = monto de la IA; person = corregido. No va al portal."
+          },
+          "reviewedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "description": "No va al portal."
+          },
+          "reviewer": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "description": "No va al portal."
           }
         },
         "required": [
           "id",
-          "documentId",
           "conceptType",
           "description",
           "amount",
-          "periodYear"
+          "periodYear",
+          "reviewed"
         ]
       }
     },
     "parameters": {}
   },
   "paths": {
-    "/api/auth/register": {
-      "post": {
-        "tags": [
-          "Auth"
-        ],
-        "summary": "Registro público (siempre crea un contador). Deja la cookie de refresh.",
-        "security": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "minLength": 2,
-                    "maxLength": 150
-                  },
-                  "email": {
-                    "type": "string",
-                    "maxLength": 150,
-                    "format": "email"
-                  },
-                  "password": {
-                    "type": "string",
-                    "maxLength": 72,
-                    "description": "10 a 72 caracteres; no puede ser una contraseña común ni contener el correo o el nombre"
-                  }
-                },
-                "required": [
-                  "name",
-                  "email",
-                  "password"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Sesión iniciada",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Session"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Datos inválidos",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Correo ya registrado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Límite de solicitudes",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/auth/login": {
       "post": {
         "tags": [
@@ -468,6 +609,112 @@
         },
         "responses": {
           "200": {
+            "description": "Sesión iniciada, o paso de verificación si la cuenta tiene MFA",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Session"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "mfaRequired": {
+                          "type": "boolean",
+                          "enum": [
+                            true
+                          ]
+                        },
+                        "challengeToken": {
+                          "type": "string"
+                        },
+                        "expiresAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "mfaRequired",
+                        "challengeToken",
+                        "expiresAt"
+                      ],
+                      "description": "Cuenta con MFA activo: todavía SIN sesión ni cookie. Continuar en POST /api/auth/login/mfa."
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Cuenta con MFA y servidor sin MFA_ENCRYPTION_KEY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login/mfa": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Segundo paso del login: código de 6 dígitos de la app o un código de recuperación. Paso de 5 min y 5 intentos; deja la cookie de refresh.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "challengeToken": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "code": {
+                    "type": "string",
+                    "minLength": 6,
+                    "maxLength": 24,
+                    "description": "6 dígitos de la app de autenticación, o un código de recuperación (XXXX-XXXX-XXXX-XXXX)"
+                  }
+                },
+                "required": [
+                  "challengeToken",
+                  "code"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
             "description": "Sesión iniciada",
             "content": {
               "application/json": {
@@ -477,8 +724,18 @@
               }
             }
           },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "401": {
-            "description": "Sin sesión o token vencido",
+            "description": "Código incorrecto, o paso vencido, usado o agotado",
             "content": {
               "application/json": {
                 "schema": {
@@ -619,12 +876,401 @@
         }
       }
     },
-    "/api/users/me": {
-      "get": {
+    "/api/auth/invitations/lookup": {
+      "post": {
         "tags": [
           "Auth"
         ],
-        "summary": "Usuario actual",
+        "summary": "Completa tu cuenta: a quién corresponde un enlace de invitación vigente (token en el cuerpo, nunca en la URL)",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "token"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Invitación vigente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string",
+                      "format": "email"
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "admin",
+                        "accountant",
+                        "assistant",
+                        "client"
+                      ]
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "mfaRequired": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "email",
+                    "role",
+                    "expiresAt",
+                    "mfaRequired"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Enlace inválido, vencido, reemplazado o ya usado (no se revela cuál)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/invitations/accept": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Activa la cuenta invitada con la contraseña elegida por la persona (un solo uso). Deja la cookie de refresh.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "password": {
+                    "type": "string",
+                    "maxLength": 72,
+                    "description": "10 a 72 caracteres; no puede ser una contraseña común ni contener el correo o el nombre"
+                  }
+                },
+                "required": [
+                  "token",
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cuenta activada y sesión iniciada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Enlace inválido, vencido, reemplazado o ya usado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/password-reset/request": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Pedir un enlace para restablecer la contraseña. Responde SIEMPRE lo mismo (y en el mismo tiempo), exista o no el correo",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "maxLength": 150,
+                    "format": "email"
+                  }
+                },
+                "required": [
+                  "email"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Recibido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/password-reset/lookup": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "¿Sigue vigente un enlace de recuperación? (token en el cuerpo)",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "token"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Vigente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "expiresAt"
+                  ]
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Inválido, vencido, reemplazado o ya usado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/password-reset/confirm": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Define la contraseña nueva (un solo uso) y cierra TODAS las sesiones de la cuenta",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "password": {
+                    "type": "string",
+                    "maxLength": 72,
+                    "description": "10 a 72 caracteres; no puede ser una contraseña común ni contener el correo o el nombre"
+                  }
+                },
+                "required": [
+                  "token",
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Contraseña cambiada; hay que iniciar sesión de nuevo"
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Inválido, vencido, reemplazado o ya usado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me": {
+      "get": {
+        "tags": [
+          "Perfil"
+        ],
+        "summary": "La propia cuenta: datos, teléfono y cambio de correo pendiente",
         "security": [
           {
             "bearerAuth": []
@@ -632,17 +1278,1480 @@
         ],
         "responses": {
           "200": {
-            "description": "Usuario",
+            "description": "Perfil",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/User"
+                  "$ref": "#/components/schemas/Profile"
                 }
               }
             }
           },
           "401": {
             "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Perfil"
+        ],
+        "summary": "Editar nombre y/o teléfono ('' o null borra el teléfono). Rol y correo no se editan aquí.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 150
+                  },
+                  "phone": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          ""
+                        ]
+                      },
+                      {
+                        "nullable": true
+                      },
+                      {
+                        "type": "string",
+                        "maxLength": 30,
+                        "pattern": "^\\+?[0-9][0-9 ()-]{5,27}[0-9]$",
+                        "description": "Opcional. Vacío o null lo borra"
+                      },
+                      {
+                        "nullable": true
+                      }
+                    ]
+                  },
+                  "tableDensity": {
+                    "type": "string",
+                    "enum": [
+                      "comfortable",
+                      "compact"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Perfil actualizado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Profile"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me/email": {
+      "post": {
+        "tags": [
+          "Perfil"
+        ],
+        "summary": "Pedir cambio de correo (con la contraseña actual): enlace de 24 h al correo NUEVO y aviso al anterior. Responde igual aunque el nuevo ya tenga cuenta.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "newEmail": {
+                    "type": "string",
+                    "maxLength": 150,
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "description": "Contraseña actual (se vuelve a pedir)"
+                  }
+                },
+                "required": [
+                  "newEmail",
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Enlace enviado; el correo cambia al confirmarlo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "pendingEmail": {
+                      "type": "object",
+                      "properties": {
+                        "email": {
+                          "type": "string",
+                          "format": "email"
+                        },
+                        "expiresAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "email",
+                        "expiresAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "pendingEmail"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos, mismo correo o contraseña incorrecta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de intentos o cuenta bloqueada por intentos fallidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Perfil"
+        ],
+        "summary": "Cancelar el cambio de correo pendiente",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Cancelado"
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No hay cambio pendiente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me/password": {
+      "post": {
+        "tags": [
+          "Perfil"
+        ],
+        "summary": "Cambiar la contraseña (con la actual): aplica la política y cierra TODAS las demás sesiones",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "currentPassword": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "description": "Contraseña actual (se vuelve a pedir)"
+                  },
+                  "newPassword": {
+                    "type": "string",
+                    "maxLength": 72,
+                    "description": "10 a 72 caracteres; distinta de la actual; sin contraseñas comunes ni el correo o el nombre"
+                  }
+                },
+                "required": [
+                  "currentPassword",
+                  "newPassword"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contraseña cambiada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "closedSessions": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "closedSessions"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Contraseña actual incorrecta o la nueva no cumple la política",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de intentos o cuenta bloqueada por intentos fallidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me/avatar": {
+      "post": {
+        "tags": [
+          "Perfil"
+        ],
+        "summary": "Subir o cambiar la foto (multipart, campo avatar): PNG o JPG verificados por su firma real, máx. 512 KB. Se guarda sin metadatos (EXIF, GPS, ICC, textos). Borra la anterior.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "avatar": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "avatar"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Foto guardada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "avatarUpdatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "avatarUpdatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Falta el archivo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Supera 512 KB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "No es una imagen PNG o JPG (por su contenido)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "La imagen no se puede analizar (truncada o malformada): no se guarda",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Perfil"
+        ],
+        "summary": "La foto de la propia cuenta (image/png o image/jpeg; CSP default-src 'none'; sandbox)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "La imagen (image/png o image/jpeg, según su firma)"
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Sin foto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Perfil"
+        ],
+        "summary": "Quitar la foto (borra el archivo)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Quitada"
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Sin foto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me/sessions": {
+      "get": {
+        "tags": [
+          "Perfil"
+        ],
+        "summary": "Sesiones activas de la propia cuenta (la actual primero). Las anteriores a B13 no tienen IP ni ubicación.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sesiones activas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "current": {
+                        "type": "boolean",
+                        "description": "Es la sesión de este access token"
+                      },
+                      "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "lastSeenAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Última renovación del token"
+                      },
+                      "ip": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "Recortada: 203.0.113.x o 2001:db8:85a3::/48; null = desconocida"
+                      },
+                      "location": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "Ubicación APROXIMADA por IP; null = desconocida"
+                      },
+                      "device": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "Navegador en sistema; null = desconocido"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "current",
+                      "createdAt",
+                      "lastSeenAt",
+                      "ip",
+                      "location",
+                      "device"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Perfil"
+        ],
+        "summary": "Cerrar todas las demás sesiones de la propia cuenta (la actual sigue abierta)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cuántas se cerraron",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "closed": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "closed"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me/sessions/{sessionId}": {
+      "delete": {
+        "tags": [
+          "Perfil"
+        ],
+        "summary": "Cerrar una sesión de la propia cuenta (no la actual). Efecto inmediato, también en el WebSocket.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "sessionId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Cerrada"
+          },
+          "400": {
+            "description": "Es la sesión actual (usa Salir) o el id no es un UUID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No existe, es de otra cuenta o ya estaba cerrada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me/export": {
+      "post": {
+        "tags": [
+          "Perfil"
+        ],
+        "summary": "Descargar mis datos (JSON, adjunto). Pide la contraseña. Incluye cuenta, sesiones, actividad, conversaciones con la IA y documentos subidos (sin archivos); de los clientes a cargo, solo cuántos.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "password": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "description": "Contraseña actual (se vuelve a pedir)"
+                  }
+                },
+                "required": [
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "renta-ia-export-v1 (Content-Disposition: attachment)"
+          },
+          "400": {
+            "description": "Contraseña incorrecta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me/deletion": {
+      "get": {
+        "tags": [
+          "Perfil"
+        ],
+        "summary": "¿Se puede eliminar la cuenta? Si no, por qué (contador con clientes, único admin).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Estado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "canDelete": {
+                      "type": "boolean"
+                    },
+                    "reason": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "canDelete",
+                    "reason"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Perfil"
+        ],
+        "summary": "Eliminar mi cuenta (irreversible). Contraseña y, con MFA, un código. Queda una lápida anónima; se cierran todas las sesiones. Ver docs/data-retention.md.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "password": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "description": "Contraseña actual (se vuelve a pedir)"
+                  },
+                  "code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 24,
+                    "description": "Obligatorio si la cuenta tiene verificación en dos pasos"
+                  }
+                },
+                "required": [
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Eliminada; borra la cookie de sesión"
+          },
+          "400": {
+            "description": "Contraseña o código incorrectos, o falta el código",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Contador con clientes a cargo o único administrador activo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/email-change/confirm": {
+      "post": {
+        "tags": [
+          "Perfil"
+        ],
+        "summary": "Confirmar el correo nuevo desde el enlace (token en el cuerpo; no exige sesión). Avisa al correo anterior.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "token"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Correo cambiado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "email": {
+                      "type": "string",
+                      "format": "email"
+                    }
+                  },
+                  "required": [
+                    "email"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Otra cuenta tomó ese correo mientras tanto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Enlace inválido, vencido, reemplazado o ya usado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de solicitudes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me/mfa": {
+      "get": {
+        "tags": [
+          "MFA"
+        ],
+        "summary": "Estado de la verificación en dos pasos",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Estado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "enabledAt": {
+                      "type": "string",
+                      "nullable": true,
+                      "format": "date-time"
+                    },
+                    "recoveryCodesRemaining": {
+                      "type": "integer"
+                    },
+                    "required": {
+                      "type": "boolean",
+                      "description": "El rol exige MFA (admin): no se puede desactivar"
+                    }
+                  },
+                  "required": [
+                    "enabled",
+                    "enabledAt",
+                    "recoveryCodesRemaining",
+                    "required"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me/mfa/setup": {
+      "post": {
+        "tags": [
+          "MFA"
+        ],
+        "summary": "Paso 1: con la contraseña actual, genera el secreto (guardado cifrado, sin activar; vence en 10 min)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "password": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "description": "Contraseña actual (se vuelve a pedir)"
+                  }
+                },
+                "required": [
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Secreto para la app de autenticación",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "secret": {
+                      "type": "string",
+                      "description": "Base32, para escribirlo a mano en la app"
+                    },
+                    "otpauthUri": {
+                      "type": "string",
+                      "description": "otpauth://totp/… (contenido del QR)"
+                    },
+                    "qrSvg": {
+                      "type": "string",
+                      "description": "QR de otpauthUri en SVG, generado en el servidor (se muestra como imagen data:image/svg+xml)"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "secret",
+                    "otpauthUri",
+                    "qrSvg",
+                    "expiresAt"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos, contraseña o código incorrectos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "MFA ya está activo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de intentos o cuenta bloqueada por intentos fallidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Servidor sin MFA_ENCRYPTION_KEY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me/mfa/enable": {
+      "post": {
+        "tags": [
+          "MFA"
+        ],
+        "summary": "Paso 2: confirma con un código; activa MFA, entrega los códigos de recuperación y cierra las DEMÁS sesiones",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "pattern": "^\\d{6}$",
+                    "description": "6 dígitos de la app de autenticación"
+                  }
+                },
+                "required": [
+                  "code"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "MFA activo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "recoveryCodes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "recoveryCodes"
+                  ],
+                  "description": "Se muestran UNA sola vez (Cache-Control: no-store); en la base solo queda su hash."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos, contraseña o código incorrectos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Ya estaba activo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "La configuración venció o no se empezó",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de intentos o cuenta bloqueada por intentos fallidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Servidor sin MFA_ENCRYPTION_KEY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me/mfa/disable": {
+      "post": {
+        "tags": [
+          "MFA"
+        ],
+        "summary": "Desactiva MFA: contraseña actual + código de la app o de recuperación",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "password": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "description": "Contraseña actual (se vuelve a pedir)"
+                  },
+                  "code": {
+                    "type": "string",
+                    "minLength": 6,
+                    "maxLength": 24,
+                    "description": "6 dígitos de la app de autenticación, o un código de recuperación (XXXX-XXXX-XXXX-XXXX)"
+                  }
+                },
+                "required": [
+                  "password",
+                  "code"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Desactivado"
+          },
+          "400": {
+            "description": "Datos inválidos, contraseña o código incorrectos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No estaba activo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de intentos o cuenta bloqueada por intentos fallidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Servidor sin MFA_ENCRYPTION_KEY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me/mfa/recovery-codes": {
+      "post": {
+        "tags": [
+          "MFA"
+        ],
+        "summary": "Códigos de recuperación nuevos (invalida los anteriores). Pide un código de la app.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "pattern": "^\\d{6}$",
+                    "description": "6 dígitos de la app de autenticación"
+                  }
+                },
+                "required": [
+                  "code"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Códigos nuevos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "recoveryCodes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "recoveryCodes"
+                  ],
+                  "description": "Se muestran UNA sola vez (Cache-Control: no-store); en la base solo queda su hash."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos, contraseña o código incorrectos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "MFA no activo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de intentos o cuenta bloqueada por intentos fallidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Servidor sin MFA_ENCRYPTION_KEY",
             "content": {
               "application/json": {
                 "schema": {
@@ -796,7 +2905,7 @@
             }
           },
           "403": {
-            "description": "El rol no permite esta acción",
+            "description": "El rol no permite esta acción, o (code: mfa_enrollment_required) un admin debe activar MFA primero",
             "content": {
               "application/json": {
                 "schema": {
@@ -931,7 +3040,7 @@
             }
           },
           "403": {
-            "description": "El rol no permite esta acción",
+            "description": "El rol no permite esta acción, o (code: mfa_enrollment_required) un admin debe activar MFA primero",
             "content": {
               "application/json": {
                 "schema": {
@@ -978,7 +3087,7 @@
             "description": "Borrado"
           },
           "403": {
-            "description": "El rol no permite esta acción",
+            "description": "El rol no permite esta acción, o (code: mfa_enrollment_required) un admin debe activar MFA primero",
             "content": {
               "application/json": {
                 "schema": {
@@ -1005,7 +3114,7 @@
         "tags": [
           "Clientes"
         ],
-        "summary": "Conceptos tributarios extraídos",
+        "summary": "Conceptos tributarios extraídos, con su revisión",
         "security": [
           {
             "bearerAuth": []
@@ -1038,6 +3147,102 @@
           },
           "404": {
             "description": "No existe o no es accesible (no se revela cuál)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/clients/{id}/tax-concepts/{conceptId}": {
+      "patch": {
+        "tags": [
+          "Clientes"
+        ],
+        "summary": "Revisar un concepto (B16): confirmar el monto de la IA o corregirlo. Queda quién y cuándo; el valor de la IA se conserva. El portal no puede.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "conceptId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 999999999999.99,
+                    "description": "Monto confirmado o corregido (COP)"
+                  }
+                },
+                "required": [
+                  "amount"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Revisado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxConcept"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El rol no permite esta acción, o (code: mfa_enrollment_required) un admin debe activar MFA primero",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El cliente o el concepto no existen o no están a tu alcance",
             "content": {
               "application/json": {
                 "schema": {
@@ -1101,7 +3306,7 @@
             }
           },
           "403": {
-            "description": "El rol no permite esta acción",
+            "description": "El rol no permite esta acción, o (code: mfa_enrollment_required) un admin debe activar MFA primero",
             "content": {
               "application/json": {
                 "schema": {
@@ -1206,7 +3411,7 @@
             }
           },
           "403": {
-            "description": "El rol no permite esta acción",
+            "description": "El rol no permite esta acción, o (code: mfa_enrollment_required) un admin debe activar MFA primero",
             "content": {
               "application/json": {
                 "schema": {
@@ -1539,12 +3744,12 @@
         }
       }
     },
-    "/api/documents/{id}/reprocess": {
-      "post": {
+    "/api/documents/{id}/file": {
+      "get": {
         "tags": [
           "Documentos"
         ],
-        "summary": "Reintentar el análisis (solo si terminó en error o con advertencias)",
+        "summary": "El archivo original (vista dividida, B17): PDF o imagen con su tipo real (por la firma), inline, nosniff, CSP default-src 'none'; sandbox y Cache-Control private, no-store. Mismo alcance que ver el documento.",
         "security": [
           {
             "bearerAuth": []
@@ -1561,6 +3766,91 @@
             "in": "path"
           }
         ],
+        "responses": {
+          "200": {
+            "description": "El archivo (application/pdf, image/png o image/jpeg)"
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No existe, no está a tu alcance, o el archivo no está disponible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "El contenido guardado no es un tipo admitido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/documents/{id}/reprocess": {
+      "post": {
+        "tags": [
+          "Documentos"
+        ],
+        "summary": "Reintentar el análisis (solo si terminó en error o con advertencias). Con conceptos revisados exige discardReviews: true (D6, auditado).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "discardReviews": {
+                    "type": "boolean",
+                    "description": "true = \"descartar revisiones\" confirmado"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "202": {
             "description": "Reencolado",
@@ -1583,7 +3873,7 @@
             }
           },
           "409": {
-            "description": "Ya está en cola o procesándose",
+            "description": "Ya está en cola o procesándose; o (code: reviewed_concepts, details.reviewedCount) tiene conceptos revisados y no se confirmó descartarlos",
             "content": {
               "application/json": {
                 "schema": {
@@ -1734,7 +4024,7 @@
             }
           },
           "403": {
-            "description": "El rol no permite esta acción",
+            "description": "El rol no permite esta acción, o (code: mfa_enrollment_required) un admin debe activar MFA primero",
             "content": {
               "application/json": {
                 "schema": {
@@ -1780,7 +4070,7 @@
             }
           },
           "403": {
-            "description": "El rol no permite esta acción",
+            "description": "El rol no permite esta acción, o (code: mfa_enrollment_required) un admin debe activar MFA primero",
             "content": {
               "application/json": {
                 "schema": {
@@ -1857,7 +4147,7 @@
             }
           },
           "403": {
-            "description": "El rol no permite esta acción",
+            "description": "El rol no permite esta acción, o (code: mfa_enrollment_required) un admin debe activar MFA primero",
             "content": {
               "application/json": {
                 "schema": {
@@ -2050,7 +4340,7 @@
             }
           },
           "403": {
-            "description": "El rol no permite esta acción",
+            "description": "El rol no permite esta acción, o (code: mfa_enrollment_required) un admin debe activar MFA primero",
             "content": {
               "application/json": {
                 "schema": {
@@ -2062,12 +4352,12 @@
         }
       }
     },
-    "/api/admin/users": {
+    "/api/admin/invitations": {
       "post": {
         "tags": [
           "Admin"
         ],
-        "summary": "Crear usuario assistant (ligado a un contador) o client (ligado a un expediente)",
+        "summary": "Invitar (nombre, correo, rol). Crea la cuenta pendiente y envía el enlace por correo; sin contraseña",
         "security": [
           {
             "bearerAuth": []
@@ -2090,14 +4380,11 @@
                     "maxLength": 150,
                     "format": "email"
                   },
-                  "password": {
-                    "type": "string",
-                    "maxLength": 72,
-                    "description": "10 a 72 caracteres; no puede ser una contraseña común ni contener el correo o el nombre"
-                  },
                   "role": {
                     "type": "string",
                     "enum": [
+                      "admin",
+                      "accountant",
                       "assistant",
                       "client"
                     ]
@@ -2114,7 +4401,6 @@
                 "required": [
                   "name",
                   "email",
-                  "password",
                   "role"
                 ]
               }
@@ -2123,11 +4409,11 @@
         },
         "responses": {
           "201": {
-            "description": "Creado",
+            "description": "Invitación creada y enviada",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/User"
+                  "$ref": "#/components/schemas/Invitation"
                 }
               }
             }
@@ -2143,7 +4429,7 @@
             }
           },
           "403": {
-            "description": "El rol no permite esta acción",
+            "description": "El rol no permite esta acción, o (code: mfa_enrollment_required) un admin debe activar MFA primero",
             "content": {
               "application/json": {
                 "schema": {
@@ -2153,7 +4439,466 @@
             }
           },
           "409": {
-            "description": "Correo o expediente ya en uso",
+            "description": "Correo con cuenta activa o invitación pendiente; expediente con portal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invitación creada pero el correo no se pudo enviar (usar Reenviar)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Cuentas pendientes con el estado y el vencimiento de su invitación",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invitaciones",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Invitation"
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El rol no permite esta acción, o (code: mfa_enrollment_required) un admin debe activar MFA primero",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/invitations/{userId}/resend": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Reenviar: invalida el enlace anterior y envía uno nuevo de 72 h",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "userId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reenviada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Invitation"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El rol no permite esta acción, o (code: mfa_enrollment_required) un admin debe activar MFA primero",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No existe o no es accesible (no se revela cuál)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "El correo no se pudo enviar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/invitations/{userId}": {
+      "delete": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Cancelar: elimina la cuenta pendiente (nunca una activa) y su enlace",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "userId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Cancelada"
+          },
+          "403": {
+            "description": "El rol no permite esta acción, o (code: mfa_enrollment_required) un admin debe activar MFA primero",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No existe o no es accesible (no se revela cuál)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users/{userId}/mfa": {
+      "delete": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Restablece el MFA de OTRA cuenta (perdió el teléfono y los códigos): lo borra y cierra todas sus sesiones",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "userId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "MFA restablecido; la persona entra con su contraseña y lo configura de nuevo"
+          },
+          "403": {
+            "description": "No es admin, o intenta restablecer su propio MFA",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Esa cuenta no tiene MFA activo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/clients/reassign": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Reasignar TODOS los clientes de un contador a otro (con sus documentos, alertas y conversaciones). Así un contador puede eliminar su cuenta.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fromUserId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "toUserId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "fromUserId",
+                  "toUserId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cuántos clientes se movieron",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "moved": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "moved"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Ids inválidos, iguales, o alguno no es un contador activo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El rol no permite esta acción, o (code: mfa_enrollment_required) un admin debe activar MFA primero",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sin clientes que mover, o el destino ya tiene clientes con los mismos documentos (no se mueve ninguno)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/accountants": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Contadores activos, con cuántos clientes tiene cada uno (ligar un asistente; reasignar clientes)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contadores",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string",
+                            "format": "email"
+                          },
+                          "clientCount": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "email",
+                          "clientCount"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El rol no permite esta acción, o (code: mfa_enrollment_required) un admin debe activar MFA primero",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/portal-clients": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Expedientes sin usuario de portal, por nombre o documento (máx. 20)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "required": false,
+            "name": "q",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Expedientes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "documentNumber": {
+                            "type": "string"
+                          },
+                          "accountant": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "name"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "fullName",
+                          "documentNumber",
+                          "accountant"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El rol no permite esta acción, o (code: mfa_enrollment_required) un admin debe activar MFA primero",
             "content": {
               "application/json": {
                 "schema": {
@@ -2223,7 +4968,8 @@
                 "client",
                 "document",
                 "session",
-                "audit"
+                "audit",
+                "tax_concept"
               ]
             },
             "required": false,
@@ -2269,7 +5015,7 @@
             }
           },
           "403": {
-            "description": "El rol no permite esta acción",
+            "description": "El rol no permite esta acción, o (code: mfa_enrollment_required) un admin debe activar MFA primero",
             "content": {
               "application/json": {
                 "schema": {

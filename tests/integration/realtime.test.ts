@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import bcrypt from "bcrypt";
 import { WebSocket } from "ws";
-import { app, authHeader, createClient, createDocument, registerUser, TEST_PASSWORD, unique } from "../helpers";
+import { app, authHeader, createClient, createDocument, createAccount, TEST_PASSWORD, unique } from "../helpers";
 import { prisma } from "../../src/config/prisma";
 import { attachRealtime, RealtimeServer, WS_CLOSE, WS_PATH } from "../../src/realtime/wsServer";
 import { publishDocumentEvent } from "../../src/services/events/documentEvents";
@@ -67,6 +67,59 @@ describe("WebSocket /ws", () => {
     expect(await closed).toBe(WS_CLOSE.authTimeout);
   });
 
+  it("cierra si la sesión del token ya se cerró (logout), aunque el token no haya vencido", async () => {
+    const email = `ws-cerrada-${unique()}@test.local`;
+    await prisma.user.create({
+      data: { name: "WS", email, role: "accountant", passwordHash: await bcrypt.hash(TEST_PASSWORD, 4) },
+    });
+    const login = await request(app).post("/api/auth/login").send({ email, password: TEST_PASSWORD });
+    const cookie = String(login.headers["set-cookie"]).split(";")[0]!;
+    await request(app)
+      .post("/api/auth/logout")
+      .set({ "X-Requested-With": "renta-ia", Origin: ALLOWED_ORIGIN })
+      .set("Cookie", cookie);
+    const { ws, closed } = connect();
+    ws.on("open", () => ws.send(JSON.stringify({ type: "auth", token: login.body.accessToken })));
+    expect(await closed).toBe(WS_CLOSE.unauthorized);
+  });
+
+  it("un socket ya conectado se cierra en el siguiente latido si su sesión se cierra (Sesiones activas)", async () => {
+    // Servidor propio con un latido corto (en producción, 30 s).
+    const fastServer = http.createServer(app);
+    await new Promise<void>((resolve) => fastServer.listen(0, resolve));
+    const fast = await attachRealtime(fastServer, { heartbeatMs: 150 });
+    const fastUrl = `ws://127.0.0.1:${(fastServer.address() as AddressInfo).port}${WS_PATH}`;
+    try {
+      const account = await createAccount("WS Sesión Cerrada");
+      const login = await request(app).post("/api/auth/login").send({ email: account.email, password: TEST_PASSWORD });
+      const token: string = login.body.accessToken;
+      const sid = JSON.parse(Buffer.from(token.split(".")[1]!, "base64url").toString()).sid as string;
+
+      const open = (t: string) => {
+        const ws = new WebSocket(fastUrl, { headers: { Origin: ALLOWED_ORIGIN } });
+        const closed = new Promise<number>((resolve) => ws.on("close", (code) => resolve(code)));
+        const ready = new Promise<void>((resolve) => {
+          ws.on("message", (d) => JSON.parse(d.toString()).type === "ready" && resolve());
+          ws.on("open", () => ws.send(JSON.stringify({ type: "auth", token: t })));
+        });
+        return { ws, closed, ready };
+      };
+      const closedOne = open(token);
+      const survivor = open(account.token); // la sesión desde la que se cierra la otra
+      await Promise.all([closedOne.ready, survivor.ready]);
+
+      const res = await request(app).delete(`/api/users/me/sessions/${sid}`).set(authHeader(account.token));
+      expect(res.status).toBe(204);
+      expect(await closedOne.closed).toBe(WS_CLOSE.unauthorized);
+      await tick(400); // dos latidos más: la otra sigue abierta
+      expect(survivor.ws.readyState).toBe(WebSocket.OPEN);
+      survivor.ws.close();
+    } finally {
+      await fast.close();
+      await new Promise((resolve) => fastServer.close(resolve));
+    }
+  });
+
   it("cierra con un token inválido", async () => {
     const { ws, closed } = connect();
     ws.on("open", () => ws.send(JSON.stringify({ type: "auth", token: "no-es-un-jwt" })));
@@ -74,8 +127,8 @@ describe("WebSocket /ws", () => {
   });
 
   it("cada contador recibe solo los eventos de sus clientes; el admin recibe todos", async () => {
-    const a = await registerUser("Contador A");
-    const b = await registerUser("Contador B");
+    const a = await createAccount("Contador A");
+    const b = await createAccount("Contador B");
     const clientA = await createClient(a.token);
 
     const adminEmail = `admin-ws-${unique()}@test.local`;
@@ -112,12 +165,12 @@ describe("WebSocket /ws", () => {
 
 describe("POST /api/documents/:id/reprocess", () => {
   it("reencola un documento terminado y notifica por WebSocket; 409 si ya está en cola; 404 a otro contador", async () => {
-    const owner = await registerUser();
+    const owner = await createAccount();
     const clientId = (await createClient(owner.token)).id;
     const doc = await createDocument(clientId, owner.user.id);
     await prisma.document.update({ where: { id: doc.id }, data: { status: "error", errorMessage: "sin crédito" } });
 
-    const other = await registerUser();
+    const other = await createAccount();
     expect((await request(app).post(`/api/documents/${doc.id}/reprocess`).set(authHeader(other.token))).status).toBe(
       404
     );
@@ -128,7 +181,7 @@ describe("POST /api/documents/:id/reprocess", () => {
     const res = await request(app).post(`/api/documents/${doc.id}/reprocess`).set(authHeader(owner.token));
     expect(res.status).toBe(202);
     expect(res.body).toMatchObject({ status: "uploaded", errorMessage: null });
-    expect(documentQueue.add).toHaveBeenCalledWith("process-document", { documentId: doc.id });
+    expect(documentQueue.add).toHaveBeenCalledWith("process-document", { documentId: doc.id, discardReviews: false });
 
     await tick();
     expect(socket.received).toContainEqual(expect.objectContaining({ documentId: doc.id, status: "uploaded" }));
