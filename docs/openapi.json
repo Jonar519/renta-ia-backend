@@ -3739,6 +3739,75 @@
         }
       }
     },
+    "/api/documents/{id}/file": {
+      "get": {
+        "tags": [
+          "Documentos"
+        ],
+        "summary": "El archivo original (vista dividida, B17): PDF o imagen con su tipo real (por la firma), inline, nosniff, CSP default-src 'none'; sandbox y Cache-Control private, no-store. Mismo alcance que ver el documento.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "El archivo (application/pdf, image/png o image/jpeg)"
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sin sesión o token vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No existe, no está a tu alcance, o el archivo no está disponible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "El contenido guardado no es un tipo admitido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/documents/{id}/reprocess": {
       "post": {
         "tags": [

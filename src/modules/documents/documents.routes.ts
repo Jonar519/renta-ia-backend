@@ -80,6 +80,8 @@ documentsRouter.get(
   asyncHandler(documentsController.findByHash)
 );
 documentsRouter.get("/:id", validate({ params: documentIdParams }), asyncHandler(documentsController.getById));
+// El archivo original (B17, vista dividida): mismo alcance que ver el documento.
+documentsRouter.get("/:id/file", validate({ params: documentIdParams }), asyncHandler(documentsController.getFile));
 // Reintentar el análisis con IA. Cuesta lo mismo que una subida: mismo límite.
 documentsRouter.post(
   "/:id/reprocess",

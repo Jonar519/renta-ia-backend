@@ -3,6 +3,7 @@ import { DocumentType, Prisma } from "@prisma/client";
 import { prisma } from "../../config/prisma";
 import { ApiError } from "../../utils/apiError";
 import { isUuid } from "../../utils/uuid";
+import { detectFileType } from "../../utils/fileType";
 import { storageService } from "../../services/storage";
 import { storageKeys } from "../../services/storage/keys";
 import { documentQueue } from "../../queues/documentQueue";
@@ -148,6 +149,27 @@ export const documentsService = {
       throw new ApiError(404, "Documento no encontrado");
     }
     return document;
+  },
+
+  /**
+   * El archivo original (B17, vista dividida). Ownership: el mismo alcance que
+   * ver el documento (404 si no está a su alcance). El tipo se toma de la
+   * firma del contenido guardado, no del nombre.
+   */
+  async getFile(id: string, user: AuthPayload) {
+    const document = isUuid(id)
+      ? await prisma.document.findFirst({
+          where: { id, client: clientScope(user) },
+          select: { id: true, originalName: true, storageKey: true },
+        })
+      : null;
+    if (!document) throw new ApiError(404, "Documento no encontrado");
+    const buffer = await storageService.readAsBuffer(document.storageKey).catch(() => {
+      throw new ApiError(404, "El archivo original de este documento no está disponible.");
+    });
+    const contentType = detectFileType(buffer);
+    if (!contentType) throw new ApiError(422, "El archivo guardado no es un PDF ni una imagen admitida.");
+    return { buffer, contentType, fileName: document.originalName };
   },
 
   /**

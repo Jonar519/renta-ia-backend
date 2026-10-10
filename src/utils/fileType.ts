@@ -20,6 +20,18 @@ export function isAllowedMimeAndExtension(mimetype: string, originalName: string
   return !!type && type.extensions.includes(path.extname(originalName).toLowerCase());
 }
 
+/**
+ * El tipo REAL de un archivo guardado, por su firma (B17: al servirlo no se
+ * confía en el nombre ni en el MIME que declaró quien lo subió). null si no es
+ * ninguno de los admitidos.
+ */
+export function detectFileType(buffer: Buffer): string | null {
+  for (const [mime, { signature }] of Object.entries(ALLOWED_FILE_TYPES)) {
+    if (signature.every((byte, i) => buffer[i] === byte)) return mime;
+  }
+  return null;
+}
+
 export function hasValidSignature(mimetype: string, buffer: Buffer): boolean {
   const type = ALLOWED_FILE_TYPES[mimetype];
   if (!type) return false;

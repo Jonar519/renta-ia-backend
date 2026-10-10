@@ -54,6 +54,21 @@ export const documentsController = {
     res.json(document);
   },
 
+  /**
+   * El archivo original, para la vista dividida (B17). Se sirve inline con el
+   * tipo real, nosniff (helmet) y una CSP que no permite nada: si alguien abre
+   * la URL directamente, un archivo "políglota" no puede ejecutar código.
+   */
+  async getFile(req: Request, res: Response) {
+    const { buffer, contentType, fileName } = await documentsService.getFile(routeParam(req, "id"), req.user!);
+    audit(req, { action: "document.file.view", entity: "document", entityId: routeParam(req, "id") });
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
+    res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+    res.setHeader("Cache-Control", "private, no-store");
+    res.send(buffer);
+  },
+
   async reprocess(req: Request, res: Response) {
     const { document, discardedReviews } = await documentsService.reprocess(
       routeParam(req, "id"),

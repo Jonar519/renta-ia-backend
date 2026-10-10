@@ -25,6 +25,7 @@ export type AuditAction =
   | "client.delete"
   | "document.list"
   | "document.view"
+  | "document.file.view"
   | "document.upload"
   | "document.reprocess"
   | "document.reprocess.discard_reviews"

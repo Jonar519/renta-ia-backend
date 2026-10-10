@@ -792,6 +792,21 @@ route({
   responses: { 200: json(Document, "Documento"), 404: errors[404] },
 });
 route({
+  method: "get",
+  path: "/api/documents/{id}/file",
+  tag: "Documentos",
+  summary:
+    "El archivo original (vista dividida, B17): PDF o imagen con su tipo real (por la firma), inline, nosniff, CSP default-src 'none'; sandbox y Cache-Control private, no-store. Mismo alcance que ver el documento.",
+  params: documentIdParams,
+  responses: {
+    200: { description: "El archivo (application/pdf, image/png o image/jpeg)" },
+    400: errors[400],
+    401: errors[401],
+    404: json(ErrorResponse, "No existe, no está a tu alcance, o el archivo no está disponible"),
+    422: json(ErrorResponse, "El contenido guardado no es un tipo admitido"),
+  },
+});
+route({
   method: "post",
   path: "/api/documents/{id}/reprocess",
   tag: "Documentos",
