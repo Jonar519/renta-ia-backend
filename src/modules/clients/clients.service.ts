@@ -2,6 +2,23 @@ import { prisma } from "../../config/prisma";
 import { AuthPayload } from "../../middlewares/auth.middleware";
 import { assertClientAccess, clientScope } from "../../middlewares/ownership.middleware";
 import { afterCursor, PageParams, toPage } from "../../utils/pagination";
+import { Prisma } from "@prisma/client";
+import { logger } from "../../config/logger";
+import { ApiError } from "../../utils/apiError";
+import { rulesService } from "../ai/rules.service";
+
+/** Lo que la UI muestra de cada concepto, con su revisión (B16). */
+const conceptSelect = {
+  id: true,
+  conceptType: true,
+  description: true,
+  amount: true,
+  aiAmount: true,
+  source: true,
+  periodYear: true,
+  reviewedAt: true,
+  reviewer: { select: { name: true } },
+} satisfies Prisma.TaxConceptSelect;
 
 interface CreateClientInput {
   accountantUserId: string;
@@ -79,7 +96,37 @@ export const clientsService = {
     return prisma.taxConcept.findMany({
       where: { clientId: id },
       orderBy: [{ periodYear: "desc" }, { createdAt: "desc" }],
-      select: { conceptType: true, description: true, amount: true, periodYear: true },
+      select: conceptSelect,
     });
+  },
+
+  /**
+   * Revisar un concepto (B16): la persona confirma el monto de la IA o lo
+   * corrige. Queda quién y cuándo; el valor de la IA no se toca. Ownership: el
+   * concepto debe ser de ESTE cliente y el cliente estar al alcance del
+   * usuario (si no, 404). El portal (solo lectura) no llega aquí (403 en la ruta).
+   */
+  async reviewConcept(clientId: string, conceptId: string, amount: number, user: AuthPayload) {
+    await assertClientAccess(clientId, user);
+    const concept = await prisma.taxConcept.findFirst({ where: { id: conceptId, clientId } });
+    if (!concept) throw new ApiError(404, "Concepto no encontrado");
+    const value = new Prisma.Decimal(amount.toFixed(2));
+    const updated = await prisma.taxConcept.update({
+      where: { id: conceptId },
+      data: {
+        amount: value,
+        source: value.equals(concept.aiAmount) ? "ai" : "person",
+        reviewedAt: new Date(),
+        reviewedBy: user.userId,
+      },
+      select: conceptSelect,
+    });
+    // Las alertas dependen de los montos: se vuelven a evaluar con el revisado.
+    await rulesService
+      .evaluateClientConcepts(clientId, concept.documentId)
+      .catch((err: unknown) =>
+        logger.warn({ err: err instanceof Error ? err.message : err }, "No se pudieron reevaluar las alertas")
+      );
+    return updated;
   },
 };

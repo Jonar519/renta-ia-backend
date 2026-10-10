@@ -27,6 +27,8 @@ export type AuditAction =
   | "document.view"
   | "document.upload"
   | "document.reprocess"
+  | "document.reprocess.discard_reviews"
+  | "tax_concept.review"
   | "ai.chat"
   | "ai.summary"
   | "admin.invitation.create"
@@ -63,7 +65,7 @@ export type AuditAction =
 export interface AuditEntry {
   action: AuditAction;
   userId?: string | null;
-  entity?: "user" | "client" | "document" | "session" | "audit";
+  entity?: "user" | "client" | "document" | "session" | "audit" | "tax_concept";
   entityId?: string | null;
 }
 

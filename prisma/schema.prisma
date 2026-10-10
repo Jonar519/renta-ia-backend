@@ -33,6 +33,7 @@ model User {
   clients            Client[]
   portalClients      Client[]              @relation("ClientPortalUser")
   uploadedDocs       Document[]            @relation("UploadedBy")
+  reviewedConcepts   TaxConcept[]          @relation("ConceptReviewer")
   refreshTokens      RefreshToken[]
   sessions           UserSession[]
   invitations        UserInvitation[]      @relation("InvitedUser")
@@ -113,6 +114,13 @@ model TaxConcept {
   periodYear  Int            @map("period_year") @db.SmallInt
   isAnomalous Boolean        @default(false) @map("is_anomalous")
   createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// Revisión humana (026): "ai" = monto de la IA; "person" = corregido por alguien.
+  source      String         @default("ai") @db.VarChar(8)
+  /// Lo que leyó la IA; no cambia nunca. Lo completa un trigger si no viene.
+  aiAmount    Decimal        @default(dbgenerated()) @map("ai_amount") @db.Decimal(14, 2)
+  reviewedAt  DateTime?      @map("reviewed_at") @db.Timestamptz(6)
+  reviewedBy  String?        @map("reviewed_by") @db.Uuid
+  reviewer    User?          @relation("ConceptReviewer", fields: [reviewedBy], references: [id], onUpdate: NoAction)
   client      Client         @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   document    Document       @relation(fields: [documentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 

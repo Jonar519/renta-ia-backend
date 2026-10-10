@@ -506,10 +506,6 @@
             "type": "string",
             "format": "uuid"
           },
-          "documentId": {
-            "type": "string",
-            "format": "uuid"
-          },
           "conceptType": {
             "type": "string"
           },
@@ -519,19 +515,52 @@
           },
           "amount": {
             "type": "string",
-            "description": "Decimal como texto"
+            "description": "Decimal como texto: el vigente (el de la IA o el corregido)"
+          },
+          "aiAmount": {
+            "type": "string",
+            "description": "Lo que leyó la IA (no cambia nunca)"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "ai",
+              "person"
+            ],
+            "description": "ai = monto de la IA; person = corregido por una persona"
           },
           "periodYear": {
             "type": "integer"
+          },
+          "reviewedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "description": "null = Extraído por IA · sin revisar"
+          },
+          "reviewer": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ]
           }
         },
         "required": [
           "id",
-          "documentId",
           "conceptType",
           "description",
           "amount",
-          "periodYear"
+          "aiAmount",
+          "source",
+          "periodYear",
+          "reviewedAt",
+          "reviewer"
         ]
       }
     },
@@ -3078,7 +3107,7 @@
         "tags": [
           "Clientes"
         ],
-        "summary": "Conceptos tributarios extraídos",
+        "summary": "Conceptos tributarios extraídos, con su revisión",
         "security": [
           {
             "bearerAuth": []
@@ -3111,6 +3140,102 @@
           },
           "404": {
             "description": "No existe o no es accesible (no se revela cuál)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/clients/{id}/tax-concepts/{conceptId}": {
+      "patch": {
+        "tags": [
+          "Clientes"
+        ],
+        "summary": "Revisar un concepto (B16): confirmar el monto de la IA o corregirlo. Queda quién y cuándo; el valor de la IA se conserva. El portal no puede.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "conceptId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 999999999999.99,
+                    "description": "Monto confirmado o corregido (COP)"
+                  }
+                },
+                "required": [
+                  "amount"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Revisado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxConcept"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El rol no permite esta acción, o (code: mfa_enrollment_required) un admin debe activar MFA primero",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El cliente o el concepto no existen o no están a tu alcance",
             "content": {
               "application/json": {
                 "schema": {
@@ -3617,7 +3742,7 @@
         "tags": [
           "Documentos"
         ],
-        "summary": "Reintentar el análisis (solo si terminó en error o con advertencias)",
+        "summary": "Reintentar el análisis (solo si terminó en error o con advertencias). Con conceptos revisados exige discardReviews: true (D6, auditado).",
         "security": [
           {
             "bearerAuth": []
@@ -3634,6 +3759,22 @@
             "in": "path"
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "discardReviews": {
+                    "type": "boolean",
+                    "description": "true = \"descartar revisiones\" confirmado"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "202": {
             "description": "Reencolado",
@@ -3656,7 +3797,7 @@
             }
           },
           "409": {
-            "description": "Ya está en cola o procesándose",
+            "description": "Ya está en cola o procesándose; o (code: reviewed_concepts, details.reviewedCount) tiene conceptos revisados y no se confirmó descartarlos",
             "content": {
               "application/json": {
                 "schema": {
@@ -4751,7 +4892,8 @@
                 "client",
                 "document",
                 "session",
-                "audit"
+                "audit",
+                "tax_concept"
               ]
             },
             "required": false,

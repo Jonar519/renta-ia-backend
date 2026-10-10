@@ -16,7 +16,7 @@ export const auditQuerySchema = z.object({
     .optional(),
   userId: uuidSchema.optional(),
   action: z.string().max(50).optional(),
-  entity: z.enum(["user", "client", "document", "session", "audit"]).optional(),
+  entity: z.enum(["user", "client", "document", "session", "audit", "tax_concept"]).optional(),
   entityId: z.string().max(64).optional(),
 });
 

@@ -15,7 +15,9 @@ import {
 } from "../modules/invitations/invitations.schema";
 import {
   clientIdParams,
+  conceptParams,
   createClientSchema,
+  reviewConceptSchema,
   summarySchema,
   updateClientSchema,
 } from "../modules/clients/clients.schema";
@@ -24,6 +26,7 @@ import {
   createDocumentSchema,
   documentClientParams,
   documentIdParams,
+  reprocessSchema,
   uploadDocumentSchema,
 } from "../modules/documents/documents.schema";
 import { alertClientParams, alertIdParams, updateAlertStatusSchema } from "../modules/alerts/alerts.schema";
@@ -183,11 +186,14 @@ const TaxConcept = registry.register(
   "TaxConcept",
   z.object({
     id: z.string().uuid(),
-    documentId: z.string().uuid(),
     conceptType: z.string(),
     description: z.string().nullable(),
-    amount: z.string().describe("Decimal como texto"),
+    amount: z.string().describe("Decimal como texto: el vigente (el de la IA o el corregido)"),
+    aiAmount: z.string().describe("Lo que leyó la IA (no cambia nunca)"),
+    source: z.enum(["ai", "person"]).describe("ai = monto de la IA; person = corregido por una persona"),
     periodYear: z.number().int(),
+    reviewedAt: z.string().datetime().nullable().describe("null = Extraído por IA · sin revisar"),
+    reviewer: z.object({ name: z.string() }).nullable(),
   })
 );
 const page = <T extends ZodTypeAny>(item: T) =>
@@ -696,9 +702,24 @@ route({
   method: "get",
   path: "/api/clients/{id}/tax-concepts",
   tag: "Clientes",
-  summary: "Conceptos tributarios extraídos",
+  summary: "Conceptos tributarios extraídos, con su revisión",
   params: clientIdParams,
   responses: { 200: json(z.array(TaxConcept), "Conceptos"), 404: errors[404] },
+});
+route({
+  method: "patch",
+  path: "/api/clients/{id}/tax-concepts/{conceptId}",
+  tag: "Clientes",
+  summary:
+    "Revisar un concepto (B16): confirmar el monto de la IA o corregirlo. Queda quién y cuándo; el valor de la IA se conserva. El portal no puede.",
+  params: conceptParams,
+  body: reviewConceptSchema,
+  responses: {
+    200: json(TaxConcept, "Revisado"),
+    400: errors[400],
+    403: errors[403],
+    404: json(ErrorResponse, "El cliente o el concepto no existen o no están a tu alcance"),
+  },
 });
 route({
   method: "post",
@@ -772,12 +793,17 @@ route({
   method: "post",
   path: "/api/documents/{id}/reprocess",
   tag: "Documentos",
-  summary: "Reintentar el análisis (solo si terminó en error o con advertencias)",
+  summary:
+    "Reintentar el análisis (solo si terminó en error o con advertencias). Con conceptos revisados exige discardReviews: true (D6, auditado).",
   params: documentIdParams,
+  body: reprocessSchema,
   responses: {
     202: json(Document, "Reencolado"),
     404: errors[404],
-    409: json(ErrorResponse, "Ya está en cola o procesándose"),
+    409: json(
+      ErrorResponse,
+      "Ya está en cola o procesándose; o (code: reviewed_concepts, details.reviewedCount) tiene conceptos revisados y no se confirmó descartarlos"
+    ),
   },
 });
 

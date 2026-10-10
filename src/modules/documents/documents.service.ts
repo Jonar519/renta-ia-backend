@@ -156,7 +156,13 @@ export const documentsService = {
    * error); uno en cola o procesándose responde 409. Al reprocesar, el
    * worker reemplaza los conceptos y embeddings anteriores del documento.
    */
-  async reprocess(id: string, user: AuthPayload) {
+  /**
+   * Reintentar el análisis. D6 (B16): si hay conceptos revisados por una
+   * persona, 409 (code "reviewed_concepts") salvo que se confirme
+   * "descartar revisiones"; entonces el worker los reemplaza. Devuelve cuántas
+   * revisiones se descartan (para auditarlo).
+   */
+  async reprocess(id: string, user: AuthPayload, discardReviews = false) {
     const document = isUuid(id)
       ? await prisma.document.findFirst({
           where: { id, client: clientScope(user) },
@@ -164,6 +170,18 @@ export const documentsService = {
       : null;
     if (!document) {
       throw new ApiError(404, "Documento no encontrado");
+    }
+
+    const reviewed = await prisma.taxConcept.count({ where: { documentId: id, reviewedAt: { not: null } } });
+    if (reviewed > 0 && !discardReviews) {
+      throw new ApiError(
+        409,
+        reviewed === 1
+          ? "Este documento tiene 1 concepto revisado. Reprocesarlo descarta esa revisión."
+          : `Este documento tiene ${reviewed} conceptos revisados. Reprocesarlo descarta esas revisiones.`,
+        { reviewedCount: reviewed },
+        "reviewed_concepts"
+      );
     }
 
     // Transición condicional en una sola sentencia: dos clics simultáneos no
@@ -176,7 +194,7 @@ export const documentsService = {
       throw new ApiError(409, "El documento ya está en cola o procesándose");
     }
 
-    await documentQueue.add("process-document", { documentId: id });
+    await documentQueue.add("process-document", { documentId: id, discardReviews: reviewed > 0 });
     await publishDocumentEvent({
       documentId: id,
       clientId: document.clientId,
@@ -184,6 +202,6 @@ export const documentsService = {
       status: "uploaded",
       errorMessage: null,
     });
-    return prisma.document.findUniqueOrThrow({ where: { id } });
+    return { document: await prisma.document.findUniqueOrThrow({ where: { id } }), discardedReviews: reviewed };
   },
 };

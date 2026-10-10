@@ -181,7 +181,7 @@ describe("POST /api/documents/:id/reprocess", () => {
     const res = await request(app).post(`/api/documents/${doc.id}/reprocess`).set(authHeader(owner.token));
     expect(res.status).toBe(202);
     expect(res.body).toMatchObject({ status: "uploaded", errorMessage: null });
-    expect(documentQueue.add).toHaveBeenCalledWith("process-document", { documentId: doc.id });
+    expect(documentQueue.add).toHaveBeenCalledWith("process-document", { documentId: doc.id, discardReviews: false });
 
     await tick();
     expect(socket.received).toContainEqual(expect.objectContaining({ documentId: doc.id, status: "uploaded" }));

@@ -55,8 +55,16 @@ export const documentsController = {
   },
 
   async reprocess(req: Request, res: Response) {
-    const document = await documentsService.reprocess(routeParam(req, "id"), req.user!);
+    const { document, discardedReviews } = await documentsService.reprocess(
+      routeParam(req, "id"),
+      req.user!,
+      req.body?.discardReviews === true
+    );
     audit(req, { action: "document.reprocess", entity: "document", entityId: document.id });
+    // D6: descartar revisiones queda auditado aparte.
+    if (discardedReviews > 0) {
+      audit(req, { action: "document.reprocess.discard_reviews", entity: "document", entityId: document.id });
+    }
     res.status(202).json(document);
   },
 };
