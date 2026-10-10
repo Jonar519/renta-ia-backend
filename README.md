@@ -5,6 +5,7 @@ Se conecta a la base de datos del repositorio [`renta-ia-database`](../renta-ia-
 mediante Prisma (solo como cliente: el esquema lo gestiona ese repo).
 
 - **Guía de prueba completa de la plataforma (Fase 5):** [`docs/demo-fase5.md`](docs/demo-fase5.md)
+- README general del proyecto (los tres repositorios, puertos, arranque, cómo demostrar cada tema): [`docs/README-general.md`](docs/README-general.md)
 - Decisiones de arquitectura: [`docs/adr/`](docs/adr/README.md)
 - Modelo de dominio (roles, entidades, ciclos de vida, reglas): [`renta-ia-database/docs/modelo-de-dominio.md`](../renta-ia-database/docs/modelo-de-dominio.md)
 - Retención y eliminación de datos: [`docs/data-retention.md`](docs/data-retention.md)
