@@ -257,6 +257,7 @@ Pruebas de carga: [`loadtests/README.md`](loadtests/README.md)
 CI (`.github/workflows/ci.yml`): lint, typecheck, tests, build; y un job
 `security` con `npm audit --omit=dev` y gitleaks (los falsos positivos revisados, en
 `.gitleaksignore`). Lo que necesita para pasar: ver "CI" en el README raíz.
+Excepciones vigentes de `npm audit`, con fecha de revisión: [ADR 0014](docs/adr/0014-excepciones-npm-audit-octubre-2026.md).
 
 ## Cambios de esquema
 

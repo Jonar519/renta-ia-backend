@@ -132,4 +132,13 @@ defecto se usa la versión simulada, y la versión simulada está prohibida en p
 - Redis y PostgreSQL locales sin TLS ni contraseña fuerte (docker-compose de desarrollo).
 - Dependencias de desarrollo con avisos de `npm audit` que requieren versiones mayores: ver
   frontend `docs/security.md`. Las de producción se revisan en CI (`npm audit --omit=dev`).
+- **Excepciones temporales de `npm audit` (29-10-2026, [ADR 0014](adr/0014-excepciones-npm-audit-octubre-2026.md)):**
+  - `body-parser` 1.20.8, alto, en producción: DoS con cuerpo comprimido. Se corrige con 1.20.9
+    el **2026-11-05**.
+  - `zod` 3.25.76, alto, en producción: agota memoria con colecciones enormes. No hay corrección
+    en zod 3; se revisa el **2026-11-30**.
+  - `uuid`/`hyperid`/`autocannon`, moderado, solo desarrollo. Se revisa el **2026-11-30**.
+  - Mitigación: cuerpo JSON de 100 KB como máximo, límite global por IP y `.max()` en el único
+    array zod que llega de un cliente. Hasta entonces, el job `security` del CI falla a
+    propósito.
 - `frame-ancestors` debe enviarse como encabezado por el servidor que sirva el frontend (no funciona en `<meta>`).
