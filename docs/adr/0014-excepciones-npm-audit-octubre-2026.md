@@ -1,7 +1,8 @@
 # 0014 — Excepciones temporales de `npm audit` (octubre 2026)
 
 **Estado:** aceptada (auditoría de dependencias del 29-10-2026, aprobada por el usuario).
-**Revisión:** body-parser el **2026-11-05**; zod y autocannon el **2026-11-30**.
+**Revisión:** body-parser el **2026-11-05**; zod y autocannon el **2026-11-13** (decisión
+explícita antes de la entrega del 17 de noviembre: migrar o entregar con la excepción declarada).
 
 ## Contexto
 
@@ -54,8 +55,8 @@ de zod.
       desde un archivo del propio servidor.
     - `src/docs/openapi.ts`: solo documentan respuestas para el OpenAPI y no validan
       peticiones.
-- **Revisión (2026-11-30):** decidir la fecha de la migración a zod 4 o renovar esta excepción
-  con nueva fecha.
+- **Revisión (2026-11-13):** decisión explícita antes de la entrega del 17 de noviembre: migrar o
+  entregar con la excepción declarada.
 
 ### 3. uuid 8.3.2 / hyperid 3.3.0 / autocannon 8.0.0 — moderado, solo desarrollo (GHSA-w5hq-g745-h8pq)
 
@@ -64,8 +65,9 @@ de zod.
 - **Por qué no se corrige:** `autocannon` solo se usa en las pruebas de carga (`loadtests/`) y
   no llega a producción. El "arreglo" de `npm audit fix --force` **bajaría** autocannon a 2.0.1,
   lo que no tiene sentido.
-- **Revisión (2026-11-30):** comprobar si hay una versión de autocannon/hyperid que use
-  `uuid >= 11.1.1`.
+- **Revisión (2026-11-13):** comprobar si hay una versión de autocannon/hyperid que use
+  `uuid >= 11.1.1`. Decisión explícita antes de la entrega del 17 de noviembre: migrar o
+  entregar con la excepción declarada.
 
 ## Alternativas consideradas
 
