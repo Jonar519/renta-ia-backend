@@ -79,9 +79,12 @@ de zod.
 
 ## Consecuencias
 
-- El job `security` del CI (`npm audit --omit=dev --audit-level=moderate`) **seguirá fallando**
-  por body-parser y zod hasta que se cierren estas excepciones. Es esperado y no debe
-  silenciarse.
+- Desde la rama `ci/security-informativo`, el paso de `npm audit` de producción del job `security`
+  (`npm audit --omit=dev --audit-level=moderate`) es **informativo** (`continue-on-error: true`).
+  El job queda en verde aunque el audit siga mostrando body-parser y zod.
+- **El log del paso sigue siendo la evidencia:** ahí se ven los avisos en cada push.
+- **Vuelve a ser bloqueante al cerrar body-parser (5-nov).** Desde entonces solo zod lo hará
+  fallar, con decisión el 13-nov.
 - Cada fecha de revisión obliga a cerrar la excepción o renovarla por escrito.
 
 ## Evidencia

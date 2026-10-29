@@ -142,6 +142,11 @@ defecto se usa la versión simulada, y la versión simulada está prohibida en p
   - Para zod y uuid/hyperid/autocannon: decisión explícita antes de la entrega del 17 de
     noviembre: migrar o entregar con la excepción declarada.
   - Mitigación: cuerpo JSON de 100 KB como máximo, límite global por IP y `.max()` en el único
-    array zod que llega de un cliente. Hasta entonces, el job `security` del CI falla a
-    propósito.
+    array zod que llega de un cliente.
+  - CI: desde la rama `ci/security-informativo`, el paso de `npm audit` de producción es
+    **informativo** (`continue-on-error: true`). El job `security` queda en verde aunque el audit
+    siga mostrando los avisos.
+    - El log del paso sigue siendo la evidencia.
+    - Vuelve a ser bloqueante al cerrar body-parser (5-nov). Desde entonces solo zod lo hará
+      fallar, con decisión el 13-nov.
 - `frame-ancestors` debe enviarse como encabezado por el servidor que sirva el frontend (no funciona en `<meta>`).
