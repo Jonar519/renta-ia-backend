@@ -48,8 +48,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/renta-ia-database
-          ref: ${{ vars.DATABASE_REPO_REF || 'main' }}
-          token: ${{ secrets.DATABASE_REPO_TOKEN || github.token }}
           path: renta-ia-database
 
       - uses: actions/setup-node@v4
