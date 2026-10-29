@@ -7,7 +7,10 @@ import { embeddingsService } from "../../src/modules/ai/embeddings.service";
 // Anthropic mockeado: los tests nunca llaman a la API real (ni gastan crédito).
 const { createMessage } = vi.hoisted(() => ({ createMessage: vi.fn() }));
 vi.mock("@anthropic-ai/sdk", () => ({
-  default: vi.fn().mockImplementation(() => ({ messages: { create: createMessage } })),
+  // `function` (no flecha): vitest 4 exige un constructor para `new Anthropic(...)`.
+  default: vi.fn().mockImplementation(function () {
+    return { messages: { create: createMessage } };
+  }),
 }));
 
 describe("POST /api/ai/chat", () => {

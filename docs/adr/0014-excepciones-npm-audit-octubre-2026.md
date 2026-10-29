@@ -13,9 +13,14 @@ romper una de estas dos reglas:
 - **Sin cambios mayores a ciegas:** una versión mayor de una dependencia de producción exige su
   propia migración y pruebas.
 
-En la rama `chore/audit-oct` ya se corrigió lo que cumplía ambas reglas: `ip-address` 10.7.4 y
-`qs` 6.16.1 (solo lockfile) y `vite` 7.3.7 (override). Quedan tres avisos, que se aceptan aquí de
-forma temporal.
+En la rama `chore/audit-oct` ya se corrigió lo que cumplía ambas reglas:
+
+- `ip-address` 10.7.4 y `qs` 6.16.1 (solo lockfile).
+- `vite` 7.3.7 (override).
+- `vitest` 4.1.12, que quita el crítico de `tinypool` (vitest 4 ya no lo usa) y el moderado de
+  `@vitest/mocker`.
+
+Quedan tres avisos, que se aceptan aquí de forma temporal.
 
 ## Decisión
 
@@ -61,12 +66,6 @@ de zod.
   lo que no tiene sentido.
 - **Revisión (2026-11-30):** comprobar si hay una versión de autocannon/hyperid que use
   `uuid >= 11.1.1`.
-
-## Fuera de esta excepción
-
-Siguen pendientes, solo por la regla de 14 días: `vitest` 4.1.12 (corrige el crítico de
-`tinypool` y el moderado de `@vitest/mocker`; cumple los 14 días el 29-10-2026 a las 14:51 UTC).
-No es una excepción aceptada: se aplica en cuanto cumple la regla.
 
 ## Alternativas consideradas
 

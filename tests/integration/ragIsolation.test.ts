@@ -7,7 +7,10 @@ import { replaceEmbeddings, searchSimilarChunks } from "../../src/modules/ai/emb
 // Anthropic mockeado: se captura el prompt para ver qué fragmentos llegan al LLM.
 const { createMessage } = vi.hoisted(() => ({ createMessage: vi.fn() }));
 vi.mock("@anthropic-ai/sdk", () => ({
-  default: vi.fn().mockImplementation(() => ({ messages: { create: createMessage } })),
+  // `function` (no flecha): vitest 4 exige un constructor para `new Anthropic(...)`.
+  default: vi.fn().mockImplementation(function () {
+    return { messages: { create: createMessage } };
+  }),
 }));
 
 /**

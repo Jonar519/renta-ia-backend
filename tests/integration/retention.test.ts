@@ -179,7 +179,8 @@ describe("tarea diaria", () => {
     let processor: ((job: { name: string }) => Promise<unknown>) | undefined;
     vi.doMock("bullmq", () => ({
       Queue: vi.fn(),
-      Worker: vi.fn().mockImplementation((_name: string, fn: typeof processor) => {
+      // `function` (no flecha): vitest 4 exige un constructor para `new Worker(...)`.
+      Worker: vi.fn().mockImplementation(function (_name: string, fn: typeof processor) {
         processor = fn;
         return { on: vi.fn() };
       }),
