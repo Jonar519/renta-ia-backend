@@ -23,7 +23,9 @@ producción en otra máquina), necesita leer el mismo archivo.
 La interfaz pasó de `save({ buffer, clientId, fileName })` (solo documentos) a
 `save({ key, buffer })`. Las claves se arman **solo** en `src/services/storage/keys.ts`:
 
-- `storageKeys.document(clientId, nombre)`: el mismo formato de siempre; documentos y worker no
+- `storageKeys.document(clientId, nombre)`: `clients/<clientId>/documents/<timestamp>-<16 hex>-<nombre>`.
+  El sufijo aleatorio llegó en `fix/dedupe-estable`: dos subidas del mismo nombre en el mismo
+  milisegundo compartían archivo. Las claves anteriores siguen valiendo; documentos y worker no
   cambiaron.
 - `storageKeys.avatar(userId, tipo)`: `users/<userId>/avatar/<timestamp>-<16 hex>.<jpg|png>`.
 

@@ -16,10 +16,16 @@ export const AVATAR_EXTENSIONS = { "image/jpeg": "jpg", "image/png": "png" } as 
 export type AvatarMime = keyof typeof AVATAR_EXTENSIONS;
 
 export const storageKeys = {
-  /** clients/<clientId>/documents/<timestamp>-<nombre saneado> (formato de siempre). */
+  /**
+   * clients/<clientId>/documents/<timestamp>-<16 hex>-<nombre saneado>. El sufijo aleatorio
+   * evita que dos subidas del mismo nombre en el mismo milisegundo compartan archivo (una
+   * pisaría o borraría el de la otra). Las claves anteriores, sin sufijo, siguen siendo válidas.
+   */
   document(clientId: string, fileName: string): string {
     requireUuid(clientId, "clientId");
-    const safeName = `${Date.now()}-${path.basename(fileName).replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+    const safeName = `${Date.now()}-${randomBytes(8).toString("hex")}-${path
+      .basename(fileName)
+      .replace(/[^a-zA-Z0-9._-]/g, "_")}`;
     return ["clients", clientId, "documents", safeName].join("/");
   },
 

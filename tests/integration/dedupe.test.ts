@@ -87,4 +87,22 @@ describe("Documentos duplicados (SHA-256 por cliente)", () => {
     const stored = fs.readdirSync(dir).map((f) => fs.readFileSync(path.join(dir, f)));
     expect(stored.filter((b) => b.equals(fresh))).toHaveLength(1);
   });
+
+  it("dos archivos DISTINTOS con el mismo nombre, simultáneos: dos 201, cada uno con su propio archivo", async () => {
+    // Regresión: con la clave <timestamp>-<nombre>, la mitad de las veces caían en el mismo
+    // milisegundo y compartían archivo (uno pisaba al otro). 5 intentos lo detectaban ~96 %.
+    for (let i = 0; i < 5; i++) {
+      const a = Buffer.concat([pdf, Buffer.from(`\n%a-${i}-${Date.now()}\n`)]);
+      const b = Buffer.concat([pdf, Buffer.from(`\n%b-${i}-${Date.now()}\n`)]);
+      const results = await Promise.all([upload(a), upload(b)]);
+      expect(results.map((r) => r.status)).toEqual([201, 201]);
+
+      const docs = await prisma.document.findMany({ where: { id: { in: results.map((r) => r.body.id) } } });
+      expect(new Set(docs.map((d) => d.storageKey)).size).toBe(2);
+      for (const doc of docs) {
+        const onDisk = fs.readFileSync(path.join(process.env.STORAGE_LOCAL_PATH!, doc.storageKey));
+        expect(createHash("sha256").update(onDisk).digest("hex")).toBe(doc.sha256);
+      }
+    }
+  });
 });

@@ -96,7 +96,11 @@ export const documentsService = {
     } catch (err) {
       // Dos subidas simultáneas del mismo archivo: el índice único
       // (client_id, sha256) rechaza la segunda; se borra su archivo huérfano.
-      await storageService.delete(storageKey);
+      // Solo si la clave es suya: el sufijo aleatorio de storageKeys.document ya lo
+      // garantiza, y además se comprueba que ningún documento apunte a ella (antes del
+      // sufijo, la perdedora podía borrar el archivo de la ganadora).
+      const inUse = await prisma.document.count({ where: { storageKey } });
+      if (inUse === 0) await storageService.delete(storageKey);
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
         const winner = await prisma.document.findFirst({
           where: { clientId: input.clientId, sha256 },

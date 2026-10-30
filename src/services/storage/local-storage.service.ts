@@ -23,7 +23,9 @@ export const localStorageService: StorageService = {
     // La clave (ruta relativa, portable entre entornos) la arma storageKeys.
     const fullPath = resolveInsideBase(key);
     fs.mkdirSync(path.dirname(fullPath), { recursive: true });
-    fs.writeFileSync(fullPath, buffer);
+    // "wx": nunca pisa un archivo existente; si una clave se repitiera, falla en vez de
+    // sobrescribir en silencio el archivo de otro documento.
+    fs.writeFileSync(fullPath, buffer, { flag: "wx" });
     return key;
   },
 
