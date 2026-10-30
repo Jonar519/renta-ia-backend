@@ -130,6 +130,23 @@ defecto se usa la versión simulada, y la versión simulada está prohibida en p
 - Correo real (SES) sin configurar: hoy los correos quedan en `email_outbox` (proveedor simulado,
   prohibido en producción).
 - Redis y PostgreSQL locales sin TLS ni contraseña fuerte (docker-compose de desarrollo).
-- Dependencias de desarrollo con avisos de `npm audit` que requieren versiones mayores: ver
-  frontend `docs/security.md`. Las de producción se revisan en CI (`npm audit --omit=dev`).
+- Dependencias del frontend: `npm audit` completo (también desarrollo) en **0** desde el
+  29-10-2026 (frontend `docs/security.md`). Las de producción se revisan en CI
+  (`npm audit --omit=dev`).
+- **Excepciones temporales de `npm audit` (29-10-2026, [ADR 0014](adr/0014-excepciones-npm-audit-octubre-2026.md)):**
+  - `body-parser` 1.20.8, alto, en producción: DoS con cuerpo comprimido. Se corrige con 1.20.9
+    el **2026-11-05**.
+  - `zod` 3.25.76, alto, en producción: agota memoria con colecciones enormes. No hay corrección
+    en zod 3; se revisa el **2026-11-13**.
+  - `uuid`/`hyperid`/`autocannon`, moderado, solo desarrollo. Se revisa el **2026-11-13**.
+  - Para zod y uuid/hyperid/autocannon: decisión explícita antes de la entrega del 17 de
+    noviembre: migrar o entregar con la excepción declarada.
+  - Mitigación: cuerpo JSON de 100 KB como máximo, límite global por IP y `.max()` en el único
+    array zod que llega de un cliente.
+  - CI: desde la rama `ci/security-informativo`, el paso de `npm audit` de producción es
+    **informativo** (`continue-on-error: true`). El job `security` queda en verde aunque el audit
+    siga mostrando los avisos.
+    - El log del paso sigue siendo la evidencia.
+    - Vuelve a ser bloqueante al cerrar body-parser (5-nov). Desde entonces solo zod lo hará
+      fallar, con decisión el 13-nov.
 - `frame-ancestors` debe enviarse como encabezado por el servidor que sirva el frontend (no funciona en `<meta>`).

@@ -7,7 +7,10 @@ import { SUMMARY_DISCLAIMER } from "../../src/modules/clients/summary.service";
 // Anthropic mockeado: sin llamadas reales ni consumo de crédito.
 const { createMessage } = vi.hoisted(() => ({ createMessage: vi.fn() }));
 vi.mock("@anthropic-ai/sdk", () => ({
-  default: vi.fn().mockImplementation(() => ({ messages: { create: createMessage } })),
+  // `function` (no flecha): vitest 4 exige un constructor para `new Anthropic(...)`.
+  default: vi.fn().mockImplementation(function () {
+    return { messages: { create: createMessage } };
+  }),
 }));
 
 describe("POST /api/clients/:id/summary", () => {

@@ -19,5 +19,6 @@ tratan del frontend o de la base de datos, para tener un solo lugar donde buscar
 | [0011](0011-mfa-totp.md)                                       | Segundo factor con TOTP propio, secreto cifrado y login en dos pasos                  | Aceptada |
 | [0012](0012-vigencia-de-los-enlaces-firmados.md)               | Vigencia de cada enlace o paso firmado (5 min · 15 min · 24 h · 72 h)                 | Aceptada |
 | [0013](0013-sesiones-activas.md)                               | Sesiones activas: qué se guarda (IP recortada, ubicación aproximada) y cómo se cierra | Aceptada |
+| [0014](0014-excepciones-npm-audit-octubre-2026.md)             | Excepciones temporales de `npm audit` (body-parser, zod, autocannon), con revisión    | Aceptada |
 
 Formato: Contexto · Decisión · Alternativas consideradas · Consecuencias · Evidencia.
