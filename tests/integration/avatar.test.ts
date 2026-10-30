@@ -165,11 +165,13 @@ describe("quitar la foto y ownership", () => {
 });
 
 describe("StorageService generalizado", () => {
-  it("documentos: la clave conserva su formato de siempre; las claves exigen UUID", () => {
+  it("documentos: clave con marca de tiempo, sufijo aleatorio y nombre saneado; las claves exigen UUID", () => {
     const clientId = "0b6f1f2e-1c2d-4e5f-8a9b-0c1d2e3f4a5b";
     expect(storageKeys.document(clientId, "../../Certificado 2025.pdf")).toMatch(
-      new RegExp(`^clients/${clientId}/documents/\\d+-Certificado_2025\\.pdf$`)
+      new RegExp(`^clients/${clientId}/documents/\\d+-[0-9a-f]{16}-Certificado_2025\\.pdf$`)
     );
+    // Mismo cliente, mismo nombre, mismo milisegundo: claves distintas.
+    expect(storageKeys.document(clientId, "x.pdf")).not.toBe(storageKeys.document(clientId, "x.pdf"));
     expect(() => storageKeys.document("../otro", "x.pdf")).toThrow(/UUID/);
     expect(() => storageKeys.avatar("no-es-uuid", "image/png")).toThrow(/UUID/);
   });
