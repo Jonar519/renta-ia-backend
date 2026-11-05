@@ -97,7 +97,7 @@ export function estimateBalance(
 /** Tope de tokens de salida del resumen (razonamiento + texto). */
 export const SUMMARY_MAX_TOKENS = 2000;
 
-const SUMMARY_SYSTEM_PROMPT = `Eres un asistente que redacta resúmenes ejecutivos para contadores en Colombia.
+export const SUMMARY_SYSTEM_PROMPT = `Eres un asistente que redacta resúmenes ejecutivos para contadores en Colombia.
 Recibes, en JSON, cifras YA CALCULADAS por el sistema a partir de los documentos de un cliente.
 Redacta en español un resumen de 3 a 5 frases, claro y profesional.
 Reglas estrictas:

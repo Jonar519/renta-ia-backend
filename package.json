@@ -23,7 +23,8 @@
     "loadtest:chat": "node loadtests/chat.mjs",
     "loadtest:upload": "node loadtests/upload-burst.mjs",
     "loadtest:ratelimit": "node loadtests/ratelimit.mjs",
-    "openapi": "tsc && node dist/docs/export-openapi.js"
+    "openapi": "tsc && node dist/docs/export-openapi.js",
+    "ai:verify": "node dist/scripts/verifyAi.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.27.3",

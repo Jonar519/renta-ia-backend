@@ -13,7 +13,7 @@ export interface ExtractedConcept {
   periodYear: number;
 }
 
-const SYSTEM_PROMPT = `Eres un asistente experto en normativa tributaria colombiana.
+export const SYSTEM_PROMPT = `Eres un asistente experto en normativa tributaria colombiana.
 Tu única tarea es leer el texto de un documento contable y extraer las cifras tributarias
 relevantes en formato JSON. Responde ÚNICAMENTE con un arreglo JSON válido, sin texto
 adicional, sin explicaciones, sin bloques de markdown. Si no encuentras ninguna cifra
