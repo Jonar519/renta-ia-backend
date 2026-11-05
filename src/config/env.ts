@@ -107,6 +107,44 @@ function mfaEncryptionKey(): Buffer | undefined {
   return key;
 }
 
+/**
+ * Almacenamiento de archivos (services/storage, ADR 0006):
+ *  - "local" (por defecto): disco, en STORAGE_LOCAL_PATH. Sirve solo si la API y el
+ *    worker comparten la máquina.
+ *  - "s3": servicio compatible con S3 (Cloudflare R2 en el despliegue). Exige S3_BUCKET,
+ *    S3_ACCESS_KEY_ID y S3_SECRET_ACCESS_KEY. S3_ENDPOINT solo para servicios que no son
+ *    AWS (R2: https://<cuenta>.r2.cloudflarestorage.com). Las credenciales son PROPIAS: no
+ *    se usan las AWS_* de SES.
+ */
+function storageDriver(): "local" | "s3" {
+  const value = process.env.STORAGE_DRIVER || "local";
+  if (value !== "local" && value !== "s3") {
+    throw new Error(`STORAGE_DRIVER="${value}" no es válido. Usa "local" o "s3".`);
+  }
+  return value;
+}
+
+function s3Config(driver: "local" | "s3") {
+  if (driver !== "s3") return undefined;
+  for (const name of ["S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"]) {
+    if (!process.env[name]) throw new Error(`STORAGE_DRIVER=s3 requiere la variable de entorno ${name}.`);
+  }
+  const endpoint = process.env.S3_ENDPOINT || undefined;
+  if (endpoint && !/^https:\/\/[^/\s]+\/?$/.test(endpoint)) {
+    throw new Error(
+      `S3_ENDPOINT="${endpoint}" debe ser una URL https:// sin ruta (p. ej. https://<cuenta>.r2.cloudflarestorage.com).`
+    );
+  }
+  return {
+    bucket: process.env.S3_BUCKET!,
+    accessKeyId: process.env.S3_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY!,
+    endpoint,
+    // R2 usa la región "auto"; en AWS hay que indicar la del bucket.
+    region: process.env.S3_REGION || (endpoint ? "auto" : "us-east-1"),
+  };
+}
+
 function positiveInt(name: string, fallback: number): number {
   const value = Number(process.env[name] ?? fallback);
   if (!Number.isInteger(value) || value < 1) throw new Error(`${name} debe ser un entero positivo.`);
@@ -121,6 +159,8 @@ const corsOrigins = (
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
+
+const storageDriverValue = storageDriver();
 
 export const env = {
   port: Number(process.env.PORT ?? 4000),
@@ -184,7 +224,8 @@ export const env = {
   geoipProvider: geoipProvider(),
   geoipDbipCsv: process.env.GEOIP_DBIP_CSV,
 
-  // Almacenamiento de documentos (Fase 3: disco local · Fase 6: S3)
-  storageDriver: process.env.STORAGE_DRIVER ?? "local",
+  // Almacenamiento de archivos (ver storageDriver): disco local o S3/R2.
+  storageDriver: storageDriverValue,
   storageLocalPath: process.env.STORAGE_LOCAL_PATH ?? "./uploads",
+  s3: s3Config(storageDriverValue),
 };
