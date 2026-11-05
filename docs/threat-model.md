@@ -134,8 +134,9 @@ defecto se usa la versión simulada, y la versión simulada está prohibida en p
   29-10-2026 (frontend `docs/security.md`). Las de producción se revisan en CI
   (`npm audit --omit=dev`).
 - **Excepciones temporales de `npm audit` (29-10-2026, [ADR 0014](adr/0014-excepciones-npm-audit-octubre-2026.md)):**
-  - `body-parser` 1.20.8, alto, en producción: DoS con cuerpo comprimido. Se corrige con 1.20.9
-    el **2026-11-05**.
+  - ~~`body-parser` 1.20.8, alto, en producción: DoS con cuerpo comprimido.~~ **Cerrada el
+    2026-11-05:** 1.20.9 (14 días de publicada, solo el lockfile, sin override; `qs` sigue en
+    6.16.1).
   - `zod` 3.25.76, alto, en producción: agota memoria con colecciones enormes. No hay corrección
     en zod 3; se revisa el **2026-11-13**.
   - `uuid`/`hyperid`/`autocannon`, moderado, solo desarrollo. Se revisa el **2026-11-13**.
@@ -147,6 +148,6 @@ defecto se usa la versión simulada, y la versión simulada está prohibida en p
     **informativo** (`continue-on-error: true`). El job `security` queda en verde aunque el audit
     siga mostrando los avisos.
     - El log del paso sigue siendo la evidencia.
-    - Vuelve a ser bloqueante al cerrar body-parser (5-nov). Desde entonces solo zod lo hará
-      fallar, con decisión el 13-nov.
+    - Sigue informativo **hasta el 13-nov** (decisión del 4-nov): cerrar body-parser el 5-nov
+      no basta, porque zod lo dejaría en rojo. Se decide junto con zod.
 - `frame-ancestors` debe enviarse como encabezado por el servidor que sirva el frontend (no funciona en `<meta>`).
