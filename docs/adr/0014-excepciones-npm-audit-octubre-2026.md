@@ -1,8 +1,10 @@
 # 0014 — Excepciones temporales de `npm audit` (octubre 2026)
 
 **Estado:** aceptada (auditoría de dependencias del 29-10-2026, aprobada por el usuario).
-**Revisión:** body-parser el **2026-11-05**; zod y autocannon el **2026-11-13** (decisión
-explícita antes de la entrega del 17 de noviembre: migrar o entregar con la excepción declarada).
+**Revisión:** body-parser el **2026-11-05** (**cerrada ese día**, ver abajo); zod y autocannon el
+**2026-11-13** (decisión explícita antes de la entrega del 17 de noviembre: migrar o entregar con
+la excepción declarada); minimatch el **2026-11-13**, o antes si eslint pide `minimatch` 11
+(sección 4).
 
 ## Contexto
 
@@ -21,12 +23,18 @@ En la rama `chore/audit-oct` ya se corrigió lo que cumplía ambas reglas:
 - `vitest` 4.1.12, que quita el crítico de `tinypool` (vitest 4 ya no lo usa) y el moderado de
   `@vitest/mocker`.
 
-Quedan tres avisos, que se aceptan aquí de forma temporal.
+Quedaban tres avisos, que se aceptan aquí de forma temporal. El de body-parser se cerró el
+2026-11-05 (sección 1). El 2026-11-05 se registró también `minimatch` (sección 4), solo de
+desarrollo, como excepción aceptada por el usuario.
 
 ## Decisión
 
-### 1. body-parser 1.20.8 — alto, producción (GHSA-27r3-jxmh-p828)
+### 1. body-parser 1.20.8 — alto, producción (GHSA-27r3-jxmh-p828) — **cerrada el 2026-11-05**
 
+- **Cierre (2026-11-05):** `npm update body-parser --before=2026-10-22T11:40:00Z`, sin override.
+  El lockfile cambia en una sola entrada: `body-parser` 1.20.8 → **1.20.9** (publicada el
+  2026-10-22 a las 11:38:27 UTC; 14 días cumplidos). `qs` sigue en 6.16.1: `--before` impide que
+  entren 6.16.2 o 6.17.x, que aún no cumplen 14 días. `npm audit` ya no muestra este aviso.
 - **Aviso:** denegación de servicio con bytes sobrantes después de un cuerpo comprimido.
 - **Por qué no se corrige hoy:** la corrección, `1.20.9`, se publicó el 2026-10-22 y cumple 14
   días el **2026-11-05**.
@@ -69,6 +77,30 @@ de zod.
   `uuid >= 11.1.1`. Decisión explícita antes de la entrega del 17 de noviembre: migrar o
   entregar con la excepción declarada.
 
+### 4. minimatch 10.2.6 — moderado, solo desarrollo (GHSA-g3hv-75wg-m249) — **excepción aceptada, revisión el 2026-11-13**
+
+- **Aviso** (publicado el 2026-10-30): denegación de servicio por amplificación de `globparts`.
+  Afecta a `>=7.0.0 <11.0.1`.
+- **Dónde:** solo en desarrollo, por `eslint` 10.11.0 (`^10.2.5`), `@eslint/config-array` 0.23.5
+  (`^10.2.4`) y `@typescript-eslint/typescript-estree` 8.70.1 (`^10.2.2`). Ya estaba en `main`
+  (10.2.6, publicada el 2026-07-27); el paso de producción del CI (`--omit=dev`) no lo ve.
+  Explica 10 de los 13 avisos moderados del `npm audit` completo (los otros 3 son la sección 3),
+  porque se propaga a eslint y typescript-eslint. La copia `minimatch` 3.1.5 (por
+  `ts-node-dev` → `rimraf` → `glob`) queda fuera del rango afectado.
+- **Por qué no se corrige hoy:**
+  - la única corrección es `11.0.1`, de una versión mayor que la que piden eslint y
+    typescript-eslint. Haría falta un override a través de esa versión mayor;
+  - además, `11.0.1` se publicó el 2026-10-27 y cumple 14 días el **2026-11-10**;
+  - el "arreglo" de `npm audit fix --force` bajaría eslint y typescript-eslint. Se descarta.
+- **Exposición:** `minimatch` solo procesa los globs de la configuración de eslint, que son del
+  propio repo, no entradas de usuarios.
+- **Decisión (aprobada por el usuario; registrada el 2026-11-05):** **excepción documentada**:
+  moderado, solo de desarrollo y **sin overrides**. Es la misma decisión del 2026-11-04 para
+  Atención (ADR 0012) y Cuaderno (ADR 0008).
+- **Revisión (2026-11-13), o antes** si eslint pasa a pedir `minimatch` 11 y la versión
+  corregida ya cumple 14 días (11.0.1, desde el 2026-11-10). La nueva versión de eslint también
+  tiene que cumplir los 14 días, y sus transitivas igual.
+
 ## Alternativas consideradas
 
 - **Instalar las versiones nuevas ya:** rompe la regla de 14 días, cuyo fin es no ser de los
@@ -83,8 +115,10 @@ de zod.
   (`npm audit --omit=dev --audit-level=moderate`) es **informativo** (`continue-on-error: true`).
   El job queda en verde aunque el audit siga mostrando body-parser y zod.
 - **El log del paso sigue siendo la evidencia:** ahí se ven los avisos en cada push.
-- **Vuelve a ser bloqueante al cerrar body-parser (5-nov).** Desde entonces solo zod lo hará
-  fallar, con decisión el 13-nov.
+- **Sigue informativo hasta el 13-nov** (decisión del 2026-11-04). Cerrar body-parser el 5-nov
+  no basta para volverlo bloqueante: zod (y `zod-to-openapi`, por depender de él) sigue siendo
+  un aviso alto de producción y lo dejaría en rojo. Se decide el 13-nov, junto con zod. minimatch
+  no cuenta para este paso, que usa `--omit=dev`.
 - Cada fecha de revisión obliga a cerrar la excepción o renovarla por escrito.
 
 ## Evidencia
