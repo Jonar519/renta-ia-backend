@@ -236,6 +236,30 @@ Incluyen `renta_ia_http_request_duration_seconds`, `renta_ia_queue_jobs`,
 `renta_ia_pipeline_stage_duration_seconds`, `renta_ia_llm_request_duration_seconds`,
 `renta_ia_llm_tokens_total` y las métricas del proceso.
 
+## Contenedor (Docker · despliegue en Railway)
+
+Una sola imagen para la API y el worker ([`Dockerfile`](Dockerfile)). Cambia solo el comando:
+
+| Servicio | Comando de arranque                              | Salud    |
+| -------- | ------------------------------------------------ | -------- |
+| API      | por defecto (`node dist/server.js`)              | `/ready` |
+| Worker   | `node dist/workers/documentProcessing.worker.js` | — (cola) |
+
+```bat
+docker build -t renta-ia-backend .
+docker run --rm -p 4000:4000 --env-file .env.produccion renta-ia-backend
+```
+
+- **Sin secretos en la imagen:** `.dockerignore` deja fuera `.env`. Las variables las pone
+  la plataforma. En producción el worker necesita las mismas obligatorias que la API.
+- **`node` directo, nunca `npm start`:** npm no reenvía `SIGTERM` y se perdería el apagado
+  ordenado. `docker stop` deja a los dos procesos en «Apagado ordenado completo» con código 0.
+- **Usuario `node`, sin root:** `/app` es escribible porque tesseract.js descarga allí
+  `spa.traineddata` la primera vez que hace OCR de una imagen. En un contenedor nuevo se
+  vuelve a descargar.
+- **Migraciones aparte, antes de desplegar:** viven en `renta-ia-database`
+  (`scripts/migrate.sh` con `DATABASE_URL`); la imagen no las corre.
+
 ## Tests, calidad y pruebas de carga
 
 ```bat
