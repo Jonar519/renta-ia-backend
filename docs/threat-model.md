@@ -142,6 +142,9 @@ defecto se usa la versión simulada, y la versión simulada está prohibida en p
   - `uuid`/`hyperid`/`autocannon`, moderado, solo desarrollo. Se revisa el **2026-11-13**.
   - Para zod y uuid/hyperid/autocannon: decisión explícita antes de la entrega del 17 de
     noviembre: migrar o entregar con la excepción declarada.
+  - `minimatch` 10.2.6 (GHSA-g3hv-75wg-m249), moderado, solo de desarrollo, por eslint:
+    excepción aceptada, sin overrides. Se revisa el **2026-11-13**, o antes si eslint pide
+    `minimatch` 11 (sección 4 del ADR 0014).
   - Mitigación: cuerpo JSON de 100 KB como máximo, límite global por IP y `.max()` en el único
     array zod que llega de un cliente.
   - CI: desde la rama `ci/security-informativo`, el paso de `npm audit` de producción es

@@ -77,6 +77,30 @@ de zod.
   `uuid >= 11.1.1`. Decisión explícita antes de la entrega del 17 de noviembre: migrar o
   entregar con la excepción declarada.
 
+### 4. minimatch 10.2.6 — moderado, solo desarrollo (GHSA-g3hv-75wg-m249) — **excepción aceptada, revisión el 2026-11-13**
+
+- **Aviso** (publicado el 2026-10-30): denegación de servicio por amplificación de `globparts`.
+  Afecta a `>=7.0.0 <11.0.1`.
+- **Dónde:** solo en desarrollo, por `eslint` 10.11.0 (`^10.2.5`), `@eslint/config-array` 0.23.5
+  (`^10.2.4`) y `@typescript-eslint/typescript-estree` 8.70.1 (`^10.2.2`). Ya estaba en `main`
+  (10.2.6, publicada el 2026-07-27); el paso de producción del CI (`--omit=dev`) no lo ve.
+  Explica 10 de los 13 avisos moderados del `npm audit` completo (los otros 3 son la sección 3),
+  porque se propaga a eslint y typescript-eslint. La copia `minimatch` 3.1.5 (por
+  `ts-node-dev` → `rimraf` → `glob`) queda fuera del rango afectado.
+- **Por qué no se corrige hoy:**
+  - la única corrección es `11.0.1`, de una versión mayor que la que piden eslint y
+    typescript-eslint. Haría falta un override a través de esa versión mayor;
+  - además, `11.0.1` se publicó el 2026-10-27 y cumple 14 días el **2026-11-10**;
+  - el "arreglo" de `npm audit fix --force` bajaría eslint y typescript-eslint. Se descarta.
+- **Exposición:** `minimatch` solo procesa los globs de la configuración de eslint, que son del
+  propio repo, no entradas de usuarios.
+- **Decisión (aprobada por el usuario; registrada el 2026-11-05):** **excepción documentada**:
+  moderado, solo de desarrollo y **sin overrides**. Es la misma decisión del 2026-11-04 para
+  Atención (ADR 0012) y Cuaderno (ADR 0008).
+- **Revisión (2026-11-13), o antes** si eslint pasa a pedir `minimatch` 11 y la versión
+  corregida ya cumple 14 días (11.0.1, desde el 2026-11-10). La nueva versión de eslint también
+  tiene que cumplir los 14 días, y sus transitivas igual.
+
 ## Alternativas consideradas
 
 - **Instalar las versiones nuevas ya:** rompe la regla de 14 días, cuyo fin es no ser de los
