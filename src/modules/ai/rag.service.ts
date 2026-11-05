@@ -3,13 +3,13 @@ import { logger } from "../../config/logger";
 import { embeddingsService } from "./embeddings.service";
 import { searchSimilarChunks } from "./embeddings.repository";
 import { AiRefusalError, getAiProvider } from "../../services/llm/provider";
+import { UNTRUSTED_CONTENT_RULE, wrapUntrusted } from "../../services/llm/untrusted";
 
 /** Tope de tokens de salida del chat (razonamiento + respuesta). */
 export const CHAT_MAX_TOKENS = 4000;
 
 /** Lo que ve la persona cuando el modelo declina responder (stop_reason "refusal"). */
 export const CHAT_REFUSAL_ANSWER = "El asistente no puede responder esta pregunta. Intenta reformularla.";
-import { UNTRUSTED_CONTENT_RULE, wrapUntrusted } from "../../services/llm/untrusted";
 
 const SYSTEM_PROMPT = `Eres un asistente contable que responde preguntas sobre la situación
 tributaria de un cliente, basándote ÚNICAMENTE en los fragmentos de documentos que se te
