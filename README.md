@@ -278,6 +278,25 @@ La extracción de conceptos y los embeddings **fallan por separado**: el documen
 queda `processed` con advertencias y se puede reprocesar. Un PDF escaneado (sin
 texto) termina en `error` con un mensaje que pide subirlo como imagen.
 
+### Respuestas del modelo (`stop_reason`)
+
+El modelo es `claude-sonnet-5`. Razona por defecto, y ese razonamiento cuenta dentro de
+`max_tokens`. Por eso los topes son holgados: extracción 8000, chat 4000, resumen 2000. Un
+tope no se cobra si no se usa.
+
+| `stop_reason` | Extracción                                                        | Chat                                      | Resumen                                   |
+| ------------- | ----------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------- |
+| `end_turn`    | se guardan los conceptos                                          | respuesta                                 | texto                                     |
+| `max_tokens`  | **error**: advertencia en el documento, no se guarda nada parcial | se devuelve lo que llegó, aviso en el log | se devuelve lo que llegó, aviso en el log |
+| `refusal`     | **error** (`AiRefusalError`): advertencia en el documento         | 200 con un mensaje claro (no un 500)      | cifras sin redacción (`textError`)        |
+
+**Verificar la IA real:** `npm run build` y después `npm run ai:verify`.
+
+- Hace una llamada por uso, con sus prompts y topes reales, y un embedding.
+- Muestra `stop_reason`, tokens y latencia, y nunca muestra las keys.
+- Sale con 1 si algo no terminó en `end_turn` o si el embedding no tiene 1024 dimensiones.
+- Cuesta unos centavos. Se corre en el ensayo de despliegue.
+
 El calendario tributario incluido (`src/config/tax-calendar.json`) tiene **fechas
 de ejemplo** (`"esEjemplo": true`) y cada alerta lo advierte: reemplázalo por el
 calendario oficial de la DIAN.
