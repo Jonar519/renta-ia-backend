@@ -246,6 +246,27 @@ npm run build
 npm run openapi
 ```
 
+### Compilado (como en producción)
+
+`npm run build` compila a `dist/`. Después, cada proceso arranca con Node, sin
+`ts-node-dev` y sin recarga:
+
+| Proceso | Comando                | Equivale a                                       |
+| ------- | ---------------------- | ------------------------------------------------ |
+| API     | `npm start`            | `node dist/server.js`                            |
+| Worker  | `npm run worker:start` | `node dist/workers/documentProcessing.worker.js` |
+
+Los dos leen la misma configuración (`src/config/env.ts`): en producción el worker
+necesita las mismas variables obligatorias que la API.
+
+**En el contenedor y en Railway, el comando de arranque es `node …` directo, no
+`npm start` ni `npm run worker:start`.** npm no reenvía `SIGTERM` al proceso de
+Node: el proceso muere con 143 y sin apagado ordenado, así que los trabajos en
+curso no se cierran. Con `node` directo, `SIGTERM` cierra en orden los trabajos
+en curso, las métricas, Redis y PostgreSQL, y sale con 0. Se verificó en Linux
+(Node 20, `NODE_ENV=production`) el 5-11-2026. Los scripts de npm quedan para
+uso local.
+
 Los tests necesitan el PostgreSQL de `renta-ia-database`: crean desde cero la base
 `renta_ia_test` (nunca tocan `renta_ia`) con las migraciones de
 `..\renta-ia-database\migrations`. Redis, Anthropic y Voyage están simulados.

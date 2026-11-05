@@ -9,6 +9,7 @@
     "worker": "ts-node-dev --respawn --transpile-only src/workers/documentProcessing.worker.ts",
     "build": "tsc",
     "start": "node dist/server.js",
+    "worker:start": "node dist/workers/documentProcessing.worker.js",
     "prisma:generate": "prisma generate",
     "prisma:pull": "prisma db pull",
     "test": "vitest run",
