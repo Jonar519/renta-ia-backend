@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { env } from "../../config/env";
+import { AiRefusalError } from "./errors";
 import type { AiProvider, CompletionRequest, CompletionResult } from "./provider";
 
 /** Modelo usado por la extracción de conceptos, el chat (RAG) y el resumen. */
@@ -44,10 +45,16 @@ export const anthropicProvider: AiProvider = {
       system: request.system,
       messages: [{ role: "user", content: request.userContent }],
     });
+    // Primero stop_reason: un "refusal" no trae una respuesta utilizable. (Los tipos del SDK
+    // 0.27 no incluyen "refusal" ni los bloques "thinking": se compara como texto, y
+    // firstTextBlock salta cualquier bloque que no sea de texto.)
+    const stopReason = (message.stop_reason as string | null) ?? null;
+    if (stopReason === "refusal") throw new AiRefusalError(request.purpose);
     return {
       text: firstTextBlock(message),
       inputTokens: message.usage?.input_tokens ?? 0,
       outputTokens: message.usage?.output_tokens ?? 0,
+      stopReason,
     };
   },
 
