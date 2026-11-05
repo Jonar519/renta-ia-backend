@@ -2,7 +2,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import { app, authHeader, createClient, createDocument, createAccount, testAdmin } from "../helpers";
 import { prisma } from "../../src/config/prisma";
-import { SUMMARY_DISCLAIMER } from "../../src/modules/clients/summary.service";
+import { SUMMARY_DISCLAIMER, SUMMARY_MAX_TOKENS } from "../../src/modules/clients/summary.service";
 
 // Anthropic mockeado: sin llamadas reales ni consumo de crédito.
 const { createMessage } = vi.hoisted(() => ({ createMessage: vi.fn() }));
@@ -82,6 +82,33 @@ describe("POST /api/clients/:id/summary", () => {
     expect(res.status).toBe(200);
     expect(res.body.text).toBeNull();
     expect(res.body.textError).toMatch(/credit balance/);
+    expect(res.body.totals.grossIncome).toBe(85_000_000);
+  });
+
+  it(`pide max_tokens = SUMMARY_MAX_TOKENS (${SUMMARY_MAX_TOKENS}) y toma el texto aunque venga tras el razonamiento`, async () => {
+    createMessage.mockResolvedValue({
+      stop_reason: "end_turn",
+      content: [
+        { type: "thinking", thinking: "", signature: "firma" },
+        { type: "text", text: "Resumen tras razonar." },
+      ],
+      usage: { input_tokens: 10, output_tokens: 5 },
+    });
+    const res = await summary();
+    expect(res.body.text).toBe("Resumen tras razonar.");
+    expect(createMessage.mock.calls[0]![0].max_tokens).toBe(SUMMARY_MAX_TOKENS);
+  });
+
+  it("si el modelo declina (refusal), devuelve las cifras y explica que no hay redacción", async () => {
+    createMessage.mockResolvedValue({
+      stop_reason: "refusal",
+      content: [{ type: "text", text: "parcial" }],
+      usage: {},
+    });
+    const res = await summary();
+    expect(res.status).toBe(200);
+    expect(res.body.text).toBeNull();
+    expect(res.body.textError).toMatch(/declinó responder/);
     expect(res.body.totals.grossIncome).toBe(85_000_000);
   });
 

@@ -18,7 +18,15 @@ export interface CompletionResult {
   text: string | null;
   inputTokens: number;
   outputTokens: number;
+  /**
+   * Por qué terminó la respuesta: "end_turn" (completa) o "max_tokens" (cortada; con Sonnet 5
+   * el razonamiento también cuenta dentro de max_tokens). Un "refusal" nunca llega aquí: el
+   * proveedor lanza AiRefusalError.
+   */
+  stopReason: string | null;
 }
+
+export { AiRefusalError } from "./errors";
 
 /**
  * Proveedor de IA. En producción siempre es "anthropic" (Claude + Voyage).

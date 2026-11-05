@@ -97,7 +97,12 @@ export function createMockProvider(): AiProvider {
       if (env.aiMockLatencyMs > 0) await sleep(env.aiMockLatencyMs);
       const text = mockCompletion(request);
       // Estimación simple de tokens (~4 caracteres por token) para las métricas.
-      return { text, inputTokens: Math.ceil(request.userContent.length / 4), outputTokens: Math.ceil(text.length / 4) };
+      return {
+        text,
+        inputTokens: Math.ceil(request.userContent.length / 4),
+        outputTokens: Math.ceil(text.length / 4),
+        stopReason: "end_turn",
+      };
     },
 
     async embed(texts: string[]): Promise<number[][]> {

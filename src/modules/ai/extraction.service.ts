@@ -13,7 +13,7 @@ export interface ExtractedConcept {
   periodYear: number;
 }
 
-const SYSTEM_PROMPT = `Eres un asistente experto en normativa tributaria colombiana.
+export const SYSTEM_PROMPT = `Eres un asistente experto en normativa tributaria colombiana.
 Tu única tarea es leer el texto de un documento contable y extraer las cifras tributarias
 relevantes en formato JSON. Responde ÚNICAMENTE con un arreglo JSON válido, sin texto
 adicional, sin explicaciones, sin bloques de markdown. Si no encuentras ninguna cifra
@@ -98,16 +98,28 @@ export function parseExtractedConcepts(rawText: string): ExtractedConcept[] {
   return concepts;
 }
 
+/** Tope de tokens de salida de la extracción (razonamiento + JSON). */
+export const EXTRACTION_MAX_TOKENS = 8000;
+
 export const extractionService = {
   async extractTaxConcepts(documentText: string): Promise<ExtractedConcept[]> {
-    const { text } = await getAiProvider().complete({
+    const { text, stopReason } = await getAiProvider().complete({
       purpose: "extraction",
       system: SYSTEM_PROMPT,
-      maxTokens: 2000,
+      // Tope holgado: con Sonnet 5 el razonamiento también cuenta dentro de max_tokens, y
+      // un JSON cortado se perdería entero. El tope no se cobra si no se usa.
+      maxTokens: EXTRACTION_MAX_TOKENS,
       // El texto del documento es contenido externo: va delimitado y el
       // prompt de sistema indica tratarlo solo como datos.
       userContent: wrapUntrusted("documento", documentText.slice(0, 12000)),
     });
+    // Una respuesta cortada no es "0 conceptos": se informa como fallo (el worker lo guarda
+    // como advertencia del documento) en vez de descartarla en silencio.
+    if (stopReason === "max_tokens") {
+      throw new Error(
+        `La respuesta de la IA quedó cortada (max_tokens = ${EXTRACTION_MAX_TOKENS}): no se guardan conceptos parciales.`
+      );
+    }
     return text === null ? [] : parseExtractedConcepts(text);
   },
 };

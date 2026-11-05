@@ -3,6 +3,7 @@ import request from "supertest";
 import { app, authHeader, createClient, createAccount } from "../helpers";
 import { prisma } from "../../src/config/prisma";
 import { embeddingsService } from "../../src/modules/ai/embeddings.service";
+import { CHAT_MAX_TOKENS, CHAT_REFUSAL_ANSWER } from "../../src/modules/ai/rag.service";
 
 // Anthropic mockeado: los tests nunca llaman a la API real (ni gastan crédito).
 const { createMessage } = vi.hoisted(() => ({ createMessage: vi.fn() }));
@@ -80,5 +81,51 @@ describe("POST /api/ai/chat", () => {
         ["user", question],
       ].sort()
     );
+  });
+
+  it(`pide max_tokens = CHAT_MAX_TOKENS (${CHAT_MAX_TOKENS}): con Sonnet 5 el razonamiento cuenta dentro`, async () => {
+    vi.spyOn(embeddingsService, "embed").mockResolvedValue([new Array(1024).fill(0.01)]);
+    createMessage.mockResolvedValue({
+      stop_reason: "end_turn",
+      content: [
+        { type: "thinking", thinking: "", signature: "firma" },
+        { type: "text", text: "Respuesta." },
+      ],
+    });
+    const res = await chat({ clientId, question: "¿Cuánto le retuvieron?" });
+    expect(res.status).toBe(200);
+    expect(res.body.answer).toBe("Respuesta.");
+    expect(createMessage.mock.calls[0]![0].max_tokens).toBe(CHAT_MAX_TOKENS);
+  });
+
+  it("si el modelo declina (refusal), responde 200 con un mensaje claro y lo guarda, sin texto parcial", async () => {
+    vi.spyOn(embeddingsService, "embed").mockResolvedValue([new Array(1024).fill(0.01)]);
+    createMessage.mockResolvedValue({ stop_reason: "refusal", content: [{ type: "text", text: "parcial" }] });
+
+    const res = await chat({ clientId, question: "Pregunta que el modelo declina" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.answer).toBe(CHAT_REFUSAL_ANSWER);
+    const messages = await prisma.aiMessage.findMany({ where: { conversationId: res.body.conversationId } });
+    expect(messages.find((m) => m.role === "assistant")?.content).toBe(CHAT_REFUSAL_ANSWER);
+  });
+
+  it("si la respuesta se corta (max_tokens), se devuelve lo que llegó", async () => {
+    vi.spyOn(embeddingsService, "embed").mockResolvedValue([new Array(1024).fill(0.01)]);
+    createMessage.mockResolvedValue({
+      stop_reason: "max_tokens",
+      content: [{ type: "text", text: "Respuesta a medias" }],
+    });
+    const res = await chat({ clientId, question: "Pregunta larga" });
+    expect(res.status).toBe(200);
+    expect(res.body.answer).toBe("Respuesta a medias");
+  });
+
+  it("otros errores del proveedor siguen siendo errores (no se disfrazan de rechazo)", async () => {
+    vi.spyOn(embeddingsService, "embed").mockResolvedValue([new Array(1024).fill(0.01)]);
+    createMessage.mockRejectedValue(new Error("Your credit balance is too low"));
+    const res = await chat({ clientId, question: "¿Algo?" });
+    expect(res.status).toBeGreaterThanOrEqual(500);
+    expect(res.body.answer).toBeUndefined();
   });
 });

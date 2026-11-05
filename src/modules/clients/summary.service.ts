@@ -94,7 +94,10 @@ export function estimateBalance(
   };
 }
 
-const SUMMARY_SYSTEM_PROMPT = `Eres un asistente que redacta resúmenes ejecutivos para contadores en Colombia.
+/** Tope de tokens de salida del resumen (razonamiento + texto). */
+export const SUMMARY_MAX_TOKENS = 2000;
+
+export const SUMMARY_SYSTEM_PROMPT = `Eres un asistente que redacta resúmenes ejecutivos para contadores en Colombia.
 Recibes, en JSON, cifras YA CALCULADAS por el sistema a partir de los documentos de un cliente.
 Redacta en español un resumen de 3 a 5 frases, claro y profesional.
 Reglas estrictas:
@@ -148,9 +151,13 @@ export const summaryService = {
       const completion = await getAiProvider().complete({
         purpose: "summary",
         system: SUMMARY_SYSTEM_PROMPT,
-        maxTokens: 600,
+        // Tope holgado: con Sonnet 5 el razonamiento también cuenta dentro de max_tokens.
+        maxTokens: SUMMARY_MAX_TOKENS,
         userContent: JSON.stringify(payload),
       });
+      if (completion.stopReason === "max_tokens") {
+        logger.warn({ clientId, maxTokens: SUMMARY_MAX_TOKENS }, "El resumen con IA quedó cortado (max_tokens)");
+      }
       text = completion.text;
     } catch (err) {
       // Sin crédito o sin API key: las cifras (lo importante) se devuelven igual.
