@@ -7,6 +7,7 @@ import { createSignedToken, verifySignedToken } from "../../utils/signedToken";
 import { sendEmail, type EmailMessage } from "../../services/email";
 import { normalizeEmail } from "../auth/auth.service";
 import { passwordProblems } from "../auth/passwordPolicy";
+import { hashPassword } from "../auth/passwordHash";
 import { reconfirmPassword } from "../auth/reauth";
 import { emailChangeNotice, emailChangeTaken, emailChangeVerification, passwordChangedNotice } from "./profile.email";
 
@@ -167,7 +168,7 @@ export const profileService = {
         problems.map((message) => ({ field: "body.newPassword", message }))
       );
     }
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const passwordHash = await hashPassword(newPassword);
     const now = new Date();
     const { count: closed } = await prisma.$transaction(async (tx) => {
       await tx.user.update({ where: { id: userId }, data: { passwordHash } });

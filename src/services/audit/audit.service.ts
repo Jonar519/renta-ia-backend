@@ -32,6 +32,7 @@ export type AuditAction =
   | "tax_concept.review"
   | "ai.chat"
   | "ai.summary"
+  | "admin.first_admin.create"
   | "admin.invitation.create"
   | "admin.invitation.resend"
   | "admin.invitation.cancel"

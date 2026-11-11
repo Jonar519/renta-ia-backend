@@ -5,6 +5,8 @@ import { AccountLockedError, lockoutService } from "./lockout.service";
 import { sessionsService } from "./sessions.service";
 import type { SessionClient } from "./sessionClient";
 import { mfaService } from "../mfa/mfa.service";
+import { hashPasswordSync } from "./passwordHash";
+import { normalizeEmail } from "./normalizeEmail";
 
 export { AccountLockedError };
 
@@ -20,16 +22,9 @@ const INVALID_CREDENTIALS = "Credenciales inválidas";
 // Hash de una contraseña aleatoria: cuando el correo no existe se compara
 // igual contra este hash, para que la respuesta tarde lo mismo que con un
 // correo real (si no, el tiempo de respuesta revelaría qué cuentas existen).
-const DUMMY_HASH = bcrypt.hashSync(`dummy-${Math.random()}`, 10);
+const DUMMY_HASH = hashPasswordSync(`dummy-${Math.random()}`);
 
-/**
- * Los emails se guardan y se buscan siempre en minúsculas (y sin espacios):
- * "Ana@Example.com" y "ana@example.com" son la misma cuenta. La base de
- * datos lo refuerza con un índice único sobre lower(email).
- */
-export function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
-}
+export { normalizeEmail };
 
 export const authService = {
   async login(input: LoginInput, client: SessionClient) {

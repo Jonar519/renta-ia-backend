@@ -124,6 +124,12 @@ curl http://localhost:4000/ready
   el enlace (token firmado, 72 h, un solo uso; en la base solo su SHA-256) viaja solo por
   correo, y la persona la activa con su contraseña (`POST /api/auth/invitations/accept`).
   La base impide que una cuenta pendiente tenga sesiones ([ADR 0009](docs/adr/0009-cuentas-pendientes-garantizadas-por-el-esquema.md)).
+- **Primer admin en producción** (el seed no se corre ahí):
+  `npm run admin:crear -- --correo <correo> --nombre "<nombre>"` con `DATABASE_URL` en la sesión.
+  Pide la contraseña dos veces sin eco (o la primera línea de la entrada con `--stdin`; nunca por
+  argumento), aplica la misma política y el mismo hash que el resto, y la deja activa y sin MFA (lo
+  activa en su primer login). Si el correo ya existe o ya hay un admin activo, no cambia nada y sale
+  con 0. Auditado como `admin.first_admin.create` (`src/scripts/crearAdmin.ts`).
 - `POST /api/auth/login` y `/invitations/accept` devuelven `{ accessToken, user }` y dejan la
   cookie `renta_ia_refresh` (httpOnly, `SameSite=Strict`, `Path=/api/auth`).
 - `POST /api/auth/refresh` rota la cookie y entrega un access token nuevo;
