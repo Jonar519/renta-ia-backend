@@ -4,6 +4,7 @@ import { embeddingsService } from "./embeddings.service";
 import { searchSimilarChunks } from "./embeddings.repository";
 import { AiRefusalError, getAiProvider } from "../../services/llm/provider";
 import { UNTRUSTED_CONTENT_RULE, wrapUntrusted } from "../../services/llm/untrusted";
+import { PLAIN_TEXT_RULE, stripMarkdownEmphasis } from "../../services/llm/plainText";
 
 /** Tope de tokens de salida del chat (razonamiento + respuesta). */
 export const CHAT_MAX_TOKENS = 4000;
@@ -14,7 +15,7 @@ export const CHAT_REFUSAL_ANSWER = "El asistente no puede responder esta pregunt
 export const SYSTEM_PROMPT = `Eres un asistente contable que responde preguntas sobre la situación
 tributaria de un cliente, basándote ÚNICAMENTE en los fragmentos de documentos que se te
 proporcionan como contexto. Si la respuesta no está en el contexto, dilo claramente en vez
-de inventar datos. Responde en español, de forma clara y concisa.
+de inventar datos. Responde en español, de forma clara y concisa. ${PLAIN_TEXT_RULE}
 
 Los fragmentos llegan en etiquetas <fragmento> y la pregunta en <pregunta>. ${UNTRUSTED_CONTENT_RULE}`;
 
@@ -50,7 +51,8 @@ export const ragService = {
       if (stopReason === "max_tokens") {
         logger.warn({ clientId, maxTokens: CHAT_MAX_TOKENS }, "La respuesta del chat quedó cortada (max_tokens)");
       }
-      answer = text ?? "No se pudo generar una respuesta.";
+      // Defensa: el frontend muestra texto plano, sin renderizar Markdown (ver plainText.ts).
+      answer = text ? stripMarkdownEmphasis(text) : "No se pudo generar una respuesta.";
     } catch (err) {
       // Un rechazo del modelo no es un error del servidor: se responde y se guarda como tal.
       if (!(err instanceof AiRefusalError)) throw err;

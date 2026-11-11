@@ -3,6 +3,7 @@ import request from "supertest";
 import { app, authHeader, createClient, createDocument, createAccount, testAdmin } from "../helpers";
 import { prisma } from "../../src/config/prisma";
 import { SUMMARY_DISCLAIMER, SUMMARY_MAX_TOKENS } from "../../src/modules/clients/summary.service";
+import { PLAIN_TEXT_RULE } from "../../src/services/llm/plainText";
 
 // Anthropic mockeado: sin llamadas reales ni consumo de crédito.
 const { createMessage } = vi.hoisted(() => ({ createMessage: vi.fn() }));
@@ -66,6 +67,17 @@ describe("POST /api/clients/:id/summary", () => {
     expect(payload.totales.grossIncome).toBe(85_000_000);
     expect(prompt.messages[0].content).not.toContain(clientName); // no se envían datos personales
     expect(prompt.system).toMatch(/No calcules/);
+  });
+
+  it("pide texto plano y, si el modelo igual usa Markdown, devuelve el texto sin asteriscos", async () => {
+    createMessage.mockResolvedValue({
+      content: [{ type: "text", text: "Ingresos brutos de **$85.000.000** y un saldo *a favor*." }],
+      usage: { input_tokens: 10, output_tokens: 5 },
+    });
+    const res = await summary();
+    expect(res.status).toBe(200);
+    expect(res.body.text).toBe("Ingresos brutos de $85.000.000 y un saldo a favor.");
+    expect(createMessage.mock.calls[0]![0].system).toContain(PLAIN_TEXT_RULE);
   });
 
   it("permite elegir el año gravable", async () => {

@@ -4,6 +4,7 @@ import { app, authHeader, createClient, createAccount } from "../helpers";
 import { prisma } from "../../src/config/prisma";
 import { embeddingsService } from "../../src/modules/ai/embeddings.service";
 import { CHAT_MAX_TOKENS, CHAT_REFUSAL_ANSWER } from "../../src/modules/ai/rag.service";
+import { PLAIN_TEXT_RULE } from "../../src/services/llm/plainText";
 
 // Anthropic mockeado: los tests nunca llaman a la API real (ni gastan crédito).
 const { createMessage } = vi.hoisted(() => ({ createMessage: vi.fn() }));
@@ -81,6 +82,22 @@ describe("POST /api/ai/chat", () => {
         ["user", question],
       ].sort()
     );
+  });
+
+  it("pide texto plano y, si el modelo igual usa Markdown, responde y guarda sin asteriscos", async () => {
+    vi.spyOn(embeddingsService, "embed").mockResolvedValue([new Array(1024).fill(0.01)]);
+    createMessage.mockResolvedValue({
+      content: [{ type: "text", text: "La retención fue de **$2.150.000**, según el *certificado*." }],
+    });
+    const res = await chat({ clientId, question: "¿Cuánto le retuvieron?" });
+    expect(res.status).toBe(200);
+    expect(res.body.answer).toBe("La retención fue de $2.150.000, según el certificado.");
+    expect(createMessage.mock.calls[0]![0].system).toContain(PLAIN_TEXT_RULE);
+
+    const stored = await prisma.aiMessage.findFirstOrThrow({
+      where: { conversationId: res.body.conversationId, role: "assistant" },
+    });
+    expect(stored.content).toBe(res.body.answer);
   });
 
   it(`pide max_tokens = CHAT_MAX_TOKENS (${CHAT_MAX_TOKENS}): con Sonnet 5 el razonamiento cuenta dentro`, async () => {
