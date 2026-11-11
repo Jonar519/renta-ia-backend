@@ -5,6 +5,7 @@ import { AuthPayload } from "../../middlewares/auth.middleware";
 import { assertClientAccess } from "../../middlewares/ownership.middleware";
 import { ApiError } from "../../utils/apiError";
 import { getAiProvider } from "../../services/llm/provider";
+import { PLAIN_TEXT_RULE, stripMarkdownEmphasis } from "../../services/llm/plainText";
 
 /**
  * Resumen ejecutivo de un cliente.
@@ -104,7 +105,8 @@ Reglas estrictas:
 - Usa ÚNICAMENTE las cifras del JSON, copiándolas tal cual (formato con separador de miles). No calcules, redondees ni inventes cifras nuevas.
 - Si "estimacion" es null, di que no hay parámetros para estimar el saldo de ese año.
 - Si "estimacion.saldoEstimado" es negativo, es un saldo a favor; si es positivo, un saldo a pagar.
-- No des recomendaciones de planeación tributaria ni asesoría; indica que la estimación es simplificada y orientativa.`;
+- No des recomendaciones de planeación tributaria ni asesoría; indica que la estimación es simplificada y orientativa.
+- ${PLAIN_TEXT_RULE}`;
 
 export const summaryService = {
   async generate(clientId: string, user: AuthPayload, requestedYear?: number) {
@@ -158,7 +160,8 @@ export const summaryService = {
       if (completion.stopReason === "max_tokens") {
         logger.warn({ clientId, maxTokens: SUMMARY_MAX_TOKENS }, "El resumen con IA quedó cortado (max_tokens)");
       }
-      text = completion.text;
+      // Defensa: el frontend muestra texto plano, sin renderizar Markdown (ver plainText.ts).
+      text = completion.text === null ? null : stripMarkdownEmphasis(completion.text);
     } catch (err) {
       // Sin crédito o sin API key: las cifras (lo importante) se devuelven igual.
       textError = err instanceof Error ? err.message : "Error desconocido";
