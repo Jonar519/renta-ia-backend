@@ -1,4 +1,3 @@
-import bcrypt from "bcrypt";
 import { env } from "../../config/env";
 import { logger } from "../../config/logger";
 import { prisma } from "../../config/prisma";
@@ -9,6 +8,7 @@ import { audit } from "../../services/audit/audit.service";
 import { normalizeEmail } from "./auth.service";
 import { lockoutService } from "./lockout.service";
 import { passwordProblems } from "./passwordPolicy";
+import { hashPassword } from "./passwordHash";
 import { escapeHtml } from "../../utils/escapeHtml";
 
 /**
@@ -151,7 +151,7 @@ export const passwordResetService = {
         problems.map((message) => ({ field: "body.password", message }))
       );
     }
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await hashPassword(password);
     const now = new Date();
     const done = await prisma.$transaction(async (tx) => {
       // Un solo uso: solo gana quien marca como usado el token todavía abierto.

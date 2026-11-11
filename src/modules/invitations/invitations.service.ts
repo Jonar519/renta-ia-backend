@@ -1,4 +1,3 @@
-import bcrypt from "bcrypt";
 import { z } from "zod";
 import type { Prisma, UserRole } from "@prisma/client";
 import { prisma } from "../../config/prisma";
@@ -9,6 +8,7 @@ import { createSignedToken, verifySignedToken } from "../../utils/signedToken";
 import { sendEmail } from "../../services/email";
 import { normalizeEmail } from "../auth/auth.service";
 import { passwordProblems } from "../auth/passwordPolicy";
+import { hashPassword } from "../auth/passwordHash";
 import { sessionsService } from "../auth/sessions.service";
 import type { SessionClient } from "../auth/sessionClient";
 import { invitationEmail } from "./invitations.email";
@@ -218,7 +218,7 @@ export const invitationsService = {
         problems.map((message) => ({ field: "body.password", message }))
       );
     }
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await hashPassword(password);
 
     const activated = await prisma.$transaction(async (tx) => {
       // Un solo uso: solo gana quien borra la invitación todavía abierta.
