@@ -198,7 +198,7 @@ Levanta todo en tu equipo con la IA y el correo **simulados** (no hace falta nin
 comandos son para `cmd.exe` en Windows y se probaron así.
 
 **Requisitos:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) en ejecución,
-[Node.js](https://nodejs.org/) 20 o superior, [Git](https://git-scm.com/) y los puertos libres 5433
+[Node.js](https://nodejs.org/) 24 (el backend funciona desde Node 20, pero las pruebas del frontend usan Node 24, como su CI), [Git](https://git-scm.com/) y los puertos libres 5433
 (PostgreSQL), 6379 (Redis), 4000 (API) y 5173 (frontend). En Linux o macOS, los scripts `.sh` de la
 base necesitan el cliente `psql`.
 
