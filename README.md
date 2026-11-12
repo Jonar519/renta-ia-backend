@@ -18,6 +18,8 @@ explican su parte y enlazan aquí:
 1. [Qué es el proyecto](#1-qué-es-el-proyecto)
 2. [Cómo funciona](#2-cómo-funciona)
 3. [Tecnologías](#3-tecnologías)
+4. [Qué necesita el profesor](#4-qué-necesita-el-profesor)
+5. [Acceso y roles](#5-acceso-y-roles)
 
 ## 1. Qué es el proyecto
 
@@ -165,3 +167,165 @@ Versiones: los rangos declarados en el `package.json` de cada repositorio, el `D
 | **GitHub Actions** · **gitleaks**                     | gitleaks `v8.21.2`                   | CI: lint, tipos, tests, build, `npm audit` y búsqueda de secretos                      | Nada llega a `main` sin pasar todo.                                                                                      |
 | **Docker**                                            | `node:20-bookworm-slim`              | Una imagen para la API y el worker; PostgreSQL y Redis en desarrollo                   | El mismo artefacto en local y en Railway, sin usuario root.                                                              |
 | **Railway** · **Vercel** · **Cloudflare**             | —                                    | API, worker, PostgreSQL y Redis en Railway; frontend en Vercel; DNS y R2 en Cloudflare | HTTPS automático y dominios propios.                                                                                     |
+
+## 4. Qué necesita el profesor
+
+### a) Opción recomendada: solo el navegador
+
+- Un navegador actualizado: **Chrome, Edge o Firefox** de escritorio, con acceso a internet.
+- La URL: <https://renta.jonarproyectos.com>. No hay que instalar nada, ni micrófono ni altavoces.
+- **Para la cuenta de administrador:** una aplicación de códigos en el teléfono (Google
+  Authenticator, Microsoft Authenticator o similar): la verificación en dos pasos es obligatoria.
+- **Documentos de prueba:** un PDF **con texto** (por ejemplo, un certificado de ingresos) y una imagen
+  JPG o PNG, de menos de 15 MB. Usa solo datos ficticios. El frontend trae un generador de archivos
+  sintéticos (`node scripts\demo-files.mjs <carpeta>` en `renta-ia-frontend`); el estudiante puede
+  enviártelos.
+- **Para probar el tiempo real y los roles:** dos ventanas, una normal y otra de incógnito (cada una
+  con su sesión).
+
+Comprobación rápida: abre <https://api-renta.jonarproyectos.com/ready>. Debe mostrar
+`{"status":"ready","checks":{"database":"ok","redis":"ok"}}`.
+
+### b) Opción local (opcional)
+
+Levanta todo en tu equipo con la IA y el correo **simulados** (no hace falta ninguna clave). Los
+comandos son para `cmd.exe` en Windows y se probaron así.
+
+**Requisitos:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) en ejecución,
+[Node.js](https://nodejs.org/) 20 o superior, [Git](https://git-scm.com/) y los puertos libres 5433
+(PostgreSQL), 6379 (Redis), 4000 (API) y 5173 (frontend). En Linux o macOS, los scripts `.sh` de la
+base necesitan el cliente `psql`.
+
+**1. Clona los tres repositorios en la misma carpeta** (los tests del backend leen
+`..\renta-ia-database\migrations`):
+
+```bat
+mkdir renta-ia
+cd renta-ia
+git clone https://github.com/Jonar519/renta-ia-database.git
+git clone https://github.com/Jonar519/renta-ia-backend.git
+git clone https://github.com/Jonar519/renta-ia-frontend.git
+```
+
+**2. Base de datos** (tablas y datos de prueba):
+
+```bat
+cd renta-ia-database
+docker compose up -d
+scripts\migrate.bat
+scripts\seed.bat
+cd ..
+```
+
+Esperado: la migración llega hasta `026_concept_review.sql` (si la repites: `Listo: 0
+migracion(es) nueva(s) aplicada(s).`) y el seed se puede cargar varias veces sin duplicar.
+
+**3. Backend:**
+
+```bat
+cd renta-ia-backend
+docker compose up -d
+npm install
+copy .env.example .env
+npx prisma generate
+node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+En `.env`, pon el primer valor en `JWT_SECRET` y el segundo en `MFA_ENCRYPTION_KEY`, y deja la IA
+simulada. Ejemplo de los valores de desarrollo:
+
+```ini
+DATABASE_URL=postgresql://postgres:postgres@localhost:5433/renta_ia
+CORS_ORIGIN=http://localhost:5173,http://localhost:4173
+APP_URL=http://localhost:5173
+AI_PROVIDER=mock
+AI_MOCK_LATENCY_MS=1500
+EMAIL_PROVIDER=mock
+STORAGE_DRIVER=local
+```
+
+Arranca la API y el worker, cada uno en su ventana:
+
+```bat
+npm run dev
+```
+
+```bat
+cd renta-ia\renta-ia-backend
+npm run worker
+```
+
+Esperado: `Servidor escuchando en http://localhost:4000` y, en la otra ventana, el worker escuchando
+la cola `document-processing`.
+
+**4. Frontend** (otra ventana):
+
+```bat
+cd renta-ia\renta-ia-frontend
+npm install
+npm run dev
+```
+
+Esperado: `Local: http://localhost:5173/`.
+
+**5. Comprueba que funciona:** <http://localhost:4000/ready> debe responder con `database` y `redis`
+en `ok`; en <http://localhost:5173> entra con una cuenta del seed (están en el
+[README de renta-ia-database](https://github.com/Jonar519/renta-ia-database#readme); solo existen en
+local). La guía paso a paso con todo el detalle local está en
+[docs/demo-fase5.md](docs/demo-fase5.md). En local, los correos no se envían: se guardan en la tabla
+`email_outbox` (ver [Solución de problemas](#9-solución-de-problemas)), y la IA simulada extrae las
+líneas "Etiqueta: $ monto" del PDF de prueba.
+
+Para detener todo: **Ctrl+C** en cada ventana y `docker compose stop` en `renta-ia-database` y en
+`renta-ia-backend`.
+
+## 5. Acceso y roles
+
+### Roles
+
+| Rol                        | Qué puede hacer                                                                                                                                                                        |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Contador**               | Crear y ver **sus** clientes, subir documentos, revisar conceptos, ver el original y la vista dividida, alertas, resumen y asistente de IA. No ve los clientes de otros contadores.    |
+| **Asistente**              | Lo mismo con los clientes de **su** contador, sin crear ni borrar clientes.                                                                                                            |
+| **Contribuyente** (portal) | Solo lectura de **su** expediente, y solo de lo ya revisado. Ve **Descargar** en vez del visor.                                                                                        |
+| **Administrador**          | Invitar personas (Usuarios), reasignar los clientes de un contador a otro y ver el rendimiento web. Verificación en dos pasos obligatoria: hasta activarla, solo puede usar Seguridad. |
+
+Un recurso de otro cliente responde **404** (no 403), para no revelar que existe. La interfaz oculta
+lo que tu rol no puede hacer, pero quien decide es la API.
+
+### Credenciales
+
+Las credenciales **no** están en este README. El estudiante las entrega por un canal privado, o
+envía **invitaciones por correo** a la dirección del profesor, idealmente una por rol (administrador,
+contador y, si se quiere probar el portal, contribuyente):
+
+<!-- ACCESO: lo completa el estudiante -->
+
+- **Invitación por correo:** trae un enlace para activar la cuenta y elegir la contraseña (10 a 72
+  caracteres, sin contraseñas comunes ni tu correo o tu nombre). El enlace **vence a las 72 horas** y
+  sirve una sola vez.
+- **Si la invitación venció:** en **Usuarios**, el administrador ve la invitación como **Vencida** y
+  puede **Reenviar** (llega un enlace nuevo y el anterior deja de servir). Pídeselo al estudiante.
+- **Si no llega el correo:** revisa spam. El correo está en modo de pruebas y solo entrega a
+  direcciones verificadas por el estudiante (ver
+  [Limitaciones](#8-limitaciones-conocidas-y-decisiones-de-diseño)).
+
+### Verificación en dos pasos
+
+- **Administrador: obligatoria.** En el primer ingreso la app lleva a **Seguridad**: confirma la
+  contraseña → **Empezar** → escanea el QR (o escribe la clave) → escribe el código → **Activar**.
+  Aparecen **10 códigos de recuperación** una sola vez (**Descargar (.txt)**); **Listo** se habilita al
+  marcar que los guardaste.
+- **Los demás roles: opcional**, en **Seguridad**.
+- Al entrar con la verificación activa, después de la contraseña se pide el código de la app (o
+  **Usar un código de recuperación**).
+
+### Si algo del acceso falla
+
+| Situación                          | Qué hacer                                                                                                                                                                      |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Olvidaste la contraseña            | **¿Olvidaste tu contraseña?** → tu correo → **Enviar enlace**. El mensaje es el mismo exista o no la cuenta.                                                                   |
+| La cuenta se bloqueó               | Tras 5 intentos fallidos el bloqueo dura 1, 2, 4… minutos (hasta 60); los códigos de verificación errados también cuentan. Espera y vuelve a intentar.                         |
+| Perdiste el teléfono y los códigos | El administrador puede restablecer la verificación de tu cuenta (por la API); pídeselo al estudiante.                                                                          |
+| La sesión se cerró sola            | El acceso dura 15 minutos y se renueva solo; cerrar sesiones desde **Seguridad**, restablecer la contraseña o activar la verificación invalida las demás sesiones al instante. |
