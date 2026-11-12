@@ -1,364 +1,167 @@
-# renta-ia-backend
+# Renta IA: gestión documental contable con inteligencia artificial
 
-API REST + worker de IA del **Sistema de Gestión Documental Contable con IA**.
-Se conecta a la base de datos del repositorio [`renta-ia-database`](../renta-ia-database)
-mediante Prisma (solo como cliente: el esquema lo gestiona ese repo).
+**Producción:** aplicación en <https://renta.jonarproyectos.com> · API en
+`api-renta.jonarproyectos.com` (estado: [`/ready`](https://api-renta.jonarproyectos.com/ready)).
 
-- **Guía de prueba completa de la plataforma (Fase 5):** [`docs/demo-fase5.md`](docs/demo-fase5.md)
-- README general del proyecto (los tres repositorios, puertos, arranque, cómo demostrar cada tema): [`docs/README-general.md`](docs/README-general.md)
-- Decisiones de arquitectura: [`docs/adr/`](docs/adr/README.md)
-- Modelo de dominio (roles, entidades, ciclos de vida, reglas): [`renta-ia-database/docs/modelo-de-dominio.md`](../renta-ia-database/docs/modelo-de-dominio.md)
-- Retención y eliminación de datos: [`docs/data-retention.md`](docs/data-retention.md)
-- Modelo de amenazas (STRIDE): [`docs/threat-model.md`](docs/threat-model.md)
-- Pruebas de carga con mediciones reales: [`docs/load-test-report.md`](docs/load-test-report.md)
-- API (OpenAPI 3): [`docs/openapi.json`](docs/openapi.json) y, fuera de producción, **http://localhost:4000/docs**
+Este README es la guía para evaluar el proyecto completo sin ayuda. El proyecto vive en tres
+repositorios; este (`renta-ia-backend`) es el principal y tiene la guía de pruebas. Los otros dos
+explican su parte y enlazan aquí:
 
-## Estructura
+| Repositorio         | Qué contiene                                                                                         |
+| ------------------- | ---------------------------------------------------------------------------------------------------- |
+| `renta-ia-backend`  | **Este.** API REST, WebSocket, worker de documentos con OCR e IA, alertas, correo y archivos.        |
+| `renta-ia-frontend` | La aplicación web: clientes, documentos, conceptos, alertas, resumen, chat, cuenta y administración. |
+| `renta-ia-database` | El esquema de PostgreSQL (migraciones SQL), los datos de prueba y el diagrama de la base.            |
 
-```
-renta-ia-backend/
-├── prisma/schema.prisma          # Generado con `npx prisma db pull` (no se edita a mano salvo nombres de relaciones)
-├── src/
-│   ├── config/                   # env (validación), logger (pino), prisma, redis, calendario y reglas tributarias
-│   ├── middlewares/              # auth (JWT), ownership (clientScope por rol), role, csrf, validate (zod), rateLimit, error
-│   ├── modules/                  # routes → (schema zod) → controller → service → Prisma
-│   │   ├── auth/                 # login (y paso MFA), refresh, logout, sesiones, recuperación, bloqueo, política de contraseñas
-│   │   ├── invitations/          # alta de cuentas SOLO por invitación (token firmado, 72 h, un solo uso)
-│   │   ├── mfa/                  # verificación en dos pasos TOTP (secreto cifrado, códigos de recuperación, QR)
-│   │   ├── users/                # mi perfil, foto, cambio de correo y contraseña, exportar y eliminar la cuenta
-│   │   ├── admin/                # invitaciones, reasignar clientes, restablecer MFA, auditoría
-│   │   ├── clients/              # clientes, conceptos y su revisión humana, resumen
-│   │   ├── documents/            # subida, archivo original, reprocesar (D6)
-│   │   ├── alerts/ ai/ metrics/
-│   ├── services/
-│   │   ├── llm/                  # proveedor de IA (anthropic | mock), delimitadores anti prompt-injection
-│   │   ├── storage/              # interfaz de almacenamiento (hoy disco local)
-│   │   ├── audit/                # registro de auditoría (audit_log)
-│   │   ├── email/                # correo: mock (email_outbox) | SES
-│   │   ├── geoip/                # ubicación aproximada de una sesión: mock | DB-IP Lite (archivo local)
-│   │   ├── retention/            # purga programada diaria (docs/data-retention.md)
-│   │   ├── access/               # audiencia de un cliente (para el tiempo real)
-│   │   └── events/               # eventos worker → API (Redis pub/sub)
-│   ├── observability/            # /health, /ready y métricas Prometheus
-│   ├── lifecycle/                # apagado ordenado (SIGTERM/SIGINT)
-│   ├── realtime/                 # WebSocket /ws
-│   ├── queues/ workers/          # BullMQ: cola de documentos y tareas programadas
-│   ├── docs/                     # generador de OpenAPI desde los schemas zod
-│   ├── app.ts · server.ts
-├── tests/                        # Vitest + Supertest (integration/ y unit/)
-├── loadtests/                    # autocannon (ver loadtests/README.md)
-└── docs/                         # ADR, threat model, informe de carga, openapi.json
-```
+## Contenido
 
-## Puesta en marcha (Windows · cmd.exe)
+1. [Qué es el proyecto](#1-qué-es-el-proyecto)
+2. [Cómo funciona](#2-cómo-funciona)
+3. [Tecnologías](#3-tecnologías)
 
-Requisitos: Node.js 20+, Docker Desktop, y `renta-ia-database` levantado y migrado.
+## 1. Qué es el proyecto
 
-```bat
-:: Redis (cola, rate limiting, eventos en tiempo real)
-docker compose up -d
+**Renta IA** ayuda a una firma contable a preparar la declaración de renta de sus clientes. El
+contador sube los soportes del cliente (certificados de ingresos, extractos, facturas…); un proceso
+en segundo plano lee el texto (con OCR si es una imagen), una IA extrae las cifras tributarias, un
+motor de reglas genera alertas (vencimientos e inconsistencias) y un chat responde preguntas sobre
+el cliente usando solo sus documentos (RAG). Lo que extrae la IA queda marcado **"sin revisar"**
+hasta que una persona lo confirma con el documento original al lado. Está pensado para contadores,
+sus asistentes y los propios contribuyentes, que consultan su expediente en un portal de solo
+lectura.
 
-npm install
-copy .env.example .env
-npx prisma generate
+Capacidades principales:
 
-:: Ventana 1: la API
-npm run dev
+- **Clientes** de cada contador, con aislamiento estricto entre contadores.
+- **Subida de documentos** (PDF, JPG o PNG, hasta 15 MB) con análisis automático: texto u OCR,
+  conceptos tributarios con IA y embeddings para el chat.
+- **Revisión humana** de cada concepto extraído, con el **visor del original** y una vista dividida.
+- **Alertas** de vencimientos e inconsistencias, y un **resumen** con estimación simplificada del
+  impuesto.
+- **Asistente de IA** que responde preguntas sobre un cliente con sus propios documentos.
+- **Tiempo real**: el estado de cada documento se actualiza solo.
+- **Cuentas** solo por invitación, con verificación en dos pasos (obligatoria para el
+  administrador), recuperación de contraseña, sesiones activas, perfil con foto, exportación y
+  eliminación de la cuenta.
+- **Administración**: invitaciones, reasignación de clientes y métricas de rendimiento web.
 
-:: Ventana 2: el worker de IA
-npm run worker
-```
+## 2. Cómo funciona
 
-Edita `.env`: `JWT_SECRET` largo y aleatorio, y `ANTHROPIC_API_KEY` / `VOYAGE_API_KEY`
-si las tienes (sin ellas todo funciona salvo el análisis con IA y el chat).
+### El recorrido de principio a fin
 
-> **Si ya tenías un `.env` de antes:** cambia `JWT_EXPIRES_IN=1d` por
-> `JWT_EXPIRES_IN=15m`. Con el esquema de sesión nuevo el access token es corto
-> y se renueva solo con la cookie de refresh.
+1. **El administrador invita** a contadores, asistentes (ligados a un contador) y contribuyentes
+   (ligados a su expediente). Cada persona recibe un enlace por correo y elige su contraseña.
+2. **El contador crea un cliente** y **sube un documento**. La API guarda el archivo, calcula su
+   huella (SHA-256, para detectar duplicados) y encola el análisis; responde al instante.
+3. **El worker** (un proceso aparte que atiende la cola en Redis) extrae el texto del PDF, o lo
+   reconoce con OCR si es una imagen, pide a Claude los conceptos tributarios (ingresos,
+   retenciones, deducciones, aportes), calcula los embeddings con Voyage y corre las reglas que
+   generan alertas.
+4. **El navegador se entera solo:** el worker publica el cambio, la API lo envía por WebSocket y la
+   tabla de documentos pasa de "Procesando" a "Procesado" sin recargar.
+5. **El contador revisa** cada concepto con el original al lado y lo confirma o corrige; queda quién
+   y cuándo, y se conserva lo que leyó la IA.
+6. **Pregunta y resume:** el asistente de IA responde con fragmentos de los documentos de ese
+   cliente, y el resumen calcula una estimación simplificada del impuesto.
+7. **El contribuyente** entra a su portal y ve su expediente, solo con lo ya revisado.
 
-Comprobación:
+### Arquitectura
 
-```bat
-curl http://localhost:4000/health
-curl http://localhost:4000/ready
-```
+```mermaid
+flowchart LR
+  subgraph Navegador
+    UI["App web<br/>(Vite, JavaScript sin framework)"]
+  end
+  subgraph Vercel
+    F["Frontend estático"]
+  end
+  subgraph Railway
+    A["API Node.js + Express<br/>REST · WebSocket /ws"]
+    K["Worker (BullMQ)<br/>texto u OCR · IA · reglas · vencimientos"]
+    D[("PostgreSQL 16 + pgvector")]
+    R[("Redis 7<br/>cola · límites · eventos")]
+  end
+  IA["Anthropic Claude<br/>(conceptos, chat, resumen)"]
+  V["Voyage AI<br/>(embeddings)"]
+  S3["Cloudflare R2<br/>(documentos y fotos)"]
+  SES["Amazon SES<br/>(correo)"]
 
-`/health` → `{"status":"ok",...}`; `/ready` → `{"status":"ready","checks":{"database":"ok","redis":"ok"}}`.
-
-## Variables de entorno
-
-| Variable                                | Por defecto                                          | Descripción                                                                                                                                                                                 |
-| --------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                          | — (obligatoria)                                      | PostgreSQL de `renta-ia-database` (puerto **5433** en local)                                                                                                                                |
-| `JWT_SECRET`                            | — (obligatoria)                                      | Clave para firmar los access tokens (HS256)                                                                                                                                                 |
-| `MFA_ENCRYPTION_KEY`                    | — (**obligatoria en producción**; opcional en local) | Clave AES-256-GCM (32 bytes en base64) que cifra los secretos de MFA. Sin ella, fuera de producción, solo las rutas de MFA responden 503. Ver "Cómo generar `MFA_ENCRYPTION_KEY`"           |
-| `JWT_EXPIRES_IN`                        | `15m`                                                | Vida del access token (el navegador lo guarda solo en memoria)                                                                                                                              |
-| `REFRESH_TOKEN_TTL_DAYS`                | `7`                                                  | Vida del refresh token (cookie httpOnly rotativa)                                                                                                                                           |
-| `COOKIE_SECURE`                         | `true` en producción                                 | Cookie `Secure` (solo HTTPS)                                                                                                                                                                |
-| `PORT`                                  | `4000`                                               | Puerto de la API y del WebSocket                                                                                                                                                            |
-| `NODE_ENV`                              | `development`                                        | `production` activa `Secure`, exige `CORS_ORIGIN`, oculta `/docs` y prohíbe `AI_PROVIDER=mock` y `RATE_LIMIT_SCALE`                                                                         |
-| `LOG_LEVEL`                             | `info`                                               | Nivel de pino                                                                                                                                                                               |
-| `CORS_ORIGIN`                           | `http://localhost:5173`                              | Orígenes permitidos (coma). **Obligatorio en producción**                                                                                                                                   |
-| `TRUST_PROXY`                           | `0`                                                  | Proxies delante de la API (1 detrás de un balanceador)                                                                                                                                      |
-| `REDIS_URL`                             | `redis://localhost:6379`                             | Cola, rate limiting y eventos                                                                                                                                                               |
-| `WORKER_CONCURRENCY`                    | `2`                                                  | Documentos en paralelo por worker (ver informe de carga)                                                                                                                                    |
-| `METRICS_TOKEN`                         | vacío                                                | Token para `GET /metrics` (API) y `:WORKER_METRICS_PORT/metrics` (worker). Vacío = 404                                                                                                      |
-| `WORKER_METRICS_PORT`                   | `9464`                                               | Puerto de métricas del worker                                                                                                                                                               |
-| `SHUTDOWN_TIMEOUT_MS`                   | `10000`                                              | Tiempo máximo del apagado ordenado                                                                                                                                                          |
-| `SHUTDOWN_DRAIN_DELAY_MS`               | `0`                                                  | Espera entre `/ready = 503` y cerrar el servidor (en producción ≥ intervalo del health check)                                                                                               |
-| `AI_PROVIDER`                           | `anthropic`                                          | `mock` **solo para E2E y pruebas de carga** (rechazado con `NODE_ENV=production`)                                                                                                           |
-| `AI_MOCK_LATENCY_MS`                    | `0`                                                  | Latencia simulada por llamada con `AI_PROVIDER=mock`                                                                                                                                        |
-| `RATE_LIMIT_SCALE`                      | `1`                                                  | **Solo pruebas de carga**: multiplica todos los límites (rechazado en producción)                                                                                                           |
-| `ANTHROPIC_API_KEY` / `VOYAGE_API_KEY`  | vacías                                               | Claves de IA                                                                                                                                                                                |
-| `STORAGE_DRIVER` / `STORAGE_LOCAL_PATH` | `local` / `./uploads`                                | Almacenamiento de archivos: `local` (disco) o `s3` (R2 en el despliegue, con `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_ENDPOINT` y `S3_REGION`; ADR 0006)                |
-| `EMAIL_PROVIDER`                        | `mock` (fuera de producción) / `ses` (producción)    | `mock` no envía nada: guarda cada correo completo en `email_outbox` (**prohibido en producción**). `ses`: Amazon SES v2 ([ADR 0010](docs/adr/0010-proveedores-externos-intercambiables.md)) |
-| `EMAIL_FROM` / `SES_REGION`             | remitente local / vacía                              | Obligatorias con `EMAIL_PROVIDER=ses`; las credenciales las toma el SDK de AWS (`AWS_*`, perfil o rol IAM)                                                                                  |
-| `GEOIP_PROVIDER` / `GEOIP_DBIP_CSV`     | `mock` / vacía                                       | Ubicación aproximada de las sesiones. `dbip`: el CSV gratuito "IP to City Lite" de db-ip.com, leído en el servidor (la IP no sale)                                                          |
-| `APP_URL`                               | `http://localhost:5173`                              | URL pública del frontend: base de los enlaces de los correos (obligatoria en producción)                                                                                                    |
-| `TAX_CALENDAR_PATH` / `TAX_RULES_PATH`  | JSON en `src/config/`                                | Calendario (fechas **de ejemplo**) y parámetros tributarios                                                                                                                                 |
-
-## Sesión y seguridad
-
-- **No hay registro público ni alta con contraseña por un admin.** Las cuentas se crean
-  por invitación (`POST /api/admin/invitations`): la cuenta nace pendiente y sin contraseña,
-  el enlace (token firmado, 72 h, un solo uso; en la base solo su SHA-256) viaja solo por
-  correo, y la persona la activa con su contraseña (`POST /api/auth/invitations/accept`).
-  La base impide que una cuenta pendiente tenga sesiones ([ADR 0009](docs/adr/0009-cuentas-pendientes-garantizadas-por-el-esquema.md)).
-- **Primer admin en producción** (el seed no se corre ahí):
-  `npm run admin:crear -- --correo <correo> --nombre "<nombre>"` con `DATABASE_URL` en la sesión.
-  Pide la contraseña dos veces sin eco (o la primera línea de la entrada con `--stdin`; nunca por
-  argumento), aplica la misma política y el mismo hash que el resto, y la deja activa y sin MFA (lo
-  activa en su primer login). Si el correo ya existe o ya hay un admin activo, no cambia nada y sale
-  con 0. Auditado como `admin.first_admin.create` (`src/scripts/crearAdmin.ts`).
-- `POST /api/auth/login` y `/invitations/accept` devuelven `{ accessToken, user }` y dejan la
-  cookie `renta_ia_refresh` (httpOnly, `SameSite=Strict`, `Path=/api/auth`).
-- `POST /api/auth/refresh` rota la cookie y entrega un access token nuevo;
-  `POST /api/auth/logout` revoca la sesión. Ambos exigen `X-Requested-With: renta-ia`.
-- Bloqueo progresivo por cuenta tras 5 fallos (1, 2, 4… hasta 60 min) y 10 fallos / 15 min por IP.
-  Los códigos de MFA fallidos cuentan en el mismo bloqueo.
-- **Verificación en dos pasos (TOTP)** ([ADR 0011](docs/adr/0011-mfa-totp.md)): con MFA activo,
-  `POST /api/auth/login` responde `{ mfaRequired: true, challengeToken, expiresAt }` **sin sesión
-  ni cookie**, y `POST /api/auth/login/mfa` (código de la app o de recuperación) inicia la sesión.
-  El secreto se guarda cifrado (AES-256-GCM, `MFA_ENCRYPTION_KEY`); los 10 códigos de recuperación,
-  solo como hash. Activar MFA cierra las demás sesiones de la cuenta. **Obligatoria para admin:** sin
-  MFA activo, la API solo le responde `GET /api/users/me` y `/api/users/me/mfa/*` (el resto: 403
-  `code: mfa_enrollment_required`) y no puede desactivarla; el admin del seed la activa en su primer login.
-- Cada petición autenticada comprueba que su sesión (`sid`) siga viva: cerrar sesión, restablecer
-  la contraseña o activar MFA invalida los access tokens al instante (costo medido en
-  `docs/load-test-report.md`).
-- Contraseñas: 10–72 caracteres, sin contraseñas comunes ni el correo o el nombre.
-- **Mi perfil** (`/api/users/me`): nombre y teléfono se editan directamente. Cambiar el correo o la
-  contraseña pide la actual (cuenta en el bloqueo). El correo nuevo se confirma con un enlace de
-  24 h y un solo uso (solo su hash), con aviso al correo anterior; cambiar la contraseña cierra las
-  demás sesiones y avisa por correo.
-- Roles: `admin`, `accountant`, `assistant` (clientes de su contador, sin crear ni
-  borrar) y `client` (solo lectura de su expediente). Todos se crean por invitación; la
-  relación del asistente con su contador y la del portal con su expediente se crean al invitar.
-- **Sesiones activas:** cada sesión guarda su equipo, ubicación aproximada e IP **recortada**; se
-  puede cerrar una o todas las demás, con efecto inmediato ([ADR 0013](docs/adr/0013-sesiones-activas.md)).
-- **Mis datos:** exportar (JSON, con la contraseña) y eliminar la cuenta (lápida anónima; un contador
-  con clientes no puede, el único admin tampoco). Política: [`docs/data-retention.md`](docs/data-retention.md).
-- **Archivo original** (`GET /api/documents/:id/file`): con el mismo alcance que el documento (404 a
-  lo ajeno), tipo por la firma del contenido, `CSP: default-src 'none'; sandbox`, `no-store`; auditado.
-- **Revisión de conceptos:** confirmar o corregir lo que extrajo la IA. Lo que leyó la IA se conserva y
-  queda quién y cuándo. Reprocesar con revisiones exige confirmación (409 `reviewed_concepts`, D6).
-  El portal solo recibe si está revisado.
-- Auditoría en `audit_log` (sin datos sensibles), consultable en `GET /api/admin/audit`.
-- Detalles y riesgos residuales: [`docs/threat-model.md`](docs/threat-model.md) y [ADR 0007](docs/adr/0007-esquema-de-sesion.md).
-
-### Cómo generar `MFA_ENCRYPTION_KEY`
-
-```bat
-node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+  F -- "descarga la app" --> UI
+  UI -- "HTTPS y WebSocket" --> A
+  A <--> D
+  A <--> R
+  K <--> R
+  K <--> D
+  A --> S3
+  K --> S3
+  A --> IA
+  K --> IA
+  A --> V
+  K --> V
+  A --> SES
 ```
 
-Pega el resultado (44 caracteres) en `.env` como `MFA_ENCRYPTION_KEY=...`. **Guárdala como un
-secreto de producción y no la cambies:** con otra clave los secretos guardados no se pueden
-descifrar y cada cuenta con MFA tendría que restablecerse (`DELETE /api/admin/users/:id/mfa`).
-En local es opcional: sin ella la API arranca igual y solo MFA responde 503.
+El DNS está en Cloudflare. La aplicación (`renta.`) y la API (`api-renta.`) son orígenes distintos del
+mismo sitio: la cookie de sesión viaja entre los dos y la API responde con CORS solo al origen de la
+aplicación.
 
-Probar con curl (cmd.exe), guardando la cookie en un archivo:
+### Flujo principal: subir un documento y revisarlo
 
-```bat
-curl -c cookies.txt -X POST http://localhost:4000/api/auth/login ^
-  -H "Content-Type: application/json" ^
-  -d "{\"email\":\"ana@example.com\",\"password\":\"Password123!\"}"
+```mermaid
+sequenceDiagram
+  actor C as Contador
+  participant API
+  participant Q as Redis (cola y eventos)
+  participant W as Worker
+  participant IA as Claude y Voyage
 
-:: Copia el accessToken de la respuesta:
-set TOKEN=pega-aqui-el-access-token
-curl http://localhost:4000/api/clients -H "Authorization: Bearer %TOKEN%"
-
-:: Renovar (usa y reemplaza la cookie)
-curl -b cookies.txt -c cookies.txt -X POST http://localhost:4000/api/auth/refresh -H "X-Requested-With: renta-ia"
+  C->>API: Subir y analizar con IA (PDF o imagen)
+  API->>API: Guarda el archivo y su huella SHA-256
+  API->>Q: Encola el análisis
+  API-->>C: "Documento subido. El análisis con IA corre en segundo plano."
+  Q->>W: Toma el trabajo
+  W->>W: Texto del PDF u OCR de la imagen
+  W->>IA: Extraer conceptos tributarios
+  W->>IA: Embeddings de los fragmentos
+  W->>W: Reglas: alertas de vencimientos e inconsistencias
+  W->>Q: Publica "documento actualizado"
+  Q-->>API: Evento
+  API-->>C: WebSocket: el estado pasa a "Procesado"
+  C->>API: Revisar un concepto (confirmar o corregir el monto)
+  API-->>C: "Concepto revisado." (queda quién y cuándo)
 ```
 
-## Endpoints
+Más detalle: el pipeline y las respuestas del modelo en la
+[referencia técnica](docs/referencia-tecnica.md#pipeline-de-ia), las decisiones en
+[docs/adr/](docs/adr/README.md), el modelo de dominio en
+[renta-ia-database](https://github.com/Jonar519/renta-ia-database/blob/main/docs/modelo-de-dominio.md) y
+el contrato de la API en [docs/openapi.json](docs/openapi.json).
 
-La referencia completa, generada desde los schemas zod, está en **`/docs`** (Swagger UI,
-fuera de producción) y en `docs/openapi.json` (`npm run openapi` la regenera; un
-test falla si quedó desactualizada).
+## 3. Tecnologías
 
-| Grupo        | Rutas                                                                                                                                                                                                                                                                                             |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Auth         | `POST /api/auth/login` · `login/mfa` · `refresh` · `logout` · `invitations/lookup` · `invitations/accept` · `password-reset/request` · `lookup` · `confirm` · `GET /api/users/me`                                                                                                                 |
-| Perfil       | `GET/PATCH /api/users/me` (incluye la densidad de las tablas) · `POST/DELETE /api/users/me/email` · `POST /api/users/me/password` · `GET/POST/DELETE /api/users/me/avatar` · `POST /api/auth/email-change/confirm`                                                                                |
-| Sesiones     | `GET/DELETE /api/users/me/sessions` · `DELETE /api/users/me/sessions/:sessionId`                                                                                                                                                                                                                  |
-| Mis datos    | `POST /api/users/me/export` · `GET/POST /api/users/me/deletion`                                                                                                                                                                                                                                   |
-| MFA          | `GET /api/users/me/mfa` · `POST /api/users/me/mfa/setup` · `enable` · `disable` · `recovery-codes`                                                                                                                                                                                                |
-| Clientes     | `GET/POST /api/clients` · `GET/PATCH/DELETE /api/clients/:id` · `GET /api/clients/:id/tax-concepts` · `PATCH /api/clients/:id/tax-concepts/:conceptId` (revisión) · `POST /api/clients/:id/summary`                                                                                               |
-| Documentos   | `POST /api/documents/upload` · `GET /api/documents/client/:clientId` · `GET /api/documents/client/:clientId/by-hash/:sha256` · `GET /api/documents/:id` · `GET /api/documents/:id/file` (original) · `POST /api/documents/:id/reprocess`                                                          |
-| Alertas      | `GET /api/alerts/client/:clientId` · `PATCH /api/alerts/:id` · `POST /api/alerts/deadlines/run` (admin)                                                                                                                                                                                           |
-| IA           | `POST /api/ai/chat`                                                                                                                                                                                                                                                                               |
-| Admin        | `GET/POST /api/admin/invitations` · `POST /api/admin/invitations/:userId/resend` · `DELETE /api/admin/invitations/:userId` · `DELETE /api/admin/users/:userId/mfa` · `POST /api/admin/clients/reassign` · `GET /api/admin/accountants` · `GET /api/admin/portal-clients` · `GET /api/admin/audit` |
-| Métricas web | `POST /api/metrics/web-vitals` · `GET /api/metrics/web-vitals/summary` (admin)                                                                                                                                                                                                                    |
-| Operación    | `GET /health` · `GET /ready` · `GET /metrics` (token) · `GET /docs` (no producción)                                                                                                                                                                                                               |
-| Tiempo real  | `WS /ws` (token en el primer mensaje)                                                                                                                                                                                                                                                             |
+Versiones: los rangos declarados en el `package.json` de cada repositorio, el `Dockerfile` y el
+`docker-compose.yml`.
 
-Listados paginados por cursor: `?limit=50&cursor=...` → `{ items, nextCursor }`.
-Un recurso de otro cliente responde **404** (no 403) para no revelar que existe.
-
-## Tiempo real (WebSocket `/ws`)
-
-- `ws://localhost:4000/ws` con un `Origin` de `CORS_ORIGIN`.
-- Primer mensaje: `{ "type": "auth", "token": "<accessToken>" }` → `{ "type": "ready" }`.
-- Eventos `document.updated` a quienes pueden ver el cliente: contador, sus
-  asistentes, el usuario de portal del cliente y los admin.
-
-## Observabilidad y operación
-
-- `GET /health` (liveness, sin dependencias) y `GET /ready` (PostgreSQL + Redis; 503 durante el apagado).
-- Apagado ordenado con `SIGTERM` o **Ctrl+C** en cmd.exe (API y worker): deja de
-  recibir tráfico, termina lo que está en curso y cierra conexiones. El worker
-  espera a que terminen los documentos en proceso.
-- Métricas Prometheus con `METRICS_TOKEN`:
-
-```bat
-set METRICS_TOKEN=un-token-largo
-npm run dev
-curl http://localhost:4000/metrics -H "Authorization: Bearer %METRICS_TOKEN%"
-```
-
-Incluyen `renta_ia_http_request_duration_seconds`, `renta_ia_queue_jobs`,
-`renta_ia_pipeline_stage_duration_seconds`, `renta_ia_llm_request_duration_seconds`,
-`renta_ia_llm_tokens_total` y las métricas del proceso.
-
-## Contenedor (Docker · despliegue en Railway)
-
-Una sola imagen para la API y el worker ([`Dockerfile`](Dockerfile)). Cambia solo el comando:
-
-| Servicio | Comando de arranque                              | Salud    |
-| -------- | ------------------------------------------------ | -------- |
-| API      | por defecto (`node dist/server.js`)              | `/ready` |
-| Worker   | `node dist/workers/documentProcessing.worker.js` | — (cola) |
-
-```bat
-docker build -t renta-ia-backend .
-docker run --rm -p 4000:4000 --env-file .env.produccion renta-ia-backend
-```
-
-- **Sin secretos en la imagen:** `.dockerignore` deja fuera `.env`. Las variables las pone
-  la plataforma. En producción el worker necesita las mismas obligatorias que la API.
-- **`node` directo, nunca `npm start`:** npm no reenvía `SIGTERM` y se perdería el apagado
-  ordenado. `docker stop` deja a los dos procesos en «Apagado ordenado completo» con código 0.
-- **Usuario `node`, sin root:** `/app` es escribible porque tesseract.js descarga allí
-  `spa.traineddata` la primera vez que hace OCR de una imagen. En un contenedor nuevo se
-  vuelve a descargar.
-- **Migraciones aparte, antes de desplegar:** viven en `renta-ia-database`
-  (`scripts/migrate.sh` con `DATABASE_URL`); la imagen no las corre.
-
-## Tests, calidad y pruebas de carga
-
-```bat
-npm test
-npm run lint
-npm run typecheck
-npm run build
-npm run openapi
-```
-
-### Compilado (como en producción)
-
-`npm run build` compila a `dist/`. Después, cada proceso arranca con Node, sin
-`ts-node-dev` y sin recarga:
-
-| Proceso | Comando                | Equivale a                                       |
-| ------- | ---------------------- | ------------------------------------------------ |
-| API     | `npm start`            | `node dist/server.js`                            |
-| Worker  | `npm run worker:start` | `node dist/workers/documentProcessing.worker.js` |
-
-Los dos leen la misma configuración (`src/config/env.ts`): en producción el worker
-necesita las mismas variables obligatorias que la API.
-
-**En el contenedor y en Railway, el comando de arranque es `node …` directo, no
-`npm start` ni `npm run worker:start`.** npm no reenvía `SIGTERM` al proceso de
-Node: el proceso muere con 143 y sin apagado ordenado, así que los trabajos en
-curso no se cierran. Con `node` directo, `SIGTERM` cierra en orden los trabajos
-en curso, las métricas, Redis y PostgreSQL, y sale con 0. Se verificó en Linux
-(Node 20, `NODE_ENV=production`) el 5-11-2026. Los scripts de npm quedan para
-uso local.
-
-Los tests necesitan el PostgreSQL de `renta-ia-database`: crean desde cero la base
-`renta_ia_test` (nunca tocan `renta_ia`) con las migraciones de
-`..\renta-ia-database\migrations`. Redis, Anthropic y Voyage están simulados.
-
-Pruebas de carga: [`loadtests/README.md`](loadtests/README.md)
-(`npm run loadtest:setup`, `loadtest:login`, `loadtest:list`, `loadtest:mixed`,
-`loadtest:chat`, `loadtest:upload`, `loadtest:ratelimit`).
-
-CI (`.github/workflows/ci.yml`): lint, typecheck, tests, build; y un job
-`security` con `npm audit --omit=dev` y gitleaks (los falsos positivos revisados, en
-`.gitleaksignore`). Lo que necesita para pasar: ver "CI" en el README raíz.
-Excepciones vigentes de `npm audit`, con fecha de revisión: [ADR 0014](docs/adr/0014-excepciones-npm-audit-octubre-2026.md).
-
-## Cambios de esquema
-
-Este repo **no crea ni modifica tablas**. Ante un cambio:
-
-1. Nueva migración en `renta-ia-database` (nunca se editan las existentes) y `scripts\migrate.bat`.
-2. Aquí: `npx prisma db pull` y ajustar el código.
-3. Merge: **primero** `renta-ia-database`, después este repo (su CI lee las migraciones de `main`).
-
-En Windows, si `prisma generate` falla con `EPERM` sobre `query_engine-windows.dll.node`,
-detén la API y el worker (tienen la DLL abierta) y vuelve a intentarlo.
-
-## Pipeline de IA
-
-Subida → cola (BullMQ) → worker: extracción de texto (PDF con texto o imagen con
-OCR) → conceptos tributarios con el LLM → embeddings (Voyage) → reglas → alertas.
-La extracción de conceptos y los embeddings **fallan por separado**: el documento
-queda `processed` con advertencias y se puede reprocesar. Un PDF escaneado (sin
-texto) termina en `error` con un mensaje que pide subirlo como imagen.
-
-### Respuestas del modelo (`stop_reason`)
-
-El modelo es `claude-sonnet-5`. Razona por defecto, y ese razonamiento cuenta dentro de
-`max_tokens`. Por eso los topes son holgados: extracción 8000, chat 4000, resumen 2000. Un
-tope no se cobra si no se usa.
-
-| `stop_reason` | Extracción                                                        | Chat                                      | Resumen                                   |
-| ------------- | ----------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------- |
-| `end_turn`    | se guardan los conceptos                                          | respuesta                                 | texto                                     |
-| `max_tokens`  | **error**: advertencia en el documento, no se guarda nada parcial | se devuelve lo que llegó, aviso en el log | se devuelve lo que llegó, aviso en el log |
-| `refusal`     | **error** (`AiRefusalError`): advertencia en el documento         | 200 con un mensaje claro (no un 500)      | cifras sin redacción (`textError`)        |
-
-**Verificar la IA real:** `npm run build` y después `npm run ai:verify`.
-
-- Hace una llamada por uso, con sus prompts y topes reales, y un embedding.
-- Muestra `stop_reason`, tokens y latencia, y nunca muestra las keys.
-- Sale con 1 si algo no terminó en `end_turn` o si el embedding no tiene 1024 dimensiones.
-- Cuesta unos centavos. Se corre en el ensayo de despliegue.
-
-El calendario tributario incluido (`src/config/tax-calendar.json`) tiene **fechas
-de ejemplo** (`"esEjemplo": true`) y cada alerta lo advierte: reemplázalo por el
-calendario oficial de la DIAN.
-
-## Estado
-
-| Tema                                                                                                                                              | Estado                           |
-| ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
-| API, pipeline de IA, tiempo real, alertas, resumen                                                                                                | ✅                               |
-| Sesión con refresh rotativo, CSRF, bloqueo, roles, auditoría, threat model                                                                        | ✅                               |
-| Health/ready, apagado ordenado, métricas, pruebas de carga                                                                                        | ✅                               |
-| OpenAPI, ADR                                                                                                                                      | ✅                               |
-| Fase 5: invitaciones, recuperación, MFA, perfil y foto, sesiones activas, mis datos, densidad, reasignar, revisión de conceptos, archivo original | ✅ (guía: `docs/demo-fase5.md`)  |
-| Despliegue en AWS (Dockerfile de producción, S3, infraestructura)                                                                                 | Pendiente (fuera del Proyecto 1) |
+| Tecnología                                            | Versión                              | Para qué se usa                                                                        | Por qué se eligió                                                                                                        |
+| ----------------------------------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| **Node.js**                                           | 20 (imagen `node:20-bookworm-slim`)  | API y worker                                                                           | Un solo lenguaje con el frontend; buen manejo de E/S y colas.                                                            |
+| **TypeScript**                                        | ^5.5.4                               | Lenguaje del backend                                                                   | Tipos en los contratos entre módulos.                                                                                    |
+| **Express**                                           | ^4.19.2                              | API REST (rutas → esquema → controlador → servicio)                                    | Estándar conocido, middlewares simples.                                                                                  |
+| **zod**                                               | ^3.23.8                              | Validación de entradas y configuración; genera `docs/openapi.json`                     | Errores claros por campo; un test falla si la documentación queda desactualizada.                                        |
+| **ws**                                                | ^8.22.0                              | WebSocket `/ws` para el estado de los documentos                                       | Autenticación en el primer mensaje y control del `Origin`.                                                               |
+| **PostgreSQL + pgvector**                             | imagen `pgvector/pgvector:pg16`      | Datos, reglas de la base y vectores para el chat                                       | Una sola base para datos y embeddings; la base impide estados inválidos (por ejemplo, sesiones de una cuenta pendiente). |
+| **Prisma**                                            | ^5.19.0                              | Cliente tipado de la base                                                              | Solo como cliente: el esquema lo manda SQL puro.                                                                         |
+| **Redis** (ioredis) + **BullMQ**                      | `redis:7-alpine` · ^5.4.1 · ^5.12.0  | Cola de documentos, tareas programadas, límites de uso y eventos                       | El análisis no bloquea la subida; varias instancias comparten estado.                                                    |
+| **Anthropic Claude** (`@anthropic-ai/sdk`)            | ^0.27.3                              | Extracción de conceptos, chat y resumen                                                | Detrás de un proveedor intercambiable (`AI_PROVIDER=mock` solo para E2E y carga).                                        |
+| **Voyage AI**                                         | embeddings de 1024 dimensiones       | Búsqueda de fragmentos para el chat (RAG)                                              | Recomendado para Claude; se llama por HTTP.                                                                              |
+| **pdf-parse** · **tesseract.js**                      | ^1.1.1 · ^5.1.1                      | Texto de los PDF y OCR de las imágenes (español)                                       | Sin servicios externos para leer documentos.                                                                             |
+| **AWS SDK S3** (con **Cloudflare R2**)                | `@aws-sdk/client-s3` ^3.1146.0       | Documentos originales y fotos de perfil                                                | Interfaz de almacenamiento intercambiable; en local, disco.                                                              |
+| **AWS SDK SES v2** (con **Amazon SES**)               | `@aws-sdk/client-sesv2` ^3.1146.0    | Invitaciones, recuperación, cambio de correo y avisos                                  | En desarrollo, `EMAIL_PROVIDER=mock` guarda los correos en una tabla.                                                    |
+| **jsonwebtoken** · **bcrypt**                         | ^9.0.2 · ^6.0.0                      | Token de acceso de 15 min y contraseñas                                                | Token en memoria y renovación con cookie httpOnly rotativa.                                                              |
+| **helmet** · **pino** · **prom-client**               | ^7.1.0 · ^10.3.1 · ^15.1.3           | Cabeceras de seguridad, logs sin datos sensibles y métricas                            | Operación: `/health`, `/ready` y `/metrics`.                                                                             |
+| **Vite** · **pdf.js** · **web-vitals** (frontend)     | ^7.3.7 · 6.4.299 · ^6.2.2            | Build, visor del original y métricas de rendimiento reales                             | Visor sin plugins y medición de la experiencia en producción.                                                            |
+| **Vitest** · **Supertest** · **Playwright** · **axe** | ^4.1.12 · ^7.3.0 · ^1.63.0 · ^4.13.0 | Pruebas unitarias, de integración, E2E y accesibilidad                                 | Integración contra una base de pruebas creada desde cero con las migraciones reales.                                     |
+| **ESLint** · **Prettier**                             | ^10.11.0 · ^3.9.9                    | Reglas y formato                                                                       | La CI los exige.                                                                                                         |
+| **GitHub Actions** · **gitleaks**                     | gitleaks `v8.21.2`                   | CI: lint, tipos, tests, build, `npm audit` y búsqueda de secretos                      | Nada llega a `main` sin pasar todo.                                                                                      |
+| **Docker**                                            | `node:20-bookworm-slim`              | Una imagen para la API y el worker; PostgreSQL y Redis en desarrollo                   | El mismo artefacto en local y en Railway, sin usuario root.                                                              |
+| **Railway** · **Vercel** · **Cloudflare**             | —                                    | API, worker, PostgreSQL y Redis en Railway; frontend en Vercel; DNS y R2 en Cloudflare | HTTPS automático y dominios propios.                                                                                     |
