@@ -21,6 +21,11 @@ explican su parte y enlazan aquí:
 4. [Qué necesita el profesor](#4-qué-necesita-el-profesor)
 5. [Acceso y roles](#5-acceso-y-roles)
 6. [Guía de pruebas función por función](#6-guía-de-pruebas-función-por-función)
+7. [Pruebas automatizadas](#7-pruebas-automatizadas)
+8. [Limitaciones conocidas y decisiones de diseño](#8-limitaciones-conocidas-y-decisiones-de-diseño)
+9. [Solución de problemas](#9-solución-de-problemas)
+10. [Estructura del repositorio](#10-estructura-del-repositorio)
+11. [Glosario](#11-glosario)
 
 ## 1. Qué es el proyecto
 
@@ -426,3 +431,109 @@ Menú de usuario → **Mi perfil** y **Seguridad**.
 | Límites de uso y bloqueo progresivo                             | Redis                                                        | Tests de integración · [docs/threat-model.md](docs/threat-model.md)               |
 | Métricas Prometheus y documentación interactiva de la API       | `GET /metrics` con token; `GET /docs` (fuera de producción)  | [Referencia técnica](docs/referencia-tecnica.md#observabilidad-y-operación)       |
 | Primer administrador en producción y verificación de la IA real | `npm run admin:crear`, `npm run ai:verify`                   | [Referencia técnica](docs/referencia-tecnica.md#sesión-y-seguridad)               |
+
+## 7. Pruebas automatizadas
+
+Necesitan la opción local (Docker con el PostgreSQL de `renta-ia-database`). Las del backend crean
+desde cero la base `renta_ia_test` con las migraciones reales (nunca tocan `renta_ia`); Redis,
+Anthropic y Voyage están simulados.
+
+| Repositorio         | Comando                                                          | Qué cubre                                                                                                                                                                                                                                                                                         | Resultado esperado                                             |
+| ------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `renta-ia-backend`  | `npm run lint`, `npm run typecheck`, `npm test`, `npm run build` | Unitarias y de integración con Supertest: sesión y CSRF, bloqueo, roles y aislamiento por cliente (404), invitaciones, MFA, perfil, sesiones, mis datos, documentos y archivo original, revisión de conceptos, pipeline de IA con proveedor simulado, tiempo real, alertas, OpenAPI al día, caché | `Tests 515 passed (515)` en 58 archivos y build sin errores.   |
+| `renta-ia-frontend` | `npm run lint`, `npm test`, `npm run build`                      | Sesión, router y guardas, vistas de clientes y documentos, visor, revisión, estados de carga y error, Service Worker, accesibilidad                                                                                                                                                               | `Tests 259 passed (259)` en 30 archivos.                       |
+| `renta-ia-frontend` | `npm run test:e2e`                                               | Playwright + axe contra el sistema completo                                                                                                                                                                                                                                                       | Todos en verde.                                                |
+| `renta-ia-database` | `scripts\migrate.bat` dos veces y `scripts\seed.bat` dos veces   | Migraciones sobre una base vacía (la segunda corrida no aplica nada) y seed idempotente                                                                                                                                                                                                           | `Listo: 0 migracion(es) nueva(s) aplicada(s).` la segunda vez. |
+
+La **CI** (GitHub Actions) corre todo esto en cada `push`, más `npm audit` y gitleaks; las excepciones
+vigentes de `npm audit` están en el [ADR 0014](docs/adr/0014-excepciones-npm-audit-octubre-2026.md).
+Las pruebas de carga y sus mediciones: [docs/load-test-report.md](docs/load-test-report.md).
+
+## 8. Limitaciones conocidas y decisiones de diseño
+
+- **Correo en modo de pruebas.** Amazon SES está en modo _sandbox_: solo entrega a direcciones
+  verificadas por el estudiante. Invitaciones, recuperación de contraseña y cambio de correo solo
+  llegan a esas direcciones.
+- **Producción sin datos de ejemplo.** El seed no se carga en producción: el contador empieza sin
+  clientes y la primera cuenta de administrador se creó con `npm run admin:crear`.
+- **Calendario tributario de ejemplo.** Las fechas de vencimiento (`src/config/tax-calendar.json`) son
+  de ejemplo y cada alerta lo advierte; habría que reemplazarlas por el calendario oficial de la DIAN.
+- **Estimación simplificada.** El resumen calcula una estimación del impuesto, no una declaración.
+- **IA no determinista.** En producción las cifras y respuestas las genera Claude: pueden variar y
+  pueden equivocarse; por eso todo lo extraído queda **sin revisar** hasta que una persona lo
+  confirma, y el portal solo muestra lo revisado.
+- **PDF escaneados.** Un PDF sin texto (una imagen escaneada dentro de un PDF) termina en error con un
+  mensaje que pide subirlo como imagen (JPG o PNG), que sí pasa por OCR.
+- **Fallos parciales.** La extracción de conceptos y los embeddings fallan por separado: el documento
+  queda procesado con advertencias y se puede reintentar.
+- **Sin pantalla para algunas acciones de administración:** restablecer la verificación en dos pasos de
+  una cuenta, editar o borrar un cliente y consultar la auditoría se hacen por la API.
+- **Ubicación de las sesiones:** se estima en el servidor con una base local de rangos de IP (la IP no
+  sale); sin esa base, aparece sin ciudad.
+- **Sin registro público** y **verificación obligatoria para el administrador:** decisiones de diseño.
+
+## 9. Solución de problemas
+
+| Síntoma                                       | Qué hacer                                                                                                                                                                                       |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| La página no carga                            | Abre <https://api-renta.jonarproyectos.com/ready>. Si no responde, avisa al estudiante. Si responde, recarga con Ctrl+F5 o prueba en incógnito.                                                 |
+| "Hay una versión nueva de Renta IA."          | Pulsa **Recargar**: el Service Worker tiene una versión más reciente de la app.                                                                                                                 |
+| La sesión expiró o vuelve al inicio de sesión | Vuelve a entrar. Pasa si cerraste sesiones desde **Seguridad**, restableciste la contraseña o activaste la verificación.                                                                        |
+| No llega el correo                            | Revisa spam. Solo llega a direcciones verificadas ([Limitaciones](#8-limitaciones-conocidas-y-decisiones-de-diseño)). Pide al estudiante un **Reenviar**.                                       |
+| El documento se queda en **Procesando**       | El worker o la IA pueden tardar unos segundos (OCR e IA real). Si termina en error o con advertencias, usa **Reintentar análisis**.                                                             |
+| El documento termina en error                 | Si es un PDF escaneado, súbelo como imagen. Revisa que pese menos de 15 MB y sea PDF, JPG o PNG.                                                                                                |
+| No hay conceptos ni alertas                   | El documento no tenía cifras reconocibles; prueba con un PDF de certificado con texto.                                                                                                          |
+| El asistente de IA no responde                | Pulsa **Reintentar**. Responde solo con los documentos ya procesados de ese cliente.                                                                                                            |
+| La cuenta se bloqueó                          | Tras 5 intentos fallidos, espera unos minutos (el bloqueo crece: 1, 2, 4… hasta 60).                                                                                                            |
+| Local: la API no arranca                      | Revisa `.env`: `JWT_SECRET` definido, PostgreSQL en 5433 y Redis en 6379 (`docker compose up -d` en los dos repositorios).                                                                      |
+| Local: el análisis falla con la IA            | Sin claves de Anthropic y Voyage, deja `AI_PROVIDER=mock`.                                                                                                                                      |
+| Local: no llega ningún correo                 | En local no se envían: `docker exec renta_ia_postgres psql -U postgres -d renta_ia -c "SELECT created_at, to_address, template, body_text FROM email_outbox ORDER BY created_at DESC LIMIT 1"`. |
+| Local: `prisma generate` falla con `EPERM`    | Detén la API y el worker (tienen abierta la librería de Prisma) y repite.                                                                                                                       |
+
+## 10. Estructura del repositorio
+
+```
+renta-ia-backend/
+├── src/
+│   ├── app.ts · server.ts       # arranque, middlewares y apagado ordenado
+│   ├── config/                  # variables validadas, logger, Prisma, Redis, calendario y reglas tributarias
+│   ├── middlewares/             # autenticación, alcance por rol, CSRF, validación, límites, errores
+│   ├── modules/                 # auth, invitations, mfa, users, admin, clients, documents, alerts, ai, metrics
+│   ├── services/                # llm, storage, audit, email, geoip, retention, access, events
+│   ├── realtime/                # WebSocket /ws
+│   ├── queues/ · workers/       # cola de documentos y tareas programadas (BullMQ)
+│   ├── observability/ · lifecycle/   # /health, /ready, métricas y apagado
+│   ├── docs/                    # generador de OpenAPI
+│   └── scripts/                 # primer administrador, verificación de la IA real
+├── tests/unit · tests/integration
+├── prisma/schema.prisma         # cliente de base de datos (el esquema lo manda renta-ia-database)
+├── loadtests/                   # pruebas de carga
+├── docs/                        # referencia técnica, guía de prueba, ADR, amenazas, retención, carga, OpenAPI
+└── Dockerfile · docker-compose.yml (Redis local)
+```
+
+Los otros repositorios describen su estructura en su propio README:
+[renta-ia-frontend](https://github.com/Jonar519/renta-ia-frontend#readme) y
+[renta-ia-database](https://github.com/Jonar519/renta-ia-database#readme).
+
+## 11. Glosario
+
+| Término                             | Qué significa aquí                                                                                                |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| **API REST**                        | Las direcciones del servidor (`/api/...`) que la app llama con métodos HTTP y que responden JSON.                 |
+| **Worker / cola**                   | Proceso aparte que analiza los documentos en segundo plano, tomándolos de una cola en Redis.                      |
+| **OCR**                             | Reconocimiento del texto de una imagen.                                                                           |
+| **LLM**                             | Modelo de lenguaje (aquí, Claude) que lee el texto y extrae las cifras o responde preguntas.                      |
+| **Embedding / pgvector**            | Lista de números que representa el significado de un texto / extensión de PostgreSQL que los guarda y compara.    |
+| **RAG**                             | Antes de responder, se buscan los fragmentos relevantes de los documentos del cliente y la IA responde con ellos. |
+| **Concepto tributario**             | Una cifra relevante para la renta (ingreso bruto, retención, deducción, aporte) con su año gravable.              |
+| **Huella (SHA-256)**                | Resumen único del contenido de un archivo; sirve para detectar que ya se subió.                                   |
+| **WebSocket**                       | Conexión abierta para que el servidor avise al navegador al instante.                                             |
+| **MFA / verificación en dos pasos** | Además de la contraseña, un código de 6 dígitos de una app del teléfono (TOTP) o un código de recuperación.       |
+| **Cookie httpOnly**                 | Cookie que el JavaScript de la página no puede leer: protege la sesión ante un script inyectado.                  |
+| **CSRF**                            | Ataque desde otro sitio con tu sesión; se bloquea exigiendo una cabecera que solo la app envía.                   |
+| **Service Worker**                  | Script del navegador que guarda la app para que cargue sin conexión.                                              |
+| **Web Vitals**                      | Métricas de la experiencia real en el navegador (carga, interacción, estabilidad visual).                         |
+| **Lápida**                          | Cuenta eliminada que pierde sus datos personales y conserva solo lo necesario para la integridad.                 |
+| **E2E**                             | Prueba de punta a punta: un navegador automatizado usa la aplicación completa.                                    |
+| **ADR**                             | Documento corto que registra una decisión técnica, sus alternativas y por qué se eligió.                          |
